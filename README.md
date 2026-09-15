@@ -12,6 +12,10 @@ Native SwiftUI iPhone and iPad app, targeting iOS 17+. Includes a local media li
 
 For a physical device, set your development team in Xcode and use a registered bundle identifier. Project settings are generated: persist changes in `project.yml`, then regenerate. The default bundle identifier is a placeholder until registered in your Apple account.
 
+## Generate subtitles from a book and audio
+
+Use the standalone [TXT + audio subtitle utility](tools/subtitle-aligner/README.md) to align a matching transcript and narration into SRT/WebVTT for the app. Its README covers installation, Polish examples, chapter offsets, validation, and import steps.
+
 ## Tests
 
 ```sh
