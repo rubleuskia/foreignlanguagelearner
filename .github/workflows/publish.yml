@@ -1,0 +1,82 @@
+name: Publish iOS
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version (for example 0.1.0)'
+        required: true
+        type: string
+      channel:
+        description: Upload destination
+        required: true
+        default: testflight
+        type: choice
+        options: [testflight, app-store]
+permissions:
+  contents: read
+concurrency:
+  group: ios-publish
+  cancel-in-progress: false
+jobs:
+  tests:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: tests
+    runs-on: macos-15
+    timeout-minutes: 45
+    environment: app-store
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      APP_IDENTIFIER: ${{ vars.APP_IDENTIFIER }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_HIDE_CHANGELOG: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate configuration
+        shell: bash
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version X.Y.Z'; exit 1; }
+          test -n "$APP_IDENTIFIER" && test -n "$APPLE_TEAM_ID"
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate project
+        run: bash scripts/bootstrap.sh
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - name: Install release tooling
+        run: gem install fastlane -v 2.238.0 --no-document
+      - name: Import signing credentials
+        run: bash scripts/install-signing.sh
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+      - name: Archive and upload
+        run: fastlane ios publish
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+      - name: Remove signing credentials
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then security delete-keychain "$KEYCHAIN_PATH" || true; fi
+          if [[ -n "${PROFILE_PATH:-}" ]]; then rm -f "$PROFILE_PATH"; fi
+          rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/profile.mobileprovision" "$RUNNER_TEMP/profile.plist"
+      - name: Save release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            build/release/
+            ~/Library/Logs/gym/
+          if-no-files-found: ignore
+          retention-days: 7

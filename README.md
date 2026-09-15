@@ -1,1 +1,42 @@
-# foreignlanguagelearner
+# Foreign Language Learner
+
+Native SwiftUI iPhone and iPad app, targeting iOS 17+. Includes a sample Polish flashcard, unit tests, UI tests, simulator CI, and signed publishing infrastructure.
+
+## Start developing
+
+1. Install full Xcode (CI uses Xcode 26.3), open it once, and install an iOS simulator runtime.
+2. Select it: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+3. Install [Homebrew](https://brew.sh), then run `brew install xcodegen` (2.45 or newer).
+4. Run `bash scripts/bootstrap.sh`.
+5. Open `ForeignLanguageLearner.xcodeproj` and run the `ForeignLanguageLearner` scheme on a simulator.
+
+For a physical device, set your development team in Xcode and use a registered bundle identifier. Project settings are generated: persist changes in `project.yml`, then regenerate. The default bundle identifier is a placeholder until registered in your Apple account.
+
+## Tests
+
+```sh
+bash scripts/test.sh
+# To choose a particular installed simulator:
+SIMULATOR_ID=<simulator-udid> bash scripts/test.sh
+```
+
+Unit tests cover flashcard reveal/reset behavior. UI tests exercise the same flow through the app. Tests use in-memory state, with no network or credentials. Add model tests under `Tests/Unit` and user journey tests under `Tests/UI`; regenerate the project after adding files. Xcode also runs both suites with Command-U. Test results and coverage are saved in `build/*.xcresult`; open these in Xcode.
+
+## Automation
+
+- **iOS CI:** pull requests, pushes to `main`, and manual runs; unit/UI tests with coverage, unsigned device Release compilation, and test artifacts.
+- **Publish iOS:** manual runs from `main`, after tests pass; signed archive and upload to TestFlight or an App Store draft. App Store review submission and public release remain manual.
+- Dependabot checks GitHub Actions weekly.
+
+Workflows become available after these files are pushed to GitHub. See [release setup](docs/RELEASING.md) for Apple credentials, GitHub environment configuration, and first release steps.
+
+## Layout
+
+- `App/`: SwiftUI entry point, screen, small testable model, and assets.
+- `Tests/`: XCTest unit and UI suites.
+- `project.yml`: XcodeGen source of truth; generated Xcode project is ignored.
+- `scripts/`: local setup, testing, and CI signing import.
+- `fastlane/`: signed archive and App Store Connect upload.
+- `.github/workflows/`: CI and release pipelines.
+
+No third-party runtime dependencies, persistence, backend, or analytics are configured. The app icon is a development placeholder; replace it before release.

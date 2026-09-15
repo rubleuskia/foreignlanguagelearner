@@ -60,3 +60,17 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Generated project and local build output
+ForeignLanguageLearner.xcodeproj/
+build/
+DerivedData/
+.DS_Store
+
+# Credentials
+.env
+.env.*
+*.p12
+*.p8
+*.mobileprovision
+*.keychain-db
