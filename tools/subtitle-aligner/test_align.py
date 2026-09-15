@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import align
+from guided import plan_chunks
 
 
 def word(text, start, end):
@@ -15,6 +16,32 @@ def word(text, start, end):
 
 
 class SubtitleTests(unittest.TestCase):
+    def test_engine_duplicate_repair_preserves_intentional_repetition(self):
+        words = [word(" Tak", 0, 1), word(" Tak", 1, 2), word(" jest.", 2, 3)]
+        data = {"segments": [{"words": words}]}
+        fixed = align.remove_engine_duplicates(data, "Tak jest.")
+        self.assertEqual(len(fixed["engine_duplicate_words"]), 1)
+        self.assertEqual(len(data["segments"][0]["words"]), 3)
+        self.assertNotIn("engine_duplicate_words", align.remove_engine_duplicates(data, "Tak Tak jest."))
+        self.assertIs(align.remove_engine_duplicates(data, "Nie jest."), data)
+
+    def test_guided_anchors_and_insufficient_matches(self):
+        book = "one two three four five six seven eight nine ten"
+        words = [word(" " + w, i * 20, i * 20 + 1) for i, w in enumerate(book.split())]
+        with self.assertRaises(ValueError):
+            plan_chunks("unrelated content", {"segments": [{"words": words}]}, 300)
+        self.assertEqual(plan_chunks(book, {"segments": [{"words": words}]}, 200),
+                         [(0, 0.0), (3, 60.0), (6, 120.0), (10, 200)])
+
+    def test_untimed_words_retained_only_with_opt_in(self):
+        words = [word("—", 0, 0), word(" Tak.", 0, 1), word(" Koniec.", 1, 1)]
+        data = {"segments": [{"words": words}]}
+        with self.assertRaises(ValueError):
+            align.validate_words(data, "— Tak. Koniec.")
+        align.validate_words(data, "— Tak. Koniec.", allow_untimed=True)
+        cues = align.make_cues(words)
+        self.assertEqual(" ".join(c["text"] for c in cues), "— Tak. Koniec.")
+        self.assertTrue(all(c["end"] > c["start"] for c in cues))
     def test_unicode_and_newlines(self):
         self.assertEqual(align.clean_text("\ufeffZażółć\r\n ge\u0328ślą\tjaźń."),
                          "Zażółć gęślą jaźń.")

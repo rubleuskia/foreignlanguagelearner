@@ -72,6 +72,25 @@ The output directory must **not already exist**. Its parents are created automat
 
 Success prints cue/word counts and exits with status 0. Input, alignment, and ordinary runtime errors exit with status 1 and a message on stderr. Invalid command-line arguments exit with argparse's status 2.
 
+### Long recordings and review output
+
+If direct alignment drifts, add `--guided`. This first produces a rough speech transcript, finds ordered runs of at least four matching normalized words in the supplied book, and uses those anchors to align passages of approximately one minute. The subtitle text still comes from the supplied TXT, not the rough transcript. A gap exceeding three minutes without a usable anchor fails with an instruction to prepare shorter excerpts. Matching is heuristic: repeated passages and poor recognition can still lead to incorrect anchors. Guided mode loads decoded 16 kHz audio into memory and performs both transcription and alignment, so it uses more memory and computation.
+
+Some engines assign zero duration to punctuation or short spoken words. By default, this fails validation. To produce **review subtitles** while retaining those words, explicitly add `--allow-untimed-words`. They remain in neighboring positive-duration cues; raw word timestamps are not invented. The JSON records `requires_review: true` and an `untimed_words` list (zero-based word indexes and input-relative times). A wholly untimed result still fails. Trailing untimed text may extend the last cue's text beyond layout targets. This mode does not relax text equality, negative timing, or overlap checks, and it does not certify timing quality.
+
+For example, after preparing matching narration and text:
+
+```sh
+python tools/subtitle-aligner/align.py \
+  --text tools/subtitle-aligner/samples/latarnik-alignment.txt \
+  --audio tools/subtitle-aligner/samples/latarnik-narration.wav \
+  --language pl --model base --guided --allow-untimed-words \
+  --model-dir tools/subtitle-aligner/.cache --offset 28 \
+  --output tools/subtitle-aligner/output/latarnik
+```
+
+The 28-second offset is specific to the sample recording's spoken introduction and a narration copy trimmed by that amount; do not reuse it for other recordings without checking. Import the full original timeline (or its M4A conversion) with those subtitles.
+
 ### Public Polish sample
 
 “Latarnik” by Henryk Sienkiewicz is available from [Wolne Lektury](https://wolnelektury.pl/katalog/lektura/latarnik/):
@@ -106,9 +125,13 @@ The engine decodes local audio through FFmpeg. Common inputs include MP3, WAV, a
 |---|---|---|
 | `--text PATH` | Required | Nonempty matching UTF-8 `.txt` file |
 | `--audio PATH` | Required | Nonempty local audio file |
+| `--alignment-json PATH` | None | Re-export a raw Stable-ts result or this utility's `alignment.json` without running models |
 | `--output PATH` | Required | New directory for generated artifacts |
 | `--language CODE` | `pl` | Whisper language code, e.g. `pl` or `en`; validated by the engine |
 | `--model NAME` | `small` | Model name or local checkpoint path accepted by Stable-ts |
+| `--token-step N` | `100` | Tokens aligned per pass, from 1 to 442; larger windows may reduce drift at higher compute cost |
+| `--guided` | Off | Rough transcription anchors bound alignment to shorter passages |
+| `--allow-untimed-words` | Off | Retain zero-duration words in surrounding cues and record review flags |
 | `--device cpu\|cuda` | `cpu` | Inference device |
 | `--model-dir PATH` | Engine default | Download/cache location for weights |
 | `--format srt\|vtt\|both` | `both` | Which subtitle files to write |
@@ -132,13 +155,15 @@ Line length and duration are **targets**. A single word longer than the requeste
 
 Only requested subtitle formats are written. The normalized TXT and JSON are always written on success. UTF-8 subtitle output must be smaller than 10,000,000 bytes, conservatively respecting the app's import limit.
 
-JSON has utility `schema_version: 1`, `language`, `model`, `offset_seconds`, descriptive timestamp-unit fields, a `cues` array, and the engine's full `alignment` object. Each cue contains `start` and `end` as **integer milliseconds including the offset**, and `text` as an unescaped string. Engine word timings in `alignment.segments[].words[]` remain **seconds relative to the input audio**, without the offset. Do not confuse those two coordinate systems. Raw engine fields can vary with engine versions.
+JSON has utility `schema_version: 1`, `language`, `model`, `token_step`, `guided`, `offset_seconds`, review flags, descriptive timestamp-unit fields, a `cues` array, and the engine's `alignment` object. Guided results also contain the rough transcription and chunk cuts under `alignment.guidance`; each cut is `[book_word_index, input_audio_seconds]`. Each cue contains `start` and `end` as **integer milliseconds including the offset**, and `text` as an unescaped string. Engine word timings in `alignment.segments[].words[]` remain **seconds relative to the input audio**, without the offset. Do not confuse those two coordinate systems. Raw engine fields can vary with engine versions.
 
 The sidecar preserves word timings, not source PDF coordinates or original text character offsets. Cue times are rounded to milliseconds with carry across seconds/minutes/hours.
 
+Use `--alignment-json` to retry formatting or explicitly allow untimed words after inspecting saved diagnostics. Supply the same text and audio as the original run. Text equality is checked, but the cache does not hash/verify the audio; selecting the correct recording is your responsibility. Set `--model` and `--language` to the original values for accurate metadata. `--offset` is applied anew to input-relative word times, so reusing this utility's JSON does not double-apply its old offset. No model or FFmpeg is loaded in this mode.
+
 ## Chapters and excerpts
 
-For long books, work chapter by chapter to reduce the cost of rerunning a bad section. This version processes one pair per invocation; it does not automatically locate chapters, reconcile different editions, batch a manifest, or merge subtitle files.
+For long books, work chapter by chapter to reduce the cost of rerunning a bad section, or use `--guided` to establish shorter alignment intervals. This version processes one pair per invocation; it does not automatically locate literary chapters, reconcile different editions, batch a manifest, or merge subtitle files.
 
 For example, extract 180 seconds starting at 600 seconds into a book:
 
@@ -164,13 +189,13 @@ An offset shifts all cues equally. It cannot correct progressive drift, omitted 
 ## How alignment and subtitle grouping work
 
 1. Validate paths/options and read/normalize TXT before loading a model.
-2. Load the selected model through Stable-ts and call `model.align` with the supplied text and explicit language. This does not ask the model to generate a replacement transcript.
-3. Extract word timings from the result. Check that concatenated aligned text equals the normalized input; fail if text disappeared or changed.
-4. Reject missing/non-finite/negative timestamps, words with zero duration at millisecond precision, or word overlap at that precision. Nothing is silently dropped or stretched to fabricate a usable timeline.
+2. Load the selected model through Stable-ts and call `model.align` with the supplied text and explicit language. In guided mode, first transcribe for anchors and align each bounded passage. The supplied book remains the subtitle text.
+3. Extract word timings from the result. Stable-ts can duplicate a word at a processing boundary. Repair only extra adjacent identical tokens that a sequence comparison proves absent from the supplied text, and record them under `alignment.engine_duplicate_words`; intentional source repetitions remain intact. Then check that concatenated aligned text equals the normalized input; fail on any other text difference.
+4. Reject missing/non-finite/negative timestamps or word overlap at millisecond precision. Zero-duration words fail unless review output is explicitly enabled. No text is silently dropped and raw word timings are not fabricated.
 5. Accumulate words into cues. Split before exceeding two wrapped lines or the target duration, across a pause longer than `--max-gap`, and after sentence-ending punctuation. These punctuation rules are simple heuristics; abbreviations can create short cues.
 6. Apply the optional offset to cue times, escape subtitle markup, validate output size, and write artifacts.
 
-These structural checks do **not** prove that a positive-duration word is aligned to the correct sound. Forced alignment can assign plausible times even to mismatched text. Human listening review remains necessary. Strict validation can also reject an otherwise mostly useful alignment when a word receives zero duration; shorten/correct the input or try another model instead of treating the error as success.
+These structural checks do **not** prove that a positive-duration word is aligned to the correct sound. Forced alignment can assign plausible times even to mismatched text. Human listening review remains necessary. Strict validation can reject an otherwise mostly useful alignment when a word receives zero duration; shorten/correct the input, try another model, or explicitly generate flagged review output.
 
 ## Import and quality review
 
@@ -205,6 +230,7 @@ Pauses between cues intentionally have no active highlight. Review unusually sho
 Files:
 
 - `align.py`: command-line interface, engine adapter, validation, cue grouping, and serializers.
+- `guided.py`: rough-transcription anchors and bounded passage alignment for long recordings.
 - `requirements.txt`: pinned direct alignment dependency.
 - `test_align.py`: dependency-free tests for Unicode, timing rejection, grouping, escaping, timestamp rollover, output generation, and overwrite protection.
 
@@ -217,12 +243,14 @@ python3 tools/subtitle-aligner/align.py --help
 
 The CLI test uses a **fake engine** and dummy audio. It verifies file generation and error handling, not speech recognition quality. A real-engine smoke test must also be performed in an installed environment with matching speech and text. For release-quality Polish evaluation, use a manually checked Polish excerpt and listen to the output; synthetic English smoke tests are insufficient to establish Polish accuracy.
 
+During development, a real `base`/CPU English smoke test produced 3 cues for 17 words. The supplied 41-minute Polish “Latarnik” sample produced 613 review cues preserving 4,747 source words using guided alignment. It flagged 280 zero-duration tokens and corrected two engine-inserted adjacent duplicates against the source. Both subtitle formats passed the app's actual Swift parser with positive, nonoverlapping cue times within the recording. This validates conversion and format compatibility, not a manual listening review of the entire audiobook.
+
 Changes to subtitle serialization should also be checked against the app's actual Swift parser. Existing app tests run through `bash scripts/test.sh` when the iOS simulator platform is installed. The utility is not installed by iOS CI and is not embedded in the app.
 
 ## Engine choice and limitations
 
 [Stable-ts](https://github.com/jianfch/stable-ts#alignment) provides direct untimed-text alignment, fitting this utility's initial TXT + audio contract. Its repository was archived on May 30, 2026 and development is paused. The pinned package is a prototype dependency with an explicit maintenance risk; evaluate a replacement before depending on it for unattended production processing.
 
-[WhisperX](https://github.com/m-bain/whisperX) is a possible alternative. Its [alignment implementation](https://github.com/m-bain/whisperX/blob/main/whisperx/alignment.py) includes a Polish model, but its interface expects text segments with approximate audio intervals. Supporting arbitrary books robustly would require a coarse transcription/text-matching stage before that alignment step. This utility does not implement that pipeline.
+[WhisperX](https://github.com/m-bain/whisperX) is a possible alternative. Its [alignment implementation](https://github.com/m-bain/whisperX/blob/main/whisperx/alignment.py) includes a Polish model, but its interface expects text segments with approximate audio intervals. This utility's guided matching stage could provide a starting point for a future WhisperX adapter; no WhisperX backend is implemented here.
 
 Other current limitations: no PDF extraction/OCR, GUI, automatic chapter detection, subtitle editor, automatic correction of abridgments, confidence-based review UI, translation, source character mapping, or on-device iOS inference. Model artifacts are cached locally and outputs are estimates that need review.
