@@ -21,6 +21,36 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(LearningLevel.adjusted(4, correct: false), 3)
     }
 
+    func testContextSentenceExtractionKeepsSelectionInContainingSentence() throws {
+        let text = "Pierwsze zdanie.  Zepsuł się zamek w kurtce! Ostatnie zdanie."
+        let selection = (text as NSString).range(of: "zamek")
+
+        let sentence = try XCTUnwrap(ContextSentenceExtractor.sentence(text: text, selection: selection))
+
+        XCTAssertEqual(sentence.text, "Zepsuł się zamek w kurtce!")
+        XCTAssertEqual((sentence.text as NSString).substring(with: sentence.selection), "zamek")
+    }
+
+    func testWordBreakdownMarksCommonGrammarWordsButKeepsSelectedShortWordVisible() {
+        let tokens = WordBreakdownBuilder.tokens(in: "Ja idę do domu i czytam.", selectedText: "do",
+                                                 languageCode: "pl")
+
+        XCTAssertEqual(tokens.map(\.text), ["Ja", "idę", "do", "domu", "i", "czytam"])
+        XCTAssertFalse(tokens.first(where: { $0.text == "do" })?.isGrammarWord ?? true,
+                       "The selected expression is never hidden as a grammar word")
+        XCTAssertTrue(tokens.first(where: { $0.text == "i" })?.isGrammarWord ?? false)
+    }
+
+    func testQualityConfigurationInvalidatesForRepeatedRequests() {
+        let first = QualityTranslationConfiguration.next(previous: nil, source: "pl", target: "ru")
+        let second = QualityTranslationConfiguration.next(previous: first, source: "pl", target: "ru")
+
+        XCTAssertGreaterThan(second.version, first.version)
+        if #available(iOS 26.4, *) {
+            XCTAssertEqual(second.preferredStrategy, .highFidelity)
+        }
+    }
+
     @MainActor func testNewDictionaryEntryUsesBookLanguageAndStartsPendingAtLevelOne() throws {
         let item = LearningItem(id: UUID(), title: "Polish story", mediaKind: "audio",
                                 mediaFilename: "media.m4a", transcriptFilename: "story.srt",
@@ -99,5 +129,55 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertTrue(json.contains("\"baseText\" : null"))
         XCTAssertTrue(json.contains("\"context\" : null"))
         XCTAssertNoThrow(try DictionaryTransferService.decode(file.data))
+    }
+
+    @MainActor func testContextAnalysisPersistsWithDictionaryEntry() throws {
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = container.mainContext
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 0,
+                                    context: SelectionContext(text: "Zepsuł się zamek w kurtce.",
+                                                              selection: NSRange(location: 10, length: 5)))
+        entry.contextSelectedTranslationText = "молния"
+        entry.contextTranslationText = "На куртке сломалась молния."
+        entry.wordHelpItems = [.init(sourceText: "kurtce", translationText: "куртке",
+                                     isGrammarWord: false)]
+        entry.selectedSenseText = "молния на одежде"
+        entry.userNote = "Не замок-здание."
+        context.insert(item)
+        context.insert(entry)
+        try context.save()
+
+        let saved = try XCTUnwrap(context.fetch(FetchDescriptor<DictionaryEntry>()).first)
+        XCTAssertEqual(saved.contextSelectedTranslationText, "молния")
+        XCTAssertEqual(saved.contextTranslationText, "На куртке сломалась молния.")
+        XCTAssertEqual(saved.wordHelpItems.first?.translationText, "куртке")
+        XCTAssertEqual(saved.selectedSenseText, "молния на одежде")
+        XCTAssertEqual(saved.userNote, "Не замок-здание.")
+    }
+
+    @MainActor func testLanguageChangeInvalidatesGeneratedAnalysisButPreservesUserNotes() {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: nil)
+        entry.contextSelectedTranslationText = "молния"
+        entry.contextTranslationText = "На куртке сломалась молния."
+        entry.wordHelpItems = [.init(sourceText: "zamek", translationText: "молния",
+                                     isGrammarWord: false)]
+        entry.selectedSenseText = "молния"
+        entry.userNote = "Clothing meaning"
+
+        entry.invalidateGeneratedContextAnalysis()
+
+        XCTAssertNil(entry.contextSelectedTranslationText)
+        XCTAssertNil(entry.contextTranslationText)
+        XCTAssertTrue(entry.wordHelpItems.isEmpty)
+        XCTAssertEqual(entry.selectedSenseText, "молния")
+        XCTAssertEqual(entry.userNote, "Clothing meaning")
+        XCTAssertEqual(entry.contextAnalysisRevision, 1)
     }
 }

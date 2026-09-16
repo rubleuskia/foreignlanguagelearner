@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Translation
 import UniformTypeIdentifiers
 
 struct DictionaryView: View {
@@ -124,6 +125,17 @@ struct DictionaryEntryDetailView: View {
     @State private var draft = ""
     @State private var errorMessage: String?
     @State private var confirmingReplacement = false
+    @State private var contextual = ContextualTranslationCoordinator()
+    @State private var showGrammarWords = false
+    @State private var hasAutoStarted = false
+    @State private var senseDraft = ""
+    @State private var noteDraft = ""
+    let autoStartContext: Bool
+
+    init(entry: DictionaryEntry, autoStartContext: Bool = false) {
+        self.entry = entry
+        self.autoStartContext = autoStartContext
+    }
 
     var body: some View {
         NavigationStack {
@@ -131,7 +143,7 @@ struct DictionaryEntryDetailView: View {
                 Section("Original") { Text(entry.text).textSelection(.enabled) }
                 if let contextText = entry.contextText {
                     Section("Source context") {
-                        Text(contextText)
+                        Text(highlightedContext(contextText))
                             .textSelection(.enabled)
                             .accessibilityIdentifier("dictionary.source-context")
                     }
@@ -142,6 +154,58 @@ struct DictionaryEntryDetailView: View {
                     else { Text("Translation is not available yet.").foregroundStyle(.secondary) }
                 }
                 Section("Progress") { LabeledContent("Level", value: "\(entry.learningLevel) · \(LearningLevel.title(entry.learningLevel))") }
+                if ContextSentenceExtractor.sentence(for: entry) != nil {
+                    Section("Meaning in context") {
+                        if let candidate = entry.contextSelectedTranslationText {
+                            LabeledContent("Selected text", value: candidate)
+                            if candidate != entry.translationText {
+                                Button("Use as Saved Translation", systemImage: "checkmark.circle") {
+                                    useContextTranslation(candidate)
+                                }
+                            }
+                        }
+                        if let sentence = entry.contextTranslationText {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Sentence translation").font(.caption).foregroundStyle(.secondary)
+                                Text(sentence).textSelection(.enabled)
+                            }
+                        }
+                        contextProgress
+                        Button(entry.contextTranslationText == nil ? "Translate in Context" : "Refresh Context Translation",
+                               systemImage: "character.book.closed") {
+                            contextual.translateContext(for: entry, context: context)
+                        }
+                        .accessibilityIdentifier("dictionary.context-translate")
+                        Text("The selected expression and its sentence are translated separately so you can compare the likely meaning. Existing manual or imported translations are preserved.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+
+                    Section("Word-by-word help") {
+                        if !entry.wordHelpItems.isEmpty {
+                            ForEach(Array(visibleWordHelp.enumerated()), id: \.offset) { _, item in
+                                LabeledContent(item.sourceText, value: item.translationText)
+                            }
+                            if hiddenGrammarWordCount > 0 {
+                                Toggle("Show \(hiddenGrammarWordCount) grammar words", isOn: $showGrammarWords)
+                            }
+                        }
+                        contextProgress(wordsOnly: true)
+                        Button(entry.wordHelpItems.isEmpty ? "Generate Word-by-word Help" : "Refresh Word-by-word Help",
+                               systemImage: "list.bullet.rectangle") {
+                            contextual.translateWords(for: entry, context: context)
+                        }
+                        .accessibilityIdentifier("dictionary.word-help")
+                        Text("Generated only when requested. These are individual word translations; the sentence translation remains the guide to meaning in context.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+
+                    Section("Your interpretation") {
+                        TextField("Preferred meaning", text: $senseDraft)
+                        TextField("Personal note", text: $noteDraft, axis: .vertical).lineLimit(2...5)
+                        Button("Save Meaning and Note") { saveInterpretation() }
+                            .disabled(senseDraft == (entry.selectedSenseText ?? "") && noteDraft == (entry.userNote ?? ""))
+                    }
+                }
                 Section("Source") {
                     Text(entry.sourceTitle)
                     LabeledContent("Languages", value: "\(SourceLanguage.name(for: entry.sourceLanguageCode)) → Russian")
@@ -155,6 +219,10 @@ struct DictionaryEntryDetailView: View {
                     if entry.translationStatus == .failed || entry.translationStatus == .needsDownload {
                         Button("Retry Translation", systemImage: "arrow.clockwise") { coordinator.retry(entry, context: context) }
                     }
+                    if entry.translationStatus == .translating {
+                        Label("Translating now — this may take a moment.", systemImage: "hourglass")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("Dictionary entry")
@@ -166,6 +234,20 @@ struct DictionaryEntryDetailView: View {
                 }
             }
             .interactiveDismissDisabled(editing)
+            .translationTask(contextual.configuration, action: contextual.perform(session:))
+            .task {
+                senseDraft = entry.selectedSenseText ?? ""
+                noteDraft = entry.userNote ?? ""
+                if autoStartContext, !hasAutoStarted {
+                    hasAutoStarted = true
+                    contextual.translateContext(for: entry, context: context)
+                }
+            }
+            .onDisappear {
+                if !entry.hasTranslation, entry.translationStatus == .pending {
+                    coordinator.enqueue(entry, context: context)
+                }
+            }
             .confirmationDialog("Replace saved translation?", isPresented: $confirmingReplacement) {
                 Button("Translate Again", role: .destructive) { forceTranslation() }
                 Button("Cancel", role: .cancel) {}
@@ -173,7 +255,53 @@ struct DictionaryEntryDetailView: View {
                 Text("The current translation will be replaced with a new automatic translation.")
             }
             .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+            .translationTask(coordinator.configuration, action: coordinator.perform(session:))
+            .alert("Context translation failed", isPresented: Binding(
+                get: { if case .failed = contextual.status { true } else { false } },
+                set: { if !$0 { contextual.clearError() } }
+            )) {
+                Button("OK") { contextual.clearError() }
+            } message: {
+                if case .failed(let message) = contextual.status { Text(message) }
+            }
         }.presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder private var contextProgress: some View {
+        switch contextual.status {
+        case .needsDownload:
+            Label("Language download required", systemImage: "arrow.down.circle")
+                .foregroundStyle(.secondary)
+        case .translatingContext:
+            HStack { ProgressView(); Text("Translating selection and sentence…") }
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder private func contextProgress(wordsOnly: Bool) -> some View {
+        if wordsOnly, contextual.status == .translatingWords {
+            HStack { ProgressView(); Text("Translating sentence words…") }
+        }
+    }
+
+    private var visibleWordHelp: [WordHelpItem] {
+        showGrammarWords ? entry.wordHelpItems : entry.wordHelpItems.filter { !$0.isGrammarWord }
+    }
+
+    private var hiddenGrammarWordCount: Int {
+        entry.wordHelpItems.count(where: \WordHelpItem.isGrammarWord)
+    }
+
+    private func highlightedContext(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        guard let location = entry.contextSelectionLocation,
+              let length = entry.contextSelectionLength,
+              let stringRange = Range(NSRange(location: location, length: length), in: text),
+              let range = Range(stringRange, in: result) else { return result }
+        result[range].backgroundColor = .yellow.opacity(0.35)
+        result[range].font = .body.bold()
+        return result
     }
 
     private func save() {
@@ -192,6 +320,26 @@ struct DictionaryEntryDetailView: View {
         do { try coordinator.force(entry, context: context) }
         catch { errorMessage = error.localizedDescription }
     }
+
+    private func useContextTranslation(_ value: String) {
+        coordinator.cancel(entry.id)
+        entry.translationRevision += 1
+        entry.translationText = value
+        entry.translationOrigin = .manual
+        entry.translationUpdatedAt = .now
+        entry.translationStatus = .ready
+        do { try context.save() } catch { context.rollback(); errorMessage = error.localizedDescription }
+    }
+
+    private func saveInterpretation() {
+        entry.selectedSenseText = senseDraft.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        entry.userNote = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        do { try context.save() } catch { context.rollback(); errorMessage = error.localizedDescription }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 private struct DictionaryImportPreviewView: View {

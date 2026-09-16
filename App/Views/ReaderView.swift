@@ -14,6 +14,7 @@ struct ReaderView: View {
     @State private var message: String?
     @State private var selectedPart = 0
     @State private var sourceLanguages = [SourceLanguage.polish]
+    @State private var contextualEntry: DictionaryEntry?
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
@@ -37,14 +38,19 @@ struct ReaderView: View {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
-            TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { text, segment, selectionContext in
+            TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { action, text, segment, selectionContext in
                 let entry = DictionaryEntry(text: text, item: item, segmentIndex: segment, context: selectionContext)
                 guard !entry.text.isEmpty else { return }
                 context.insert(entry)
                 do {
                     try context.save()
-                    translationCoordinator.enqueue(entry, context: context)
-                    message = "Added to Dictionary"
+                    switch action {
+                    case .addToDictionary:
+                        translationCoordinator.enqueue(entry, context: context)
+                        message = "Added to Dictionary"
+                    case .translateInContext:
+                        contextualEntry = entry
+                    }
                 }
                 catch { context.delete(entry); message = error.localizedDescription }
             }
@@ -75,6 +81,9 @@ struct ReaderView: View {
             openCurrentPart()
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
+        .sheet(item: $contextualEntry) {
+            DictionaryEntryDetailView(entry: $0, autoStartContext: true)
+        }
         .onChange(of: playback.position) { _, position in
             if abs(item.lastPosition - position) >= 5 {
                 item.lastPosition = position
@@ -169,6 +178,7 @@ struct ReaderView: View {
                 translationCoordinator.cancel(entry.id)
                 entry.sourceLanguageCode = code
                 entry.translationRevision += 1
+                entry.invalidateGeneratedContextAnalysis()
                 if entry.translationOrigin == .apple || entry.translationOrigin == nil {
                     entry.translationText = nil
                     entry.translationOrigin = nil

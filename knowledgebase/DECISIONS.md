@@ -24,6 +24,8 @@ Untimed text is aligned outside the app using the local `tools/subtitle-aligner`
 
 Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need. Apple Translation was selected as the initial on-device integration direction; broader LLM/API integration remains an option for later quality improvements.
 
+Contextual translation remains local and user-triggered. Because Apple Translation has no separate context, dictionary-definition, or grammatical-analysis parameter, the app translates the selected expression and its containing sentence as separate requests and presents both for comparison. Word-by-word help is also explicit and is described as individual translation rather than authoritative semantic or morphological analysis. Existing manual and imported translations are never silently replaced by contextual results. High-fidelity translation is preferred where the OS exposes it, with the compatible standard configuration retained for older supported systems.
+
 ## Learning parts
 
 Learning content is modeled as virtual parts rather than requiring duplicated media files. This keeps a shared dictionary independent of whether the referenced media exists on another device and supports future practice flows.

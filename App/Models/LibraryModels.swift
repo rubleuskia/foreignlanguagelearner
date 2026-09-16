@@ -124,6 +124,14 @@ struct TranscriptDocument: Sendable {
     var contextText: String?
     var contextSelectionLocation: Int?
     var contextSelectionLength: Int?
+    var contextSelectedTranslationText: String?
+    var contextTranslationText: String?
+    var contextAnalysisUpdatedAt: Date?
+    var contextAnalysisRevision: Int = 0
+    var wordHelpItems: [WordHelpItem] = []
+    var wordHelpUpdatedAt: Date?
+    var selectedSenseText: String?
+    var userNote: String?
 
     init(text: String, item: LearningItem, segmentIndex: Int?, context: SelectionContext? = nil) {
         id = UUID()
@@ -176,6 +184,15 @@ struct TranscriptDocument: Sendable {
 
     var hasTranslation: Bool { translationText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
     var isLearningEligible: Bool { targetLanguageCode == "ru" && hasTranslation && translationStatus == .ready && learningLevel < 4 }
+
+    func invalidateGeneratedContextAnalysis() {
+        contextAnalysisRevision += 1
+        contextSelectedTranslationText = nil
+        contextTranslationText = nil
+        contextAnalysisUpdatedAt = nil
+        wordHelpItems = []
+        wordHelpUpdatedAt = nil
+    }
 }
 
 enum TranslationStatus: String, Codable, Sendable { case pending, translating, needsDownload, ready, failed, unsupported }
@@ -184,6 +201,12 @@ enum TranslationOrigin: String, Codable, Sendable { case apple, manual, imported
 struct SelectionContext: Equatable, Sendable {
     var text: String
     var selection: NSRange
+}
+
+struct WordHelpItem: Codable, Equatable, Sendable {
+    var sourceText: String
+    var translationText: String
+    var isGrammarWord: Bool
 }
 
 enum LearningLevel {
