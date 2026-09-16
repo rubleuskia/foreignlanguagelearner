@@ -2,6 +2,8 @@
 
 A local command-line utility for turning a **matching UTF-8 book transcript and an audio recording** into **SRT and WebVTT** files that Foreign Language Learner can import. Alignment estimates when the supplied words are spoken; no timestamps are required in the TXT.
 
+For the actual experiments, failures, fixes, and limits of the Polish sample conversion, see the [detailed conversion report](../../docs/SUBTITLE_CONVERSION_REPORT.md).
+
 This utility lives outside the iOS target. Run it on a development computer, review the result, then import the audio and one subtitle file into the app. It does not modify the book, audio, Xcode project, or library database.
 
 ## Contents
