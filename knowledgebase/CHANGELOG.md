@@ -41,9 +41,3 @@ Entries are ordered oldest to newest and summarize the project history recovered
 
 - Added saved source context to dictionary entry details and to the revealed side of learning cards.
 - No architectural/product decision or project-overview change was required.
-
-## 2026-09-16 — Sentence-based source context
-
-- Limited captured dictionary context to the selected sentence plus the preceding and following sentences.
-- Trimmed the adjacent sentences to 15 words each, preserving the selected phrase and reducing oversized context cards.
-- No architectural/product decision or project-overview change was required.
