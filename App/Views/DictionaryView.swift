@@ -129,6 +129,13 @@ struct DictionaryEntryDetailView: View {
         NavigationStack {
             Form {
                 Section("Original") { Text(entry.text).textSelection(.enabled) }
+                if let contextText = entry.contextText {
+                    Section("Source context") {
+                        Text(contextText)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("dictionary.source-context")
+                    }
+                }
                 Section("Russian translation") {
                     if editing { TextEditor(text: $draft).frame(minHeight: 100) }
                     else if let translation = entry.translationText { Text(translation).textSelection(.enabled) }
