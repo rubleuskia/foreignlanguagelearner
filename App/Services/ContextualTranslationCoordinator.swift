@@ -307,10 +307,12 @@ enum QualityTranslationConfiguration {
             previous.invalidate()
             return previous
         }
+        #if compiler(>=6.2)
         if #available(iOS 26.4, *) {
             return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage,
                                                     preferredStrategy: .highFidelity)
         }
+        #endif
         return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
     }
 }
