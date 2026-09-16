@@ -123,6 +123,7 @@ struct DictionaryEntryDetailView: View {
     @State private var editing = false
     @State private var draft = ""
     @State private var errorMessage: String?
+    @State private var confirmingReplacement = false
 
     var body: some View {
         NavigationStack {
@@ -138,8 +139,15 @@ struct DictionaryEntryDetailView: View {
                     Text(entry.sourceTitle)
                     LabeledContent("Languages", value: "\(SourceLanguage.name(for: entry.sourceLanguageCode)) → Russian")
                 }
-                if entry.translationStatus == .failed || entry.translationStatus == .needsDownload {
-                    Button("Retry Translation", systemImage: "arrow.clockwise") { coordinator.retry(entry, context: context) }
+                Section("Automatic translation") {
+                    Button(entry.hasTranslation ? "Translate Again" : "Force Translation",
+                           systemImage: "character.book.closed") {
+                        if entry.hasTranslation { confirmingReplacement = true }
+                        else { forceTranslation() }
+                    }
+                    if entry.translationStatus == .failed || entry.translationStatus == .needsDownload {
+                        Button("Retry Translation", systemImage: "arrow.clockwise") { coordinator.retry(entry, context: context) }
+                    }
                 }
             }
             .navigationTitle("Dictionary entry")
@@ -151,6 +159,12 @@ struct DictionaryEntryDetailView: View {
                 }
             }
             .interactiveDismissDisabled(editing)
+            .confirmationDialog("Replace saved translation?", isPresented: $confirmingReplacement) {
+                Button("Translate Again", role: .destructive) { forceTranslation() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The current translation will be replaced with a new automatic translation.")
+            }
             .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
         }.presentationDetents([.medium, .large])
     }
@@ -165,6 +179,11 @@ struct DictionaryEntryDetailView: View {
         entry.translationUpdatedAt = .now
         entry.translationStatus = .ready
         do { try context.save(); editing = false } catch { context.rollback(); errorMessage = error.localizedDescription }
+    }
+
+    private func forceTranslation() {
+        do { try coordinator.force(entry, context: context) }
+        catch { errorMessage = error.localizedDescription }
     }
 }
 

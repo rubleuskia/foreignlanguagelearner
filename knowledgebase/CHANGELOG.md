@@ -30,3 +30,9 @@ Entries are ordered oldest to newest and summarize the project history recovered
 ## 2026-09-16 — Knowledgebase governance
 
 - Added this knowledgebase and `AGENTS.md` rule requiring every completed PR to update project knowledge.
+
+## 2026-09-16 — Translation queue reliability
+
+- Invalidated same-language Apple Translation configurations between dictionary jobs so every queued phrase starts instead of only the first phrase translating.
+- Added a Force Translation action to dictionary entry details, with confirmation before replacing an existing translation.
+- No architectural/product decision or project-overview change was required.
