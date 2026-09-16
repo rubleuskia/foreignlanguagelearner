@@ -76,7 +76,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
             let previousBoundary = separators.last { $0.range.location < selection.location }
             let nextBoundary = separators.first { $0.range.location >= NSMaxRange(selection) }
-            let currentStart = previousBoundary.map(NSMaxRange) ?? 0
+            let currentStart = previousBoundary.map { NSMaxRange($0.range) } ?? 0
             let currentEnd = nextBoundary.map { $0.range.location + 1 } ?? ns.length
 
             let earlierBoundary = previousBoundary.flatMap { boundary in
@@ -86,13 +86,13 @@ struct TranscriptTextView: UIViewRepresentable {
                 separators.first { $0.range.location > boundary.range.location }
             }
 
-            let beforeStart = earlierBoundary.map(NSMaxRange) ?? 0
+            let beforeStart = earlierBoundary.map { NSMaxRange($0.range) } ?? 0
             let before = limitedSentence(ns.substring(with: NSRange(location: beforeStart,
                                                                        length: max(0, currentStart - beforeStart))),
                                          fromEnd: true)
             let current = ns.substring(with: NSRange(location: currentStart,
                                                       length: currentEnd - currentStart)).trimmingCharacters(in: .whitespacesAndNewlines)
-            let afterStart = nextBoundary.map(NSMaxRange) ?? ns.length
+            let afterStart = nextBoundary.map { NSMaxRange($0.range) } ?? ns.length
             let afterEnd = laterBoundary?.range.location ?? ns.length
             let after = limitedSentence(ns.substring(with: NSRange(location: afterStart,
                                                                       length: max(0, afterEnd - afterStart))),
