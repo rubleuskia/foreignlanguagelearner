@@ -66,19 +66,48 @@ struct TranscriptTextView: UIViewRepresentable {
 
         private static func context(in text: String, selection: NSRange) -> SelectionContext? {
             let ns = text as NSString
-            let capacity = 2_000
-            guard selection.location != NSNotFound, selection.length <= capacity,
+            guard selection.location != NSNotFound, selection.length > 0,
                   NSMaxRange(selection) <= ns.length else { return nil }
-            var start = max(0, selection.location - max(0, (capacity - selection.length) / 2))
-            let length = min(ns.length - start, capacity)
-            if NSMaxRange(selection) > start + length { start = max(0, NSMaxRange(selection) - length) }
-            let range = ns.rangeOfComposedCharacterSequences(for: NSRange(location: start, length: min(length, ns.length - start)))
-            guard range.length <= capacity else { return nil }
-            let excerpt = ns.substring(with: range)
-            let relative = NSRange(location: selection.location - range.location, length: selection.length)
-            guard relative.location >= 0, NSMaxRange(relative) <= (excerpt as NSString).length,
-                  DictionaryEntry.normalized((excerpt as NSString).substring(with: relative)) == DictionaryEntry.normalized(ns.substring(with: selection)) else { return nil }
+
+            // A sentence boundary is a dot followed by whitespace and an uppercase letter.
+            let pattern = #"\.(?:\s+)(?=[\p{Lu}])"#
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+            let separators = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+
+            let previousBoundary = separators.last { $0.range.location < selection.location }
+            let nextBoundary = separators.first { $0.range.location >= NSMaxRange(selection) }
+            let currentStart = previousBoundary.map { NSMaxRange($0.range) } ?? 0
+            let currentEnd = nextBoundary.map { $0.range.location + 1 } ?? ns.length
+
+            let earlierBoundary = previousBoundary.flatMap { boundary in
+                separators.last { $0.range.location < boundary.range.location }
+            }
+            let laterBoundary = nextBoundary.flatMap { boundary in
+                separators.first { $0.range.location > boundary.range.location }
+            }
+
+            let beforeStart = earlierBoundary.map { NSMaxRange($0.range) } ?? 0
+            let before = limitedSentence(ns.substring(with: NSRange(location: beforeStart,
+                                                                       length: max(0, currentStart - beforeStart))),
+                                         fromEnd: true)
+            let current = ns.substring(with: NSRange(location: currentStart,
+                                                      length: currentEnd - currentStart)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let afterStart = nextBoundary.map { NSMaxRange($0.range) } ?? ns.length
+            let afterEnd = laterBoundary?.range.location ?? ns.length
+            let after = limitedSentence(ns.substring(with: NSRange(location: afterStart,
+                                                                      length: max(0, afterEnd - afterStart))),
+                                        fromEnd: false)
+            let excerpt = [before, current, after].filter { !$0.isEmpty }.joined(separator: " ")
+            let relative = (excerpt as NSString).range(of: ns.substring(with: selection))
+            guard relative.location != NSNotFound else { return nil }
             return SelectionContext(text: excerpt, selection: relative)
+        }
+
+        private static func limitedSentence(_ sentence: String, fromEnd: Bool) -> String {
+            let words = sentence.split(whereSeparator: { $0.isWhitespace })
+            guard words.count > 15 else { return sentence.trimmingCharacters(in: .whitespacesAndNewlines) }
+            let limited = fromEnd ? words.suffix(15) : words.prefix(15)
+            return limited.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 }
