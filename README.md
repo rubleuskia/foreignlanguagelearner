@@ -1,6 +1,6 @@
 # Foreign Language Learner
 
-Native SwiftUI iPhone and iPad app, targeting iOS 17+. Includes a local media library, synchronized selectable transcripts, a phrase dictionary, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
+Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media library, synchronized selectable transcripts, an Apple Translation-powered phrase dictionary, interactive learning rounds, portable JSON dictionary files, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
 
 ## Start developing
 
@@ -24,7 +24,7 @@ bash scripts/test.sh
 SIMULATOR_ID=<simulator-udid> bash scripts/test.sh
 ```
 
-Unit tests cover subtitle parsing, timing lookup, Unicode ranges, and dictionary persistence. UI tests exercise the empty library, import sheet, and dictionary navigation. Tests use in-memory state, with no network or credentials. Add model tests under `Tests/Unit` and user journey tests under `Tests/UI`; regenerate the project after adding files. Xcode also runs both suites with Command-U. Test results and coverage are saved in `build/*.xcresult`; open these in Xcode.
+Unit tests cover subtitle parsing, timing lookup, Unicode ranges, dictionary persistence, learning levels, and JSON dictionary transfer. UI tests exercise the empty library, import sheet, and dictionary navigation. Tests use in-memory state, with no network or credentials. Add model tests under `Tests/Unit` and user journey tests under `Tests/UI`; regenerate the project after adding files. Xcode also runs both suites with Command-U. Test results and coverage are saved in `build/*.xcresult`; open these in Xcode.
 
 ## Automation
 

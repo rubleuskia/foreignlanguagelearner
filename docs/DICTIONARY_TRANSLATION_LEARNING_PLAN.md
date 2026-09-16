@@ -1,6 +1,6 @@
 # Dictionary translation and learning — implementation plan
 
-Status: ready for implementation; this document does not implement the feature.
+Status: implemented on `codex/dictionary-translation-learning`; retained as the design and acceptance record.
 Prepared: 2026-09-16.
 
 ## 1. Objective and confirmed decisions

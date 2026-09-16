@@ -29,6 +29,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["library.upload"].tap()
         XCTAssertTrue(app.buttons["Choose audio or video"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Choose transcript"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["import.language"].exists)
         XCTAssertTrue(app.switches["import.split"].exists)
         XCTAssertFalse(app.buttons["Import"].isEnabled)
         app.buttons["Cancel"].tap()

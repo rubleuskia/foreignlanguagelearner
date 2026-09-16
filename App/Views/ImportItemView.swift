@@ -13,6 +13,8 @@ struct ImportItemView: View {
     @State private var errorMessage: String?
     @State private var splitIntoParts = false
     @State private var partMinutes = 10
+    @State private var sourceLanguageCode = "pl"
+    @State private var sourceLanguages = [SourceLanguage.polish]
 
     var body: some View {
         NavigationStack {
@@ -34,6 +36,11 @@ struct ImportItemView: View {
                     Text("SRT and WebVTT support synchronized scrolling. Plain UTF-8 text supports reading and phrase selection.")
                 }
                 Section {
+                    Picker("Source language", selection: $sourceLanguageCode) {
+                        ForEach(sourceLanguages) { language in Text(language.name).tag(language.code) }
+                    }.accessibilityIdentifier("import.language")
+                } header: { Text("Language") } footer: { Text("Used to translate saved phrases into Russian.") }
+                Section {
                     Toggle("Split into parts", isOn: $splitIntoParts).accessibilityIdentifier("import.split")
                     if splitIntoParts { Stepper("Part length: \(partMinutes) minutes", value: $partMinutes, in: 1...60) }
                 } header: { Text("Parts") } footer: { Text("Parts share the imported media file. Splitting requires a timed SRT or WebVTT transcript.") }
@@ -50,6 +57,7 @@ struct ImportItemView: View {
             }
             .disabled(importing)
             .interactiveDismissDisabled(importing)
+            .task { sourceLanguages = await SourceLanguage.availableForRussian() }
         }
     }
 
@@ -67,7 +75,8 @@ struct ImportItemView: View {
             }
             let item = LearningItem(id: imported.id, title: imported.title, mediaKind: imported.mediaKind,
                                     mediaFilename: imported.mediaFilename, transcriptFilename: imported.transcriptFilename,
-                                    duration: imported.duration, segments: imported.document.segments, parts: parts)
+                                    duration: imported.duration, segments: imported.document.segments, parts: parts,
+                                    sourceLanguageCode: sourceLanguageCode)
             context.insert(item)
             do { try context.save() }
             catch {

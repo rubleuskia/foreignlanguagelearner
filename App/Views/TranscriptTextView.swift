@@ -5,7 +5,7 @@ struct TranscriptTextView: UIViewRepresentable {
     let document: TranscriptDocument
     let activeSegment: Int?
     @Binding var following: Bool
-    let saveSelection: (String, Int?) -> Void
+    let saveSelection: (String, Int?, SelectionContext?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextView {
@@ -57,10 +57,28 @@ struct TranscriptTextView: UIViewRepresentable {
             guard range.length > 0 else { return UIMenu(children: suggestedActions) }
             let selected = (textView.text as NSString).substring(with: range)
             let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, range).length > 0 }
+            let selectionContext = Self.context(in: textView.text, selection: range)
             let action = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
-                self?.parent.saveSelection(selected, segment)
+                self?.parent.saveSelection(selected, segment, selectionContext)
             }
             return UIMenu(children: [action] + suggestedActions)
+        }
+
+        private static func context(in text: String, selection: NSRange) -> SelectionContext? {
+            let ns = text as NSString
+            let capacity = 2_000
+            guard selection.location != NSNotFound, selection.length <= capacity,
+                  NSMaxRange(selection) <= ns.length else { return nil }
+            var start = max(0, selection.location - max(0, (capacity - selection.length) / 2))
+            let length = min(ns.length - start, capacity)
+            if NSMaxRange(selection) > start + length { start = max(0, NSMaxRange(selection) - length) }
+            let range = ns.rangeOfComposedCharacterSequences(for: NSRange(location: start, length: min(length, ns.length - start)))
+            guard range.length <= capacity else { return nil }
+            let excerpt = ns.substring(with: range)
+            let relative = NSRange(location: selection.location - range.location, length: selection.length)
+            guard relative.location >= 0, NSMaxRange(relative) <= (excerpt as NSString).length,
+                  DictionaryEntry.normalized((excerpt as NSString).substring(with: relative)) == DictionaryEntry.normalized(ns.substring(with: selection)) else { return nil }
+            return SelectionContext(text: excerpt, selection: relative)
         }
     }
 }
