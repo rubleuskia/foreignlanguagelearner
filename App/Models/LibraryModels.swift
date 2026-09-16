@@ -7,6 +7,41 @@ struct TranscriptSegment: Codable, Equatable, Sendable {
     var text: String
 }
 
+struct LearningPart: Codable, Equatable, Sendable, Identifiable {
+    var id: UUID
+    var start: Double
+    var end: Double
+    var isCompleted: Bool
+    var lastPosition: Double
+
+    init(id: UUID = UUID(), start: Double, end: Double, isCompleted: Bool = false, lastPosition: Double? = nil) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.isCompleted = isCompleted
+        self.lastPosition = lastPosition ?? start
+    }
+}
+
+enum LearningPartPlanner {
+    static func makeParts(segments: [TranscriptSegment], duration: Double, targetDuration: Double) -> [LearningPart] {
+        guard duration > 0, targetDuration > 0,
+              segments.contains(where: { $0.start != nil && $0.end != nil }) else { return [] }
+        let cueEnds = segments.compactMap(\.end).filter { $0 > 0 && $0 < duration }.sorted()
+        var parts: [LearningPart] = []
+        var start = 0.0
+        while duration - start > targetDuration {
+            let target = start + targetDuration
+            let boundary = cueEnds.min(by: { abs($0 - target) < abs($1 - target) }) ?? target
+            guard boundary > start else { break }
+            parts.append(LearningPart(start: start, end: boundary))
+            start = boundary
+        }
+        if start < duration { parts.append(LearningPart(start: start, end: duration)) }
+        return parts.count > 1 ? parts : []
+    }
+}
+
 struct TranscriptDocument: Sendable {
     let segments: [TranscriptSegment]
     let text: String
@@ -46,9 +81,10 @@ struct TranscriptDocument: Sendable {
     var duration: Double
     var lastPosition: Double
     var segments: [TranscriptSegment]
+    var parts: [LearningPart] = []
 
     init(id: UUID, title: String, mediaKind: String, mediaFilename: String,
-         transcriptFilename: String, duration: Double, segments: [TranscriptSegment]) {
+         transcriptFilename: String, duration: Double, segments: [TranscriptSegment], parts: [LearningPart] = []) {
         self.id = id
         self.title = title
         self.createdAt = .now
@@ -58,6 +94,11 @@ struct TranscriptDocument: Sendable {
         self.duration = duration
         self.lastPosition = 0
         self.segments = segments
+        self.parts = parts
+    }
+
+    func partIndex(containing position: Double) -> Int {
+        parts.firstIndex(where: { position >= $0.start && position < $0.end }) ?? 0
     }
 }
 
@@ -81,4 +122,5 @@ struct TranscriptDocument: Sendable {
     static func normalized(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
+
 }

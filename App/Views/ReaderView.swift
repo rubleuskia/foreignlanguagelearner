@@ -11,12 +11,15 @@ struct ReaderView: View {
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     @State private var message: String?
-    private let document: TranscriptDocument
+    @State private var selectedPart = 0
 
-    init(item: LearningItem) {
-        self.item = item
-        self.document = TranscriptDocument(segments: item.segments)
+    private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
+    private var document: TranscriptDocument {
+        guard let part = currentPart else { return TranscriptDocument(segments: item.segments) }
+        return TranscriptDocument(segments: item.segments.filter { ($0.end ?? -.infinity) > part.start && ($0.start ?? .infinity) < part.end })
     }
+    private var lowerBound: Double { currentPart?.start ?? 0 }
+    private var upperBound: Double { currentPart?.end ?? item.duration }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,15 +46,19 @@ struct ReaderView: View {
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            playback.open(url: MediaImportService.directory(for: item.id).appending(path: item.mediaFilename), position: item.lastPosition)
+            selectedPart = item.partIndex(containing: item.lastPosition)
+            openCurrentPart()
         }
         .onChange(of: playback.position) { _, position in
-            if abs(item.lastPosition - position) >= 5 { item.lastPosition = position }
+            if abs(item.lastPosition - position) >= 5 {
+                item.lastPosition = position
+                updatePartPosition(position)
+            }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { item.lastPosition = playback.position; try? context.save() }
+            if phase != .active { savePosition() }
         }
-        .onDisappear { item.lastPosition = playback.position; playback.close(); try? context.save() }
+        .onDisappear { savePosition(); playback.close() }
         .alert("Dictionary", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
@@ -62,26 +69,67 @@ struct ReaderView: View {
 
     private var playerBar: some View {
         VStack(spacing: 8) {
-            Slider(value: Binding(get: { scrubbing ? scrubPosition : min(playback.position, item.duration) }, set: { scrubPosition = $0 }), in: 0...max(item.duration, 0.01)) { editing in
+            if !item.parts.isEmpty {
+                HStack {
+                    Menu("Part \(selectedPart + 1) of \(item.parts.count)") {
+                        ForEach(item.parts.indices, id: \.self) { index in
+                            Button("Part \(index + 1)\(item.parts[index].isCompleted ? " · Completed" : "")") { switchToPart(index) }
+                        }
+                    }
+                    Spacer()
+                    Button(currentPart?.isCompleted == true ? "Completed" : "Mark completed", systemImage: currentPart?.isCompleted == true ? "checkmark.circle.fill" : "circle") { toggleCompleted() }
+                }
+            }
+            Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
                 scrubbing = editing
                 if !editing { playback.seek(to: scrubPosition); following = true }
             }.accessibilityLabel("Playback position")
             HStack {
                 Text(time(playback.position)).monospacedDigit()
                 Spacer()
-                Button { playback.seek(to: max(0, playback.position - 10)); following = true } label: { Image(systemName: "gobackward.10") }
+                Button { playback.seek(to: max(lowerBound, playback.position - 10)); following = true } label: { Image(systemName: "gobackward.10") }
                     .accessibilityLabel("Back 10 seconds")
                 Button { playback.toggle(); if playback.isPlaying { following = true } } label: { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
                     .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
-                Button { playback.seek(to: min(item.duration, playback.position + 10)); following = true } label: { Image(systemName: "goforward.10") }
+                Button { playback.seek(to: min(upperBound, playback.position + 10)); following = true } label: { Image(systemName: "goforward.10") }
                     .accessibilityLabel("Forward 10 seconds")
                 Spacer()
-                Text(time(item.duration)).monospacedDigit()
+                Text(time(upperBound)).monospacedDigit()
             }
         }.padding().background(.bar)
     }
     private func time(_ value: Double) -> String {
         let seconds = Int(max(0, value))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func openCurrentPart() {
+        let range = currentPart.map { $0.start...$0.end }
+        playback.open(url: MediaImportService.directory(for: item.id).appending(path: item.mediaFilename), position: currentPart?.lastPosition ?? item.lastPosition, range: range)
+    }
+
+    private func switchToPart(_ index: Int) {
+        savePosition()
+        playback.close()
+        selectedPart = index
+        following = true
+        openCurrentPart()
+    }
+
+    private func toggleCompleted() {
+        guard item.parts.indices.contains(selectedPart) else { return }
+        item.parts[selectedPart].isCompleted.toggle()
+        try? context.save()
+    }
+
+    private func updatePartPosition(_ position: Double) {
+        guard item.parts.indices.contains(selectedPart) else { return }
+        item.parts[selectedPart].lastPosition = position
+    }
+
+    private func savePosition() {
+        item.lastPosition = playback.position
+        updatePartPosition(playback.position)
+        try? context.save()
     }
 }
