@@ -7,16 +7,20 @@ import Observation
     var isPlaying = false
     var errorMessage: String?
     private var observer: Any?
+    private var playbackRange: ClosedRange<Double>?
 
-    func open(url: URL, position: Double) {
+    func open(url: URL, position: Double, range: ClosedRange<Double>? = nil) {
         close()
         errorMessage = nil
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        playbackRange = range
+        let item = AVPlayerItem(url: url)
+        if let range { item.forwardPlaybackEndTime = CMTime(seconds: range.upperBound, preferredTimescale: 600) }
+        player.replaceCurrentItem(with: item)
         seek(to: position)
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.position = time.seconds.isFinite ? time.seconds : 0
+                self.position = self.clamped(time.seconds.isFinite ? time.seconds : 0)
                 self.isPlaying = self.player.rate != 0
                 if let error = self.player.currentItem?.error { self.errorMessage = error.localizedDescription }
             }
@@ -29,7 +33,8 @@ import Observation
             do {
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
                 try AVAudioSession.sharedInstance().setActive(true)
-                if let duration = player.currentItem?.duration.seconds, duration.isFinite, position >= duration - 0.2 { seek(to: 0) }
+                let end = playbackRange?.upperBound ?? player.currentItem?.duration.seconds ?? 0
+                if end.isFinite, position >= end - 0.2 { seek(to: playbackRange?.lowerBound ?? 0) }
                 player.play()
                 isPlaying = true
             } catch { errorMessage = error.localizedDescription }
@@ -37,7 +42,7 @@ import Observation
     }
 
     func seek(to seconds: Double) {
-        position = max(0, seconds)
+        position = clamped(seconds)
         player.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
@@ -47,6 +52,12 @@ import Observation
         if let observer { player.removeTimeObserver(observer) }
         observer = nil
         player.replaceCurrentItem(with: nil)
+        playbackRange = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private func clamped(_ seconds: Double) -> Double {
+        guard let playbackRange else { return max(0, seconds) }
+        return min(max(playbackRange.lowerBound, seconds), playbackRange.upperBound)
     }
 }

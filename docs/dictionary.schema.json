@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rubleuskia/foreignlanguagelearner/docs/dictionary.schema.json",
+  "title": "Foreign Language Learner Dictionary",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["format", "schemaVersion", "exportedAt", "entries"],
+  "properties": {
+    "format": { "const": "foreign-language-learner.dictionary" },
+    "schemaVersion": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "entries": {
+      "type": "array",
+      "maxItems": 50000,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "text", "sourceLanguage", "targetLanguage", "translation", "learningLevel", "createdAt", "source"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "sourceLanguage": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "targetLanguage": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "translation": { "$ref": "#/$defs/translation" },
+        "learningLevel": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "translation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["text", "baseText", "origin", "updatedAt"],
+      "properties": {
+        "text": { "type": ["string", "null"], "maxLength": 65536 },
+        "baseText": { "type": ["string", "null"], "maxLength": 65536 },
+        "origin": { "type": ["string", "null"] },
+        "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string" },
+        "context": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/context" }
+          ]
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["text", "selectionUTF16"],
+      "properties": {
+        "text": { "type": "string", "maxLength": 2000 },
+        "selectionUTF16": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["location", "length"],
+          "properties": {
+            "location": { "type": "integer", "minimum": 0 },
+            "length": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

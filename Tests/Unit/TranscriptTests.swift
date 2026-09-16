@@ -53,6 +53,32 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(document.activeSegment(at: 1), 0)
     }
 
+    func testPartPlannerUsesTimedCueBoundariesAndDoesNotCreatePartsForPlainText() {
+        let segments = [TranscriptSegment(start: 0, end: 298, text: "One"), TranscriptSegment(start: 298, end: 603, text: "Two"), TranscriptSegment(start: 603, end: 900, text: "Three"), TranscriptSegment(start: 900, end: 1_201, text: "Four")]
+        let parts = LearningPartPlanner.makeParts(segments: segments, duration: 1_201, targetDuration: 600)
+        XCTAssertEqual(parts.map(\.start), [0, 603])
+        XCTAssertEqual(parts.map(\.end), [603, 1_201])
+        XCTAssertTrue(LearningPartPlanner.makeParts(segments: [.init(start: nil, end: nil, text: "Untimed")], duration: 1_201, targetDuration: 600).isEmpty)
+    }
+
+    func testPartProgressAndLookupArePersistentModelValues() {
+        let item = LearningItem(id: UUID(), title: "Lesson", mediaKind: "audio", mediaFilename: "media.m4a", transcriptFilename: "transcript.srt", duration: 1_000, segments: [], parts: [LearningPart(start: 0, end: 600), LearningPart(start: 600, end: 1_000)])
+        XCTAssertEqual(item.partIndex(containing: 650), 1)
+        XCTAssertEqual(item.partIndex(containing: 1_000), 0)
+        item.parts[0].isCompleted = true
+        XCTAssertTrue(item.parts[0].isCompleted)
+    }
+
+    @MainActor func testPartCompletionAndPositionPersist() throws {
+        let container = try ModelContainer(for: LearningItem.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = container.mainContext
+        let item = LearningItem(id: UUID(), title: "Lesson", mediaKind: "audio", mediaFilename: "media.m4a", transcriptFilename: "transcript.srt", duration: 1_000, segments: [], parts: [LearningPart(start: 0, end: 600, isCompleted: true, lastPosition: 242)])
+        context.insert(item)
+        try context.save()
+        let saved = try context.fetch(FetchDescriptor<LearningItem>()).first!
+        XCTAssertEqual(saved.parts, [LearningPart(id: saved.parts[0].id, start: 0, end: 600, isCompleted: true, lastPosition: 242)])
+    }
+
     @MainActor func testDictionaryPersistsMultiwordSelectionAndSource() throws {
         let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
