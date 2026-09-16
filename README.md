@@ -1,6 +1,6 @@
 # Foreign Language Learner
 
-Native SwiftUI iPhone and iPad app, targeting iOS 17+. Includes a sample Polish flashcard, unit tests, UI tests, simulator CI, and signed publishing infrastructure.
+Native SwiftUI iPhone and iPad app, targeting iOS 17+. Includes a local media library, synchronized selectable transcripts, a phrase dictionary, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
 
 ## Start developing
 
@@ -20,7 +20,7 @@ bash scripts/test.sh
 SIMULATOR_ID=<simulator-udid> bash scripts/test.sh
 ```
 
-Unit tests cover flashcard reveal/reset behavior. UI tests exercise the same flow through the app. Tests use in-memory state, with no network or credentials. Add model tests under `Tests/Unit` and user journey tests under `Tests/UI`; regenerate the project after adding files. Xcode also runs both suites with Command-U. Test results and coverage are saved in `build/*.xcresult`; open these in Xcode.
+Unit tests cover subtitle parsing, timing lookup, Unicode ranges, and dictionary persistence. UI tests exercise the empty library, import sheet, and dictionary navigation. Tests use in-memory state, with no network or credentials. Add model tests under `Tests/Unit` and user journey tests under `Tests/UI`; regenerate the project after adding files. Xcode also runs both suites with Command-U. Test results and coverage are saved in `build/*.xcresult`; open these in Xcode.
 
 ## Automation
 
@@ -32,11 +32,11 @@ Workflows become available after these files are pushed to GitHub. See [release 
 
 ## Layout
 
-- `App/`: SwiftUI entry point, screen, small testable model, and assets.
+- `App/`: SwiftUI screens, UIKit transcript selection, SwiftData models, media services, and assets.
 - `Tests/`: XCTest unit and UI suites.
 - `project.yml`: XcodeGen source of truth; generated Xcode project is ignored.
 - `scripts/`: local setup, testing, and CI signing import.
 - `fastlane/`: signed archive and App Store Connect upload.
 - `.github/workflows/`: CI and release pipelines.
 
-No third-party runtime dependencies, persistence, backend, or analytics are configured. The app icon is a development placeholder; replace it before release.
+The app uses SwiftData and local file storage, with no third-party runtime dependencies, backend, or analytics. The app icon is a development placeholder; replace it before release.
