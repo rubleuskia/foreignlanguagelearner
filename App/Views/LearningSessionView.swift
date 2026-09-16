@@ -46,6 +46,14 @@ struct LearningSessionView: View {
                 Divider()
                 Text(entry.text).font(.title2).multilineTextAlignment(.center)
                     .accessibilityIdentifier("learn.original")
+                if let contextText = entry.contextText {
+                    Text(contextText)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                        .accessibilityIdentifier("learn.source-context")
+                }
                 HStack(spacing: 20) {
                     Button("Wrong", systemImage: "xmark.circle") { answer(entry, right: false) }
                         .buttonStyle(.bordered).tint(.red).accessibilityIdentifier("learn.wrong")

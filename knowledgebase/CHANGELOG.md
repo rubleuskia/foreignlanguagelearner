@@ -36,3 +36,8 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Invalidated same-language Apple Translation configurations between dictionary jobs so every queued phrase starts instead of only the first phrase translating.
 - Added a Force Translation action to dictionary entry details, with confirmation before replacing an existing translation.
 - No architectural/product decision or project-overview change was required.
+
+## 2026-09-16 — Dictionary context visibility
+
+- Added saved source context to dictionary entry details and to the revealed side of learning cards.
+- No architectural/product decision or project-overview change was required.
