@@ -17,9 +17,17 @@ struct ImportItemView: View {
             Form {
                 Section("Media") {
                     Button(media?.lastPathComponent ?? "Choose audio or video") { pickingMedia = true }
+                        .accessibilityIdentifier("import.media")
+                        .fileImporter(isPresented: $pickingMedia, allowedContentTypes: [.audio, .movie]) { result in
+                            switch result { case .success(let url): media = url; case .failure(let error): errorMessage = error.localizedDescription }
+                        }
                 }
                 Section {
                     Button(transcript?.lastPathComponent ?? "Choose transcript") { pickingTranscript = true }
+                        .accessibilityIdentifier("import.transcript")
+                        .fileImporter(isPresented: $pickingTranscript, allowedContentTypes: [.plainText, UTType(filenameExtension: "srt") ?? .data, UTType(filenameExtension: "vtt") ?? .data]) { result in
+                            switch result { case .success(let url): transcript = url; case .failure(let error): errorMessage = error.localizedDescription }
+                        }
                 } header: { Text("Transcript") } footer: {
                     Text("SRT and WebVTT support synchronized scrolling. Plain UTF-8 text supports reading and phrase selection.")
                 }
@@ -36,12 +44,6 @@ struct ImportItemView: View {
             }
             .disabled(importing)
             .interactiveDismissDisabled(importing)
-            .fileImporter(isPresented: $pickingMedia, allowedContentTypes: [.audio, .movie]) { result in
-                switch result { case .success(let url): media = url; case .failure(let error): errorMessage = error.localizedDescription }
-            }
-            .fileImporter(isPresented: $pickingTranscript, allowedContentTypes: [.plainText, UTType(filenameExtension: "srt") ?? .data, UTType(filenameExtension: "vtt") ?? .data]) { result in
-                switch result { case .success(let url): transcript = url; case .failure(let error): errorMessage = error.localizedDescription }
-            }
         }
     }
 
