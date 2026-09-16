@@ -8,6 +8,8 @@ import Observation
     var errorMessage: String?
     private var observer: Any?
     private var playbackRange: ClosedRange<Double>?
+    private var seekGeneration = 0
+    private var seekInProgress = false
 
     func open(url: URL, position: Double, range: ClosedRange<Double>? = nil) {
         close()
@@ -20,6 +22,7 @@ import Observation
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                guard !self.seekInProgress else { return }
                 self.position = self.clamped(time.seconds.isFinite ? time.seconds : 0)
                 self.isPlaying = self.player.rate != 0
                 if let error = self.player.currentItem?.error { self.errorMessage = error.localizedDescription }
@@ -43,10 +46,22 @@ import Observation
 
     func seek(to seconds: Double) {
         position = clamped(seconds)
-        player.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        seekGeneration += 1
+        let generation = seekGeneration
+        seekInProgress = true
+        player.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.seekGeneration == generation else { return }
+                self.seekInProgress = false
+                let actual = self.player.currentTime().seconds
+                if actual.isFinite { self.position = self.clamped(actual) }
+            }
+        }
     }
 
     func close() {
+        seekGeneration += 1
+        seekInProgress = false
         player.pause()
         isPlaying = false
         if let observer { player.removeTimeObserver(observer) }
