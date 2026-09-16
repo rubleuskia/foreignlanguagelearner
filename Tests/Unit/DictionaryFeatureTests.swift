@@ -3,6 +3,16 @@ import SwiftData
 @testable import ForeignLanguageLearner
 
 final class DictionaryFeatureTests: XCTestCase {
+    func testSameLanguagePairInvalidatesTranslationConfiguration() {
+        let first = TranslationConfiguration.next(previous: nil, source: "pl", target: "ru")
+        let second = TranslationConfiguration.next(previous: first, source: "pl", target: "ru")
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertGreaterThan(second.version, first.version)
+        XCTAssertEqual(second.source, first.source)
+        XCTAssertEqual(second.target, first.target)
+    }
+
     func testLearningLevelAdjustmentIsBounded() {
         XCTAssertEqual(LearningLevel.adjusted(1, correct: false), 1)
         XCTAssertEqual(LearningLevel.adjusted(1, correct: true), 2)

@@ -36,6 +36,31 @@ final class DictionaryTranslationCoordinator {
         enqueue(entry, context: context)
     }
 
+    func force(_ entry: DictionaryEntry, context: ModelContext) throws {
+        modelContext = context
+        let previous = (entry.translationText, entry.translationOriginRaw, entry.translationStatusRaw,
+                        entry.translationErrorCode, entry.translationUpdatedAt, entry.translationRevision)
+        entry.translationText = nil
+        entry.translationOrigin = nil
+        entry.translationStatus = .pending
+        entry.translationErrorCode = nil
+        entry.translationUpdatedAt = nil
+        entry.translationRevision += 1
+        do {
+            try context.save()
+        } catch {
+            (entry.translationText, entry.translationOriginRaw, entry.translationStatusRaw,
+             entry.translationErrorCode, entry.translationUpdatedAt, entry.translationRevision) = previous
+            throw error
+        }
+
+        attemptedPreparationPairs.remove("\(entry.sourceLanguageCode)>\(entry.targetLanguageCode)")
+        queued.removeAll { $0 == entry.id }
+        queued.insert(entry.id, at: 0)
+        if let active = currentJob, active.id == entry.id { finish(active) }
+        else { startNext(context: context) }
+    }
+
     func recover(context: ModelContext) {
         modelContext = context
         guard let entries = try? context.fetch(FetchDescriptor<DictionaryEntry>()) else { return }
@@ -169,10 +194,8 @@ final class DictionaryTranslationCoordinator {
             let job = Job(id: id, text: entry.text, source: entry.sourceLanguageCode,
                           target: entry.targetLanguageCode, revision: entry.translationRevision)
             currentJob = job
-            configuration = TranslationSession.Configuration(
-                source: Locale.Language(identifier: job.source),
-                target: Locale.Language(identifier: job.target)
-            )
+            configuration = TranslationConfiguration.next(previous: configuration,
+                                                          source: job.source, target: job.target)
             return
         }
     }
@@ -180,7 +203,6 @@ final class DictionaryTranslationCoordinator {
     private func finish(_ job: Job) {
         guard currentJob == job else { return }
         currentJob = nil
-        configuration = nil
         Task { @MainActor in
             await Task.yield()
             if let context = self.modelContext { self.startNext(context: context) }
@@ -191,6 +213,19 @@ final class DictionaryTranslationCoordinator {
         var descriptor = FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
+    }
+}
+
+enum TranslationConfiguration {
+    static func next(previous: TranslationSession.Configuration?, source: String,
+                     target: String) -> TranslationSession.Configuration {
+        let sourceLanguage = Locale.Language(identifier: source)
+        let targetLanguage = Locale.Language(identifier: target)
+        if var previous, previous.source == sourceLanguage, previous.target == targetLanguage {
+            previous.invalidate()
+            return previous
+        }
+        return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
     }
 }
 
