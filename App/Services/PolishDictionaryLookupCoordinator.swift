@@ -5,6 +5,7 @@ import SwiftData
 enum PolishDictionaryLookupState: Equatable {
     case idle
     case loading
+    case choosingLemma([String])
     case failed(String)
 }
 
@@ -22,13 +23,13 @@ final class PolishDictionaryLookupCoordinator {
         states[key(for: word)] ?? .idle
     }
 
-    func lookup(_ word: String, for entry: DictionaryEntry, context: ModelContext) {
+    func lookup(_ word: String, lemma: String? = nil, for entry: DictionaryEntry, context: ModelContext) {
         let lookupKey = key(for: word)
         tasks[lookupKey]?.cancel()
         states[lookupKey] = .loading
         tasks[lookupKey] = Task { [provider] in
             do {
-                let result = try await provider.lookup(word)
+                let result = try await provider.lookup(word, preferredLemma: lemma)
                 try Task.checkCancellation()
                 let originalItems = entry.wordHelpItems
                 var items = entry.wordHelpItems
@@ -47,6 +48,8 @@ final class PolishDictionaryLookupCoordinator {
                 states[lookupKey] = .idle
             } catch is CancellationError {
                 states[lookupKey] = .idle
+            } catch PolishWiktionaryError.ambiguousLemmas(let lemmas) {
+                states[lookupKey] = .choosingLemma(lemmas)
             } catch {
                 states[lookupKey] = .failed(error.localizedDescription)
             }

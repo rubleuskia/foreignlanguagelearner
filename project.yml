@@ -16,7 +16,13 @@ targets:
   ForeignLanguageLearner:
     type: application
     platform: iOS
-    sources: [App]
+    sources:
+      - path: App
+        excludes: [Resources]
+      - path: App/Resources
+        buildPhase: resources
+    dependencies:
+      - sdk: libsqlite3.tbd
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner

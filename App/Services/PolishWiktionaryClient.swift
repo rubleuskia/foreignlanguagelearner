@@ -20,28 +20,42 @@ struct PolishDictionaryMeaning: Codable, Equatable, Sendable, Identifiable {
 }
 
 protocol PolishDictionaryProviding: Sendable {
-    func lookup(_ word: String) async throws -> PolishDictionaryResult
+    func lookup(_ word: String, preferredLemma: String?) async throws -> PolishDictionaryResult
 }
 
 struct PolishWiktionaryClient: PolishDictionaryProviding {
     private let session: URLSession
+    private let lemmaResolver: any PolishLemmaResolving
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared,
+         lemmaResolver: any PolishLemmaResolving = BundledPolishLemmaResolver()) {
         self.session = session
+        self.lemmaResolver = lemmaResolver
     }
 
-    func lookup(_ word: String) async throws -> PolishDictionaryResult {
-        let initial = try await lookupPage(word)
+    func lookup(_ word: String, preferredLemma: String? = nil) async throws -> PolishDictionaryResult {
+        if let preferredLemma {
+            return try await lookupPage(preferredLemma).resolved(for: word)
+        }
+
+        let initial: PolishDictionaryResult
+        do {
+            initial = try await lookupPage(word)
+        } catch let error as PolishWiktionaryError where error.supportsLemmaFallback {
+            let lemmas = try await lemmaResolver.lemmas(for: word)
+                .filter { Self.comparisonKey($0) != Self.comparisonKey(word) }
+            guard !lemmas.isEmpty else { throw error }
+            guard lemmas.count == 1, let lemma = lemmas.first else {
+                throw PolishWiktionaryError.ambiguousLemmas(lemmas)
+            }
+            return try await lookupPage(lemma).resolved(for: word)
+        }
         guard let lemma = initial.formOfLemma,
-              lemma.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pl_PL")) !=
-                word.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pl_PL")) else {
+              Self.comparisonKey(lemma) != Self.comparisonKey(word) else {
             return initial
         }
         do {
-            var resolved = try await lookupPage(lemma)
-            resolved.requestedWord = word
-            resolved.resolvedFromForm = initial.headword
-            return resolved
+            return try await lookupPage(lemma).resolved(for: word)
         } catch {
             return initial
         }
@@ -58,6 +72,10 @@ struct PolishWiktionaryClient: PolishDictionaryProviding {
             throw PolishWiktionaryError.serverError
         }
         return try PolishWiktionaryParser.parse(data: data, requestedWord: word)
+    }
+
+    private static func comparisonKey(_ word: String) -> String {
+        word.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "pl_PL"))
     }
 
     static func requestURL(for word: String) throws -> URL {
@@ -86,6 +104,7 @@ enum PolishWiktionaryError: LocalizedError, Equatable {
     case wordNotFound
     case noPolishEntry
     case noDefinitions
+    case ambiguousLemmas([String])
 
     var errorDescription: String? {
         switch self {
@@ -95,7 +114,27 @@ enum PolishWiktionaryError: LocalizedError, Equatable {
         case .wordNotFound: "This word was not found in Wiktionary."
         case .noPolishEntry: "No Polish dictionary entry was found for this word."
         case .noDefinitions: "The Polish entry contains no definitions the app can display."
+        case .ambiguousLemmas: "Several Polish dictionary forms match this word."
         }
+    }
+
+    var supportsLemmaFallback: Bool {
+        switch self {
+        case .wordNotFound, .noPolishEntry, .noDefinitions: true
+        default: false
+        }
+    }
+}
+
+private extension PolishDictionaryResult {
+    func resolved(for originalWord: String) -> Self {
+        var result = self
+        result.requestedWord = originalWord
+        let locale = Locale(identifier: "pl_PL")
+        let originalKey = originalWord.precomposedStringWithCanonicalMapping.lowercased(with: locale)
+        let headwordKey = headword.precomposedStringWithCanonicalMapping.lowercased(with: locale)
+        result.resolvedFromForm = originalKey == headwordKey ? nil : originalWord
+        return result
     }
 }
 
