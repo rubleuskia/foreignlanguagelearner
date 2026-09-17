@@ -126,6 +126,7 @@ struct DictionaryEntryDetailView: View {
     @State private var errorMessage: String?
     @State private var confirmingReplacement = false
     @State private var contextual = ContextualTranslationCoordinator()
+    @State private var dictionaryLookup = PolishDictionaryLookupCoordinator()
     @State private var showGrammarWords = false
     @State private var hasAutoStarted = false
     @State private var senseDraft = ""
@@ -183,7 +184,7 @@ struct DictionaryEntryDetailView: View {
                     Section("Word-by-word help") {
                         if !entry.wordHelpItems.isEmpty {
                             ForEach(Array(visibleWordHelp.enumerated()), id: \.offset) { _, item in
-                                LabeledContent(item.sourceText, value: item.translationText)
+                                wordHelpRow(item)
                             }
                             if hiddenGrammarWordCount > 0 {
                                 Toggle("Show \(hiddenGrammarWordCount) grammar words", isOn: $showGrammarWords)
@@ -244,6 +245,7 @@ struct DictionaryEntryDetailView: View {
                 }
             }
             .onDisappear {
+                dictionaryLookup.cancelAll()
                 if !entry.hasTranslation, entry.translationStatus == .pending {
                     coordinator.enqueue(entry, context: context)
                 }
@@ -291,6 +293,74 @@ struct DictionaryEntryDetailView: View {
 
     private var hiddenGrammarWordCount: Int {
         entry.wordHelpItems.count(where: \WordHelpItem.isGrammarWord)
+    }
+
+    @ViewBuilder private func wordHelpRow(_ item: WordHelpItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent(item.sourceText, value: item.translationText)
+            if entry.sourceLanguageCode == "pl" {
+                if let result = item.polishDictionaryResult {
+                    DisclosureGroup("Polish definition · \(result.headword)") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if let form = result.resolvedFromForm {
+                                Text("\(form) → dictionary form: \(result.headword)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if let partOfSpeech = result.partOfSpeech {
+                                Text(partOfSpeech).font(.caption).foregroundStyle(.secondary)
+                            }
+                            ForEach(Array(result.meanings.enumerated()), id: \.element.id) { index, meaning in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(index + 1). \(meaning.definition)")
+                                    if !meaning.usageLabels.isEmpty {
+                                        Text(meaning.usageLabels.joined(separator: " · "))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    ForEach(meaning.examples, id: \.self) { example in
+                                        Text(example).italic().foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            HStack {
+                                if let sourceURL = URL(string: result.sourceURL) {
+                                    Link("Source: Polish Wiktionary", destination: sourceURL)
+                                }
+                                Spacer()
+                                switch dictionaryLookup.state(for: item.sourceText) {
+                                case .loading:
+                                    ProgressView()
+                                default:
+                                    Button("Refresh", systemImage: "arrow.clockwise") {
+                                        dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
+                                    }
+                                }
+                            }.font(.caption)
+                            if case .failed(let message) = dictionaryLookup.state(for: item.sourceText) {
+                                Text(message).font(.caption).foregroundStyle(.red)
+                            }
+                        }.padding(.top, 6)
+                    }
+                } else {
+                    switch dictionaryLookup.state(for: item.sourceText) {
+                    case .idle:
+                        Button("Look up Polish definition", systemImage: "book.closed") {
+                            dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
+                        }
+                        .accessibilityIdentifier("dictionary.polish-lookup.\(item.sourceText)")
+                    case .loading:
+                        HStack { ProgressView(); Text("Looking up Polish definition…") }
+                            .foregroundStyle(.secondary)
+                    case .failed(let message):
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(message).font(.caption).foregroundStyle(.red)
+                            Button("Try Again", systemImage: "arrow.clockwise") {
+                                dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func highlightedContext(_ text: String) -> AttributedString {

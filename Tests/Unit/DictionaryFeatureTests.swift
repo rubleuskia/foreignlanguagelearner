@@ -143,8 +143,15 @@ final class DictionaryFeatureTests: XCTestCase {
                                                               selection: NSRange(location: 10, length: 5)))
         entry.contextSelectedTranslationText = "молния"
         entry.contextTranslationText = "На куртке сломалась молния."
+        let dictionaryResult = PolishDictionaryResult(
+            requestedWord: "kurtce", headword: "kurtka", resolvedFromForm: "kurtce",
+            partOfSpeech: "rzeczownik", meanings: [
+                .init(id: "1.1", definition: "część ubrania", examples: ["Założyła kurtkę."], usageLabels: [])
+            ], sourceURL: "https://pl.wiktionary.org/wiki/kurtka", revisionID: 1,
+            fetchedAt: Date(timeIntervalSince1970: 100)
+        )
         entry.wordHelpItems = [.init(sourceText: "kurtce", translationText: "куртке",
-                                     isGrammarWord: false)]
+                                     isGrammarWord: false, polishDictionaryResult: dictionaryResult)]
         entry.selectedSenseText = "молния на одежде"
         entry.userNote = "Не замок-здание."
         context.insert(item)
@@ -155,6 +162,7 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(saved.contextSelectedTranslationText, "молния")
         XCTAssertEqual(saved.contextTranslationText, "На куртке сломалась молния.")
         XCTAssertEqual(saved.wordHelpItems.first?.translationText, "куртке")
+        XCTAssertEqual(saved.wordHelpItems.first?.polishDictionaryResult, dictionaryResult)
         XCTAssertEqual(saved.selectedSenseText, "молния на одежде")
         XCTAssertEqual(saved.userNote, "Не замок-здание.")
     }

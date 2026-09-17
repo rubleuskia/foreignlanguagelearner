@@ -253,7 +253,17 @@ final class ContextualTranslationCoordinator {
 
     private func completeWords(_ request: Request, items: [WordHelpItem]) {
         guard let entry = currentEntry(for: request) else { return }
-        entry.wordHelpItems = items
+        var cachedDefinitions: [String: PolishDictionaryResult] = [:]
+        for item in entry.wordHelpItems {
+            if let result = item.polishDictionaryResult {
+                cachedDefinitions[item.sourceText.lowercased()] = result
+            }
+        }
+        entry.wordHelpItems = items.map { item in
+            var item = item
+            item.polishDictionaryResult = cachedDefinitions[item.sourceText.lowercased()]
+            return item
+        }
         entry.wordHelpUpdatedAt = .now
         finish(request)
     }
