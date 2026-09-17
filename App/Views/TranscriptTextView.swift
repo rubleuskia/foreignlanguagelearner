@@ -10,7 +10,7 @@ struct TranscriptTextView: UIViewRepresentable {
     let document: TranscriptDocument
     let activeSegment: Int?
     @Binding var following: Bool
-    let handleSelection: (TranscriptSelectionAction, String, Int?, SelectionContext?) -> Void
+    let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextView {
@@ -64,10 +64,10 @@ struct TranscriptTextView: UIViewRepresentable {
             let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, range).length > 0 }
             let selectionContext = Self.context(in: textView.text, selection: range)
             let add = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
-                self?.parent.handleSelection(.addToDictionary, selected, segment, selectionContext)
+                self?.parent.handleSelection(.addToDictionary, selected, range, segment, selectionContext)
             }
             let context = UIAction(title: "Translate in Context", image: UIImage(systemName: "character.book.closed")) { [weak self] _ in
-                self?.parent.handleSelection(.translateInContext, selected, segment, selectionContext)
+                self?.parent.handleSelection(.translateInContext, selected, range, segment, selectionContext)
             }
             return UIMenu(children: [context, add] + suggestedActions)
         }

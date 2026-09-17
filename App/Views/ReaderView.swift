@@ -39,11 +39,11 @@ struct ReaderView: View {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
-            TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { action, text, segment, selectionContext in
+            TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
-                let audio = absoluteSegment.flatMap { item.segments.indices.contains($0) ? item.segments[$0] : nil }
+                let audio = audioRange(for: selectionRange)
                 let entry = DictionaryEntry(text: text, item: item, segmentIndex: absoluteSegment, context: selectionContext,
-                                            audioStart: audio?.start, audioEnd: audio?.end)
+                                            audioStart: audio?.lowerBound, audioEnd: audio?.upperBound)
                 guard !entry.text.isEmpty else { return }
                 context.insert(entry)
                 do {
@@ -140,6 +140,29 @@ struct ReaderView: View {
     private func time(_ value: Double) -> String {
         let seconds = Int(max(0, value))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func audioRange(for selectionRange: NSRange) -> ClosedRange<Double>? {
+        let matching = document.ranges.indices.filter {
+            NSIntersectionRange(document.ranges[$0], selectionRange).length > 0
+        }
+        let absoluteIndices = matching.compactMap { index -> Int? in
+            guard document.sourceIndices.indices.contains(index) else { return nil }
+            return document.sourceIndices[index]
+        }
+        let timed = absoluteIndices.compactMap { index -> (index: Int, segment: TranscriptSegment)? in
+            guard item.segments.indices.contains(index), item.segments[index].start != nil,
+                  item.segments[index].end != nil else { return nil }
+            return (index, item.segments[index])
+        }
+        guard let first = timed.compactMap({ $0.segment.start }).min(),
+              let last = timed.compactMap({ $0.segment.end }).max(), last > first else { return nil }
+
+        let nextStart = item.segments.drop(while: { ($0.end ?? -.infinity) <= last })
+            .compactMap(\.start).first
+        let paddedEnd = min(last + 0.75, nextStart ?? item.duration, item.duration)
+        guard paddedEnd > first else { return first...last }
+        return first...paddedEnd
     }
 
     private func openCurrentPart() {
