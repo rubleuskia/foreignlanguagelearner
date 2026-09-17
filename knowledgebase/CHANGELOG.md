@@ -80,3 +80,4 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Entries imported from JSON, created from untimed text, or whose source media is unavailable continue to work without audio and show an unavailable state.
 - Added coverage for source-index preservation and persisted audio ranges. No new architectural decision or project-overview change was required.
 - Extended phrase audio to include every subtitle cue touched by a selection and a bounded 0.75-second tail, preventing natural speech from being cut at the first cue boundary.
+- Increased the document-picker UI test wait for slower CI simulator launches; no product or architectural decision changed.
