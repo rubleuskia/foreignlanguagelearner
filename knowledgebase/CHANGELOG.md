@@ -58,3 +58,10 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Limited captured dictionary context to the selected sentence plus the preceding and following sentences.
 - Trimmed the adjacent sentences to 15 words each, preserving the selected phrase and reducing oversized context cards.
 - No architectural/product decision or project-overview change was required.
+
+## 2026-09-17 — Polish Wiktionary definitions
+
+- Added explicit per-word Polish Wiktionary lookup to word-by-word help, with numbered Polish definitions, usage labels, matching examples, source attribution, retry, and refresh states.
+- Cached successful Wiktionary results inside saved word-help data so previously viewed definitions remain available offline and survive translation refreshes.
+- Added fixture-backed coverage for multilingual article isolation, definition/example parsing, errors, and Polish query encoding.
+- Recorded Wiktionary as the first third-party runtime data source and updated the project boundary accordingly; the app still has no backend or analytics.

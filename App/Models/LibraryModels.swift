@@ -207,6 +207,7 @@ struct WordHelpItem: Codable, Equatable, Sendable {
     var sourceText: String
     var translationText: String
     var isGrammarWord: Bool
+    var polishDictionaryResult: PolishDictionaryResult? = nil
 }
 
 enum LearningLevel {
