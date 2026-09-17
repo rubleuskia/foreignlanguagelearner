@@ -19,7 +19,8 @@ struct ReaderView: View {
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
         guard let part = currentPart else { return TranscriptDocument(segments: item.segments) }
-        return TranscriptDocument(segments: item.segments.filter { ($0.end ?? -.infinity) > part.start && ($0.start ?? .infinity) < part.end })
+        let indexed = item.segments.enumerated().filter { ($0.element.end ?? -.infinity) > part.start && ($0.element.start ?? .infinity) < part.end }
+        return TranscriptDocument(segments: indexed.map(\.element), sourceIndices: indexed.map(\.offset))
     }
     private var lowerBound: Double { currentPart?.start ?? 0 }
     private var upperBound: Double { currentPart?.end ?? item.duration }
@@ -39,7 +40,10 @@ struct ReaderView: View {
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
             TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { action, text, segment, selectionContext in
-                let entry = DictionaryEntry(text: text, item: item, segmentIndex: segment, context: selectionContext)
+                let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
+                let audio = absoluteSegment.flatMap { item.segments.indices.contains($0) ? item.segments[$0] : nil }
+                let entry = DictionaryEntry(text: text, item: item, segmentIndex: absoluteSegment, context: selectionContext,
+                                            audioStart: audio?.start, audioEnd: audio?.end)
                 guard !entry.text.isEmpty else { return }
                 context.insert(entry)
                 do {

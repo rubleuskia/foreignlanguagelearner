@@ -44,11 +44,13 @@ enum LearningPartPlanner {
 
 struct TranscriptDocument: Sendable {
     let segments: [TranscriptSegment]
+    let sourceIndices: [Int]
     let text: String
     let ranges: [NSRange]
 
-    init(segments: [TranscriptSegment]) {
+    init(segments: [TranscriptSegment], sourceIndices: [Int]? = nil) {
         self.segments = segments
+        self.sourceIndices = sourceIndices ?? Array(segments.indices)
         self.text = segments.map(\.text).joined(separator: "\n\n")
         var offset = 0
         self.ranges = segments.map {
@@ -121,6 +123,8 @@ struct TranscriptDocument: Sendable {
     var translationRevision: Int = 0
     var learningLevel: Int = 1
     var localSourceItemID: UUID?
+    var audioStart: Double?
+    var audioEnd: Double?
     var contextText: String?
     var contextSelectionLocation: Int?
     var contextSelectionLength: Int?
@@ -133,7 +137,8 @@ struct TranscriptDocument: Sendable {
     var selectedSenseText: String?
     var userNote: String?
 
-    init(text: String, item: LearningItem, segmentIndex: Int?, context: SelectionContext? = nil) {
+    init(text: String, item: LearningItem, segmentIndex: Int?, context: SelectionContext? = nil,
+         audioStart: Double? = nil, audioEnd: Double? = nil) {
         id = UUID()
         self.text = Self.normalized(text)
         sourceItemID = item.id
@@ -142,6 +147,8 @@ struct TranscriptDocument: Sendable {
         createdAt = .now
         sourceLanguageCode = item.sourceLanguageCode
         localSourceItemID = item.id
+        self.audioStart = audioStart
+        self.audioEnd = audioEnd
         contextText = context?.text
         contextSelectionLocation = context?.selection.location
         contextSelectionLength = context?.selection.length
@@ -163,6 +170,8 @@ struct TranscriptDocument: Sendable {
         self.translationStatusRaw = translationText == nil ? TranslationStatus.pending.rawValue : TranslationStatus.ready.rawValue
         self.translationUpdatedAt = translationUpdatedAt
         self.learningLevel = min(4, max(1, learningLevel))
+        self.audioStart = nil
+        self.audioEnd = nil
         self.contextText = context?.text
         self.contextSelectionLocation = context?.selection.location
         self.contextSelectionLength = context?.selection.length

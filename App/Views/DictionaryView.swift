@@ -120,7 +120,9 @@ struct DictionaryEntryDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var coordinator
+    @Query private var sourceItems: [LearningItem]
     @Bindable var entry: DictionaryEntry
+    @State private var playback = PlaybackController()
     @State private var editing = false
     @State private var draft = ""
     @State private var errorMessage: String?
@@ -142,6 +144,22 @@ struct DictionaryEntryDetailView: View {
         NavigationStack {
             Form {
                 Section("Original") { Text(entry.text).textSelection(.enabled) }
+                Section("Audio") {
+                    if let item = sourceItem, let start = entry.audioStart, let end = entry.audioEnd, end > start {
+                        Button {
+                            playAudio(item: item, start: start, end: end)
+                        } label: {
+                            Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
+                                  systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        }
+                        .accessibilityIdentifier("dictionary.play-audio")
+                        Text("\(formatTime(start))–\(formatTime(end)) · \(item.title)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Label("Audio is unavailable for this phrase", systemImage: "speaker.slash")
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 if let contextText = entry.contextText {
                     Section("Source context") {
                         Text(highlightedContext(contextText))
@@ -245,6 +263,7 @@ struct DictionaryEntryDetailView: View {
                 }
             }
             .onDisappear {
+                playback.close()
                 dictionaryLookup.cancelAll()
                 if !entry.hasTranslation, entry.translationStatus == .pending {
                     coordinator.enqueue(entry, context: context)
@@ -267,6 +286,26 @@ struct DictionaryEntryDetailView: View {
                 if case .failed(let message) = contextual.status { Text(message) }
             }
         }.presentationDetents([.medium, .large])
+    }
+
+    private var sourceItem: LearningItem? {
+        sourceItems.first { $0.id == (entry.localSourceItemID ?? entry.sourceItemID) }
+    }
+
+    private func playAudio(item: LearningItem, start: Double, end: Double) {
+        let url = MediaImportService.directory(for: item.id).appending(path: item.mediaFilename)
+        if playback.isPlaying {
+            playback.toggle()
+        } else {
+            playback.close()
+            playback.open(url: url, position: start, range: start...end)
+            playback.toggle()
+        }
+    }
+
+    private func formatTime(_ value: Double) -> String {
+        let seconds = Int(max(0, value))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     @ViewBuilder private var contextProgress: some View {

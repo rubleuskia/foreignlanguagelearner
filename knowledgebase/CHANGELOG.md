@@ -65,3 +65,16 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Cached successful Wiktionary results inside saved word-help data so previously viewed definitions remain available offline and survive translation refreshes.
 - Added fixture-backed coverage for multilingual article isolation, definition/example parsing, errors, and Polish query encoding.
 - Recorded Wiktionary as the first third-party runtime data source and updated the project boundary accordingly; the app still has no backend or analytics.
+
+## 2026-09-17 — Listening and vocabulary market research
+
+- Added [market research](../docs/LANGUAGE_LEARNING_MARKET_RESEARCH.md) comparing LingQ with nine alternatives/workflows, linking user feedback, and prioritizing listening and vocabulary-retention features.
+- Mapped proposed features to the current Swift implementation with estimated engineering effort, illustrative budgets, operating-cost assumptions, and a phased validation plan.
+- Recommendations are not adopted product or architectural decisions. No project-overview or supported-workflow change was made.
+
+## 2026-09-17 — Audio playback for saved phrases
+
+- Saved dictionary entries now retain the absolute transcript cue start/end when created from timed media.
+- Added a Play/Pause control to dictionary-entry details that reuses the local source media and plays only the saved phrase range.
+- Entries imported from JSON, created from untimed text, or whose source media is unavailable continue to work without audio and show an unavailable state.
+- Added coverage for source-index preservation and persisted audio ranges. No new architectural decision or project-overview change was required.
