@@ -4,7 +4,7 @@ Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media li
 
 ## Start developing
 
-1. Install full Xcode (CI uses Xcode 26.3), open it once, and install an iOS simulator runtime.
+1. Install full Xcode 26.6 or later, open it once, and install an iOS simulator runtime.
 2. Select it: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
 3. Install [Homebrew](https://brew.sh), then run `brew install xcodegen` (2.45 or newer).
 4. Run `bash scripts/bootstrap.sh`.

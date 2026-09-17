@@ -50,6 +50,7 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Added on-demand word-by-word sentence help, with common grammar words hidden by default but available through a reveal toggle.
 - Added editable preferred-meaning and personal-note fields, while preserving existing manual or imported translations until the learner explicitly accepts a contextual candidate.
 - Translation configurations prefer Apple's high-fidelity strategy on iOS 26.4 and later while retaining the iOS 18-compatible path on earlier systems.
+- Moved CI and publishing to the macOS 26 runner with Xcode 26.6 so the iOS 26 Translation APIs compile and are tested consistently.
 - Recorded the contextual translation architecture and updated the supported dictionary workflow; no broader project-purpose or boundary change was required.
 
 ## 2026-09-16 — Sentence-based source context

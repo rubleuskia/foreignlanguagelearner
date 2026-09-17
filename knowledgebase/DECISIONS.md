@@ -32,7 +32,7 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 
 ## Project and release tooling
 
-`project.yml` is authoritative and the Xcode project is generated. CI runs unit/UI tests and an unsigned Release build. Publishing is manual, gated by tests, uses an ephemeral keychain, and uploads to TestFlight or prepares an App Store draft without automatically submitting or releasing.
+`project.yml` is authoritative and the Xcode project is generated. CI and publishing use the macOS 26 runner with Xcode 26.6 so iOS 26 Translation APIs are available consistently. CI runs unit/UI tests and an unsigned Release build. Publishing is manual, gated by tests, uses an ephemeral keychain, and uploads to TestFlight or prepares an App Store draft without automatically submitting or releasing.
 
 ## Seek synchronization
 
