@@ -71,6 +71,7 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Added [market research](../docs/LANGUAGE_LEARNING_MARKET_RESEARCH.md) comparing LingQ with nine alternatives/workflows, linking user feedback, and prioritizing listening and vocabulary-retention features.
 - Mapped proposed features to the current Swift implementation with estimated engineering effort, illustrative budgets, operating-cost assumptions, and a phased validation plan.
 - Recommendations are not adopted product or architectural decisions. No project-overview or supported-workflow change was made.
+- Перевёл отчёт исследования на русский язык, сохранив структуру, источники, оценки и технические рекомендации.
 
 ## 2026-09-17 — Audio playback for saved phrases
 
