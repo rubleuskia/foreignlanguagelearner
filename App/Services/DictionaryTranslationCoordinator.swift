@@ -42,7 +42,7 @@ final class DictionaryTranslationCoordinator {
                         entry.translationErrorCode, entry.translationUpdatedAt, entry.translationRevision)
         entry.translationText = nil
         entry.translationOrigin = nil
-        entry.translationStatus = .pending
+        entry.translationStatus = .translating
         entry.translationErrorCode = nil
         entry.translationUpdatedAt = nil
         entry.translationRevision += 1
@@ -219,13 +219,7 @@ final class DictionaryTranslationCoordinator {
 enum TranslationConfiguration {
     static func next(previous: TranslationSession.Configuration?, source: String,
                      target: String) -> TranslationSession.Configuration {
-        let sourceLanguage = Locale.Language(identifier: source)
-        let targetLanguage = Locale.Language(identifier: target)
-        if var previous, previous.source == sourceLanguage, previous.target == targetLanguage {
-            previous.invalidate()
-            return previous
-        }
-        return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
+        QualityTranslationConfiguration.next(previous: previous, source: source, target: target)
     }
 }
 

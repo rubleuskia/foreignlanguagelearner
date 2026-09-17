@@ -1,11 +1,16 @@
 import SwiftUI
 import UIKit
 
+enum TranscriptSelectionAction {
+    case addToDictionary
+    case translateInContext
+}
+
 struct TranscriptTextView: UIViewRepresentable {
     let document: TranscriptDocument
     let activeSegment: Int?
     @Binding var following: Bool
-    let saveSelection: (String, Int?, SelectionContext?) -> Void
+    let handleSelection: (TranscriptSelectionAction, String, Int?, SelectionContext?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextView {
@@ -58,10 +63,13 @@ struct TranscriptTextView: UIViewRepresentable {
             let selected = (textView.text as NSString).substring(with: range)
             let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, range).length > 0 }
             let selectionContext = Self.context(in: textView.text, selection: range)
-            let action = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
-                self?.parent.saveSelection(selected, segment, selectionContext)
+            let add = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+                self?.parent.handleSelection(.addToDictionary, selected, segment, selectionContext)
             }
-            return UIMenu(children: [action] + suggestedActions)
+            let context = UIAction(title: "Translate in Context", image: UIImage(systemName: "character.book.closed")) { [weak self] _ in
+                self?.parent.handleSelection(.translateInContext, selected, segment, selectionContext)
+            }
+            return UIMenu(children: [context, add] + suggestedActions)
         }
 
         private static func context(in text: String, selection: NSRange) -> SelectionContext? {
