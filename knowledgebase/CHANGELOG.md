@@ -71,6 +71,7 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Added [market research](../docs/LANGUAGE_LEARNING_MARKET_RESEARCH.md) comparing LingQ with nine alternatives/workflows, linking user feedback, and prioritizing listening and vocabulary-retention features.
 - Mapped proposed features to the current Swift implementation with estimated engineering effort, illustrative budgets, operating-cost assumptions, and a phased validation plan.
 - Recommendations are not adopted product or architectural decisions. No project-overview or supported-workflow change was made.
+- Перевёл отчёт исследования на русский язык, сохранив структуру, источники, оценки и технические рекомендации.
 
 ## 2026-09-17 — Audio playback for saved phrases
 
@@ -78,6 +79,8 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Added a Play/Pause control to dictionary-entry details that reuses the local source media and plays only the saved phrase range.
 - Entries imported from JSON, created from untimed text, or whose source media is unavailable continue to work without audio and show an unavailable state.
 - Added coverage for source-index preservation and persisted audio ranges. No new architectural decision or project-overview change was required.
+- Extended phrase audio to include every subtitle cue touched by a selection and a bounded 0.75-second tail, preventing natural speech from being cut at the first cue boundary.
+- Increased the document-picker UI test wait for slower CI simulator launches; no product or architectural decision changed.
 
 ## 2026-09-17 — Offline Polish form resolution
 
