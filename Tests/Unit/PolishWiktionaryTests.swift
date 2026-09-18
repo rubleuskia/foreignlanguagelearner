@@ -2,6 +2,66 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class PolishWiktionaryTests: XCTestCase {
+    override func tearDown() {
+        PolishWiktionaryURLProtocol.handler = nil
+        super.tearDown()
+    }
+
+    func testBundledSGJPDatabaseResolvesInflectedAndAmbiguousForms() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "PolishLemmaTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let resolver = BundledPolishLemmaResolver(destinationDirectory: directory)
+
+        let zostal = try await resolver.lemmas(for: "został")
+        let zrobilem = try await resolver.lemmas(for: "ZROBIŁEM!")
+        let mam = try await resolver.lemmas(for: "mam")
+
+        XCTAssertEqual(zostal, ["zostać"])
+        XCTAssertEqual(zrobilem, ["zrobić"])
+        XCTAssertEqual(Set(mam), Set(["mama", "mamić", "mieć"]))
+    }
+
+    func testClientUsesOfflineLemmaWhenInflectedPageIsMissing() async throws {
+        PolishWiktionaryURLProtocol.handler = { request in
+            let title = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "titles" })?.value
+            if title == "został" { return Data(Self.missingResponse(title: "został").utf8) }
+            let content = "== zostać ({{język polski}}) ==\n{{znaczenia}}\n''czasownik''\n: (1.1) pozostać w miejscu\n{{odmiana}}"
+            return Data(Self.response(title: "zostać", content: content).utf8)
+        }
+        let session = URLSession(configuration: Self.stubConfiguration)
+        defer { session.invalidateAndCancel() }
+        let client = PolishWiktionaryClient(
+            session: session,
+            lemmaResolver: StubLemmaResolver(lemmas: ["zostać"])
+        )
+
+        let result = try await client.lookup("został")
+
+        XCTAssertEqual(result.headword, "zostać")
+        XCTAssertEqual(result.resolvedFromForm, "został")
+        XCTAssertEqual(result.meanings.first?.definition, "pozostać w miejscu")
+    }
+
+    func testClientRequiresSelectionWhenOfflineFormHasMultipleLemmas() async throws {
+        PolishWiktionaryURLProtocol.handler = { _ in Data(Self.missingResponse(title: "mam").utf8) }
+        let session = URLSession(configuration: Self.stubConfiguration)
+        defer { session.invalidateAndCancel() }
+        let client = PolishWiktionaryClient(
+            session: session,
+            lemmaResolver: StubLemmaResolver(lemmas: ["mama", "mamić", "mieć"])
+        )
+
+        do {
+            _ = try await client.lookup("mam")
+            XCTFail("Expected an explicit lemma choice")
+        } catch {
+            XCTAssertEqual(error as? PolishWiktionaryError,
+                           .ambiguousLemmas(["mama", "mamić", "mieć"]))
+        }
+    }
+
     func testParserExtractsOnlyPolishMeaningsAndMatchesExamples() throws {
         let data = try XCTUnwrap(fixture.data(using: .utf8))
         let fetchedAt = Date(timeIntervalSince1970: 100)
@@ -50,7 +110,17 @@ final class PolishWiktionaryTests: XCTestCase {
         XCTAssertEqual(result.formOfLemma, "dom")
     }
 
-    private func response(title: String = "dom", content: String) -> String {
+    private static var stubConfiguration: URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PolishWiktionaryURLProtocol.self]
+        return configuration
+    }
+
+    private static func missingResponse(title: String) -> String {
+        "{\"batchcomplete\":true,\"query\":{\"pages\":[{\"ns\":0,\"title\":\"\(title)\",\"missing\":true}]}}"
+    }
+
+    private static func response(title: String = "dom", content: String) -> String {
         let encoded = try! JSONSerialization.data(withJSONObject: [
             "batchcomplete": true,
             "query": ["pages": [[
@@ -60,6 +130,10 @@ final class PolishWiktionaryTests: XCTestCase {
             ]]]
         ])
         return String(decoding: encoded, as: UTF8.self)
+    }
+
+    private func response(title: String = "dom", content: String) -> String {
+        Self.response(title: title, content: content)
     }
 
     private let fixture = #"""
@@ -77,4 +151,31 @@ final class PolishWiktionaryTests: XCTestCase {
       }
     }
     """#
+}
+
+private struct StubLemmaResolver: PolishLemmaResolving {
+    let lemmas: [String]
+    func lemmas(for word: String) async throws -> [String] { lemmas }
+}
+
+private final class PolishWiktionaryURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var handler: ((URLRequest) throws -> Data)?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let data = try Self.handler?(request) ?? Data()
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }

@@ -78,3 +78,10 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Added a Play/Pause control to dictionary-entry details that reuses the local source media and plays only the saved phrase range.
 - Entries imported from JSON, created from untimed text, or whose source media is unavailable continue to work without audio and show an unavailable state.
 - Added coverage for source-index preservation and persisted audio ranges. No new architectural decision or project-overview change was required.
+
+## 2026-09-17 — Offline Polish form resolution
+
+- Added a bundled SGJP morphology index containing 4,934,967 Polish surface forms and 5,252,824 unique form-to-lemma pairs.
+- Polish Wiktionary lookup now resolves missing inflected forms locally, including `został → zostać`, before requesting the lemma article.
+- Added an explicit lemma chooser for ambiguous forms, first-use database installation, SGJP attribution, and a reproducible pack builder.
+- Recorded the bundled language-pack architecture and updated the supported dictionary workflow and repository map.

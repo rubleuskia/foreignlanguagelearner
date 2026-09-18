@@ -370,7 +370,8 @@ struct DictionaryEntryDetailView: View {
                                     ProgressView()
                                 default:
                                     Button("Refresh", systemImage: "arrow.clockwise") {
-                                        dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
+                                        dictionaryLookup.lookup(item.sourceText, lemma: result.headword,
+                                                                for: entry, context: context)
                                     }
                                 }
                             }.font(.caption)
@@ -389,6 +390,17 @@ struct DictionaryEntryDetailView: View {
                     case .loading:
                         HStack { ProgressView(); Text("Looking up Polish definition…") }
                             .foregroundStyle(.secondary)
+                    case .choosingLemma(let lemmas):
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Choose the dictionary form for “\(item.sourceText)”:")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(lemmas, id: \.self) { lemma in
+                                Button(lemma, systemImage: "book.closed") {
+                                    dictionaryLookup.lookup(item.sourceText, lemma: lemma,
+                                                            for: entry, context: context)
+                                }
+                            }
+                        }
                     case .failed(let message):
                         VStack(alignment: .leading, spacing: 4) {
                             Text(message).font(.caption).foregroundStyle(.red)
