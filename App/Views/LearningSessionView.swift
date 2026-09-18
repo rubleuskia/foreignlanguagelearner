@@ -4,6 +4,7 @@ import SwiftData
 struct LearningSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query private var allEntries: [DictionaryEntry]
     @State private var round: [UUID] = []
     @State private var index = 0
@@ -11,6 +12,8 @@ struct LearningSessionView: View {
     @State private var rightCount = 0
     @State private var wrongCount = 0
     @State private var errorMessage: String?
+    @State private var editingEntry: DictionaryEntry?
+    @State private var translationDraft = ""
 
     private var current: DictionaryEntry? {
         guard round.indices.contains(index) else { return nil }
@@ -35,6 +38,28 @@ struct LearningSessionView: View {
             } message: { Text(errorMessage ?? "") }
         }
         .onAppear { if round.isEmpty { startRound() } }
+        .sheet(item: $editingEntry) { entry in
+            NavigationStack {
+                Form {
+                    Section("Original") { Text(entry.text) }
+                    Section("Russian translation") {
+                        TextEditor(text: $translationDraft).frame(minHeight: 120)
+                    }
+                }
+                .navigationTitle("Edit translation")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { editingEntry = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { saveTranslation(entry) }
+                            .disabled(translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private func questionView(_ entry: DictionaryEntry) -> some View {
@@ -42,14 +67,19 @@ struct LearningSessionView: View {
             Text("\(index + 1) of \(round.count)").font(.caption).foregroundStyle(.secondary)
             Text(entry.translationText ?? "").font(.largeTitle).multilineTextAlignment(.center)
                 .accessibilityIdentifier("learn.translation")
+            Button("Edit translation", systemImage: "pencil") {
+                translationDraft = entry.translationText ?? ""
+                editingEntry = entry
+            }
+            .font(.caption)
+            .accessibilityIdentifier("learn.edit")
             if revealed {
                 Divider()
                 Text(entry.text).font(.title2).multilineTextAlignment(.center)
                     .accessibilityIdentifier("learn.original")
                 if let contextText = entry.contextText {
-                    Text(contextText)
+                    Text(highlightedContext(contextText, entry: entry))
                         .font(.body)
-                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .textSelection(.enabled)
                         .accessibilityIdentifier("learn.source-context")
@@ -90,12 +120,55 @@ struct LearningSessionView: View {
         do {
             try context.save()
             if right { rightCount += 1 } else { wrongCount += 1 }
-            index += 1; revealed = false
+            index = LearningQueue.advance(&round, from: index, correct: right)
+            revealed = false
         } catch {
             entry.learningLevel = old
             errorMessage = error.localizedDescription
         }
     }
 
-    private func skipMissing() { if index < round.count { index += 1; revealed = false } }
+    private func skipMissing() {
+        if index < round.count { index += 1; revealed = false }
+    }
+
+    private func highlightedContext(_ text: String, entry: DictionaryEntry) -> AttributedString {
+        var result = AttributedString(text)
+        result.foregroundColor = .secondary
+        guard let location = entry.contextSelectionLocation,
+              let length = entry.contextSelectionLength,
+              let stringRange = Range(NSRange(location: location, length: length), in: text),
+              let range = Range(stringRange, in: result) else { return result }
+        result[range].backgroundColor = .yellow.opacity(0.35)
+        result[range].foregroundColor = .primary
+        result[range].font = .body.bold()
+        return result
+    }
+
+    private func saveTranslation(_ entry: DictionaryEntry) {
+        let value = translationDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        let previousText = entry.translationText
+        let previousOrigin = entry.translationOrigin
+        let previousRevision = entry.translationRevision
+        let previousUpdatedAt = entry.translationUpdatedAt
+        let previousStatus = entry.translationStatus
+        translationCoordinator.cancel(entry.id)
+        entry.translationText = value
+        entry.translationOrigin = .manual
+        entry.translationRevision += 1
+        entry.translationUpdatedAt = .now
+        entry.translationStatus = .ready
+        do {
+            try context.save()
+            editingEntry = nil
+        } catch {
+            entry.translationText = previousText
+            entry.translationOrigin = previousOrigin
+            entry.translationRevision = previousRevision
+            entry.translationUpdatedAt = previousUpdatedAt
+            entry.translationStatus = previousStatus
+            errorMessage = error.localizedDescription
+        }
+    }
 }

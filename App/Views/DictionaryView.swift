@@ -38,7 +38,7 @@ struct DictionaryView: View {
                     .accessibilityIdentifier("dictionary.learn")
                 Menu("Transfer", systemImage: "arrow.up.arrow.down") {
                     Toggle("Include source context", isOn: $includeContext)
-                    Button("Export Dictionary", systemImage: "square.and.arrow.up") { prepareExport() }
+                    Button("Export Dictionary + Diagnostics", systemImage: "square.and.arrow.up") { prepareExport() }
                     Menu("Import Dictionary") {
                         Button(DictionaryImportMode.merge.rawValue) { importMode = .merge; importing = true }
                         Button(DictionaryImportMode.translations.rawValue) { importMode = .translations; importing = true }
@@ -92,6 +92,14 @@ private struct DictionaryRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 5) {
                 Text(entry.text).foregroundStyle(.primary)
+                if let translation = entry.translationText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !translation.isEmpty {
+                    Text(translation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("dictionary.row-translation")
+                }
                 Text(entry.sourceTitle).font(.caption).foregroundStyle(.secondary)
                 Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
             }

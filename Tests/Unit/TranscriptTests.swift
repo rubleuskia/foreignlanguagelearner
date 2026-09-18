@@ -65,6 +65,19 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(document.sourceIndices, [1, 2])
     }
 
+    func testTranscriptContextKeepsExactRepeatedSelection() throws {
+        let text = "Zamek jest stary. Zamek jest zepsuty. Koniec."
+        let first = (text as NSString).range(of: "Zamek")
+        let second = (text as NSString).range(of: "Zamek", options: [],
+                                              range: NSRange(location: NSMaxRange(first),
+                                                             length: (text as NSString).length - NSMaxRange(first)))
+
+        let context = try XCTUnwrap(TranscriptTextView.Coordinator.context(in: text, selection: second))
+
+        XCTAssertEqual((context.text as NSString).substring(with: context.selection), "Zamek")
+        XCTAssertGreaterThan(context.selection.location, first.location)
+    }
+
     func testPartPlannerUsesTimedCueBoundariesAndDoesNotCreatePartsForPlainText() {
         let segments = [TranscriptSegment(start: 0, end: 298, text: "One"), TranscriptSegment(start: 298, end: 603, text: "Two"), TranscriptSegment(start: 603, end: 900, text: "Three"), TranscriptSegment(start: 900, end: 1_201, text: "Four")]
         let parts = LearningPartPlanner.makeParts(segments: segments, duration: 1_201, targetDuration: 600)

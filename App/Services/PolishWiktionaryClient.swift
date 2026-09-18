@@ -26,11 +26,14 @@ protocol PolishDictionaryProviding: Sendable {
 struct PolishWiktionaryClient: PolishDictionaryProviding {
     private let session: URLSession
     private let lemmaResolver: any PolishLemmaResolving
+    private let diagnostics: PolishLookupDiagnosticLog
 
     init(session: URLSession = .shared,
-         lemmaResolver: any PolishLemmaResolving = BundledPolishLemmaResolver()) {
+         lemmaResolver: any PolishLemmaResolving = BundledPolishLemmaResolver(),
+         diagnostics: PolishLookupDiagnosticLog = .shared) {
         self.session = session
         self.lemmaResolver = lemmaResolver
+        self.diagnostics = diagnostics
     }
 
     func lookup(_ word: String, preferredLemma: String? = nil) async throws -> PolishDictionaryResult {
@@ -56,7 +59,11 @@ struct PolishWiktionaryClient: PolishDictionaryProviding {
         }
         do {
             return try await lookupPage(lemma).resolved(for: word)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
+            diagnostics.record(error: error, operation: "lookup-derived-lemma",
+                               word: word, preferredLemma: lemma)
             return initial
         }
     }
@@ -69,7 +76,7 @@ struct PolishWiktionaryClient: PolishDictionaryProviding {
                          forHTTPHeaderField: "User-Agent")
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw PolishWiktionaryError.serverError
+            throw PolishWiktionaryError.serverError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
         return try PolishWiktionaryParser.parse(data: data, requestedWord: word)
     }
@@ -100,7 +107,7 @@ struct PolishWiktionaryClient: PolishDictionaryProviding {
 enum PolishWiktionaryError: LocalizedError, Equatable {
     case invalidRequest
     case invalidResponse
-    case serverError
+    case serverError(Int)
     case wordNotFound
     case noPolishEntry
     case noDefinitions
@@ -110,7 +117,7 @@ enum PolishWiktionaryError: LocalizedError, Equatable {
         switch self {
         case .invalidRequest: "The Wiktionary request could not be created."
         case .invalidResponse: "Wiktionary returned an unreadable response."
-        case .serverError: "Wiktionary is currently unavailable."
+        case .serverError(let status): "Wiktionary is currently unavailable (HTTP \(status))."
         case .wordNotFound: "This word was not found in Wiktionary."
         case .noPolishEntry: "No Polish dictionary entry was found for this word."
         case .noDefinitions: "The Polish entry contains no definitions the app can display."

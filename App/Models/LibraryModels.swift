@@ -228,3 +228,11 @@ enum LearningLevel {
         switch level { case 1: "New"; case 2: "Learning"; case 3: "Practising"; default: "Learnt" }
     }
 }
+
+enum LearningQueue {
+    static func advance(_ queue: inout [UUID], from index: Int, correct: Bool) -> Int {
+        guard queue.indices.contains(index) else { return index }
+        if !correct { queue.append(queue[index]) }
+        return index + 1
+    }
+}

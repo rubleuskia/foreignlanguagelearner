@@ -13,9 +13,45 @@
       "type": "array",
       "maxItems": 50000,
       "items": { "$ref": "#/$defs/entry" }
+    },
+    "diagnostics": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/diagnostics" }
+      ]
     }
   },
   "$defs": {
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["appVersion", "operatingSystem", "polishDefinitionErrors"],
+      "properties": {
+        "appVersion": { "type": "string" },
+        "operatingSystem": { "type": "string" },
+        "polishDefinitionErrors": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/polishDefinitionError" }
+        }
+      }
+    },
+    "polishDefinitionError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp", "operation", "word", "errorType", "errorDomain", "errorCode", "message"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "operation": { "type": "string", "maxLength": 100 },
+        "word": { "type": "string", "maxLength": 200 },
+        "preferredLemma": { "type": ["string", "null"], "maxLength": 200 },
+        "entryID": { "type": ["string", "null"], "format": "uuid" },
+        "errorType": { "type": "string" },
+        "errorDomain": { "type": "string", "maxLength": 200 },
+        "errorCode": { "type": "integer" },
+        "message": { "type": "string", "maxLength": 2000 }
+      }
+    },
     "entry": {
       "type": "object",
       "additionalProperties": true,

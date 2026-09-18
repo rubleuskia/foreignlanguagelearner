@@ -8,6 +8,15 @@ struct DictionaryTransferDocument: Codable {
     let schemaVersion: Int
     let exportedAt: Date
     let entries: [Entry]
+    let diagnostics: Diagnostics?
+
+    init(format: String, schemaVersion: Int, exportedAt: Date, entries: [Entry], diagnostics: Diagnostics? = nil) {
+        self.format = format
+        self.schemaVersion = schemaVersion
+        self.exportedAt = exportedAt
+        self.entries = entries
+        self.diagnostics = diagnostics
+    }
 
     struct Entry: Codable, Identifiable {
         let id: UUID
@@ -23,6 +32,11 @@ struct DictionaryTransferDocument: Codable {
     struct Source: Codable { let id: UUID; let title: String; let context: Context? }
     struct Context: Codable { let text: String; let selectionUTF16: Selection }
     struct Selection: Codable { let location: Int; let length: Int }
+    struct Diagnostics: Codable {
+        let appVersion: String
+        let operatingSystem: String
+        let polishDefinitionErrors: [PolishLookupDiagnosticEvent]
+    }
 }
 
 extension DictionaryTransferDocument.Translation {
@@ -106,7 +120,8 @@ enum DictionaryTransferError: LocalizedError {
 }
 
 enum DictionaryTransferService {
-    static func export(entries: [DictionaryEntry], includeContext: Bool) throws -> DictionaryJSONFile {
+    static func export(entries: [DictionaryEntry], includeContext: Bool,
+                       diagnosticEvents: [PolishLookupDiagnosticEvent] = PolishLookupDiagnosticLog.shared.events()) throws -> DictionaryJSONFile {
         let exported = entries.sorted { $0.id.uuidString < $1.id.uuidString }.map { entry in
             let translation = entry.translationText?.trimmingCharacters(in: .whitespacesAndNewlines)
             let context: DictionaryTransferDocument.Context?
@@ -123,8 +138,16 @@ enum DictionaryTransferService {
                 source: .init(id: entry.sourceItemID, title: entry.sourceTitle, context: context)
             )
         }
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let build = info?["CFBundleVersion"] as? String ?? "unknown"
+        let diagnostics = DictionaryTransferDocument.Diagnostics(
+            appVersion: "\(version) (\(build))",
+            operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
+            polishDefinitionErrors: diagnosticEvents
+        )
         let document = DictionaryTransferDocument(format: "foreign-language-learner.dictionary", schemaVersion: 1,
-                                                   exportedAt: .now, entries: exported)
+                                                   exportedAt: .now, entries: exported, diagnostics: diagnostics)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601

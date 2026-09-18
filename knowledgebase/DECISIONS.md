@@ -41,3 +41,7 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 ## Seek synchronization
 
 Playback seeks use generation tokens and completion callbacks. Periodic time observations are ignored while a seek is active, and stale completions cannot overwrite a newer seek. This addresses the observed 2–4 second transcript drift after manual seeking and previous/next navigation.
+
+## Exportable lookup diagnostics
+
+Polish Definition failures are recorded both through Apple's unified `Logger` and in an app-local, file-protected JSON log capped at 200 newest events. Dictionary export embeds a snapshot of these events plus app/OS versions in an optional `diagnostics` field, preserving version-1 import compatibility and requiring an explicit user export before diagnostic data leaves the device. Logs contain the looked-up word and technical error details, but not source sentence context or media content.

@@ -88,3 +88,13 @@ Entries are ordered oldest to newest and summarize the project history recovered
 - Polish Wiktionary lookup now resolves missing inflected forms locally, including `został → zostać`, before requesting the lemma article.
 - Added an explicit lemma chooser for ambiguous forms, first-use database installation, SGJP attribution, and a reproducible pack builder.
 - Recorded the bundled language-pack architecture and updated the supported dictionary workflow and repository map.
+
+## 2026-09-18 — Reading and review refinements
+
+- Fixed transcript content and highlight synchronization when switching between virtual audiobook parts.
+- Expanded partial transcript selections to complete word boundaries before saving or translating them, while preserving the exact selected range in context.
+- Added compact phrase translations to dictionary rows.
+- Learning cards now highlight the saved phrase in source context and allow the Russian translation to be edited directly.
+- Wrong learning answers now return to the end of the current queue, and the round continues until every queued entry is answered correctly.
+- Polish Definition failures are now written to the iOS unified log and to a bounded, protected local diagnostic file; the existing dictionary export includes that log and environment metadata for support.
+- Recorded the local diagnostic-retention/export decision; no project-overview change was required.
