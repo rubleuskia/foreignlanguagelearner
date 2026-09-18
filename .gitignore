@@ -74,3 +74,6 @@ DerivedData/
 *.p8
 *.mobileprovision
 *.keychain-db
+
+# JetBrains IDE
+.idea/

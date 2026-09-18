@@ -9,6 +9,27 @@ struct ContextSentence: Equatable, Sendable {
     let selection: NSRange
 }
 
+enum WordSelectionExpander {
+    static func expandedRange(in text: String, selection: NSRange) -> NSRange {
+        let source = text as NSString
+        guard selection.location != NSNotFound, selection.length > 0,
+              NSMaxRange(selection) <= source.length,
+              Range(selection, in: text) != nil else { return selection }
+
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        var expanded = selection
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let token = NSRange(range, in: text)
+            if NSIntersectionRange(token, selection).length > 0 {
+                expanded = NSUnionRange(expanded, token)
+            }
+            return true
+        }
+        return expanded
+    }
+}
+
 enum ContextSentenceExtractor {
     static func sentence(text: String, selection: NSRange) -> ContextSentence? {
         let source = text as NSString

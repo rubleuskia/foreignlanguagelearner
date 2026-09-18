@@ -21,6 +21,40 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(LearningLevel.adjusted(4, correct: false), 3)
     }
 
+    func testWrongLearningAnswerMovesEntryToEndUntilAnsweredCorrectly() {
+        let first = UUID()
+        let second = UUID()
+        var queue = [first, second]
+        var index = 0
+
+        index = LearningQueue.advance(&queue, from: index, correct: false)
+        XCTAssertEqual(queue, [first, second, first])
+        XCTAssertEqual(index, 1)
+
+        index = LearningQueue.advance(&queue, from: index, correct: true)
+        index = LearningQueue.advance(&queue, from: index, correct: true)
+        XCTAssertEqual(index, queue.count)
+        XCTAssertEqual(queue.filter { $0 == first }.count, 2)
+    }
+
+    func testPartialSelectionExpandsToUnicodeWordBoundaries() throws {
+        let text = "On powiedział: Zepsuł się zamek 🌍."
+        let partial = (text as NSString).range(of: "epsuł si")
+
+        let expanded = WordSelectionExpander.expandedRange(in: text, selection: partial)
+
+        XCTAssertEqual((text as NSString).substring(with: expanded), "Zepsuł się")
+    }
+
+    func testSelectionExpansionPreservesAdjacentPunctuation() throws {
+        let text = "(dzień dobry), świecie!"
+        let partial = (text as NSString).range(of: "zień dobr")
+
+        let expanded = WordSelectionExpander.expandedRange(in: text, selection: partial)
+
+        XCTAssertEqual((text as NSString).substring(with: expanded), "dzień dobry")
+    }
+
     func testContextSentenceExtractionKeepsSelectionInContainingSentence() throws {
         let text = "Pierwsze zdanie.  Zepsuł się zamek w kurtce! Ostatnie zdanie."
         let selection = (text as NSString).range(of: "zamek")
@@ -115,6 +149,22 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(entry.translationText, "добрый день!")
         XCTAssertEqual(entry.translationOrigin, .imported)
         XCTAssertEqual(entry.learningLevel, 3, "Translation-only imports preserve learning progress")
+    }
+
+    @MainActor func testDictionaryExportIncludesPolishLookupDiagnostics() throws {
+        let event = PolishLookupDiagnosticEvent(
+            timestamp: Date(timeIntervalSince1970: 123), operation: "lookup", word: "żółć",
+            preferredLemma: nil, entryID: UUID(), errorType: "URLError",
+            errorDomain: NSURLErrorDomain, errorCode: -1009, message: "Offline"
+        )
+
+        let file = try DictionaryTransferService.export(entries: [], includeContext: false,
+                                                        diagnosticEvents: [event])
+        let decoded = try DictionaryTransferService.decode(file.data)
+
+        XCTAssertEqual(decoded.diagnostics?.polishDefinitionErrors, [event])
+        XCTAssertFalse(decoded.diagnostics?.appVersion.isEmpty ?? true)
+        XCTAssertFalse(decoded.diagnostics?.operatingSystem.isEmpty ?? true)
     }
 
     @MainActor func testExportWritesExplicitNullsForLLMRoundTrip() throws {

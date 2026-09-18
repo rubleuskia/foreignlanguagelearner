@@ -30,18 +30,24 @@ struct TranscriptTextView: UIViewRepresentable {
     }
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
-        guard view.selectedRange.length == 0 else { return }
         let coordinator = context.coordinator
+        if view.text != document.text {
+            view.text = document.text
+            coordinator.highlighted = nil
+            coordinator.scrolled = nil
+        }
+        guard view.selectedRange.length == 0 else { return }
         if coordinator.highlighted != activeSegment {
             if let previous = coordinator.highlighted, document.ranges.indices.contains(previous) {
                 view.textStorage.removeAttribute(.backgroundColor, range: document.ranges[previous])
             }
-            if let activeSegment {
+            if let activeSegment, document.ranges.indices.contains(activeSegment) {
                 view.textStorage.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.25), range: document.ranges[activeSegment])
             }
             coordinator.highlighted = activeSegment
         }
-        if following, let activeSegment, coordinator.scrolled != activeSegment || !coordinator.wasFollowing {
+        if following, let activeSegment, document.ranges.indices.contains(activeSegment),
+           coordinator.scrolled != activeSegment || !coordinator.wasFollowing {
             view.scrollRangeToVisible(document.ranges[activeSegment])
             coordinator.scrolled = activeSegment
         }
@@ -60,9 +66,10 @@ struct TranscriptTextView: UIViewRepresentable {
         }
         func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
             guard range.length > 0 else { return UIMenu(children: suggestedActions) }
-            let selected = (textView.text as NSString).substring(with: range)
-            let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, range).length > 0 }
-            let selectionContext = Self.context(in: textView.text, selection: range)
+            let expandedRange = WordSelectionExpander.expandedRange(in: textView.text, selection: range)
+            let selected = (textView.text as NSString).substring(with: expandedRange)
+            let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, expandedRange).length > 0 }
+            let selectionContext = Self.context(in: textView.text, selection: expandedRange)
             let add = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
                 self?.parent.handleSelection(.addToDictionary, selected, segment, selectionContext)
             }
@@ -72,7 +79,7 @@ struct TranscriptTextView: UIViewRepresentable {
             return UIMenu(children: [context, add] + suggestedActions)
         }
 
-        private static func context(in text: String, selection: NSRange) -> SelectionContext? {
+        static func context(in text: String, selection: NSRange) -> SelectionContext? {
             let ns = text as NSString
             guard selection.location != NSNotFound, selection.length > 0,
                   NSMaxRange(selection) <= ns.length else { return nil }
@@ -98,16 +105,21 @@ struct TranscriptTextView: UIViewRepresentable {
             let before = limitedSentence(ns.substring(with: NSRange(location: beforeStart,
                                                                        length: max(0, currentStart - beforeStart))),
                                          fromEnd: true)
-            let current = ns.substring(with: NSRange(location: currentStart,
-                                                      length: currentEnd - currentStart)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let currentRaw = ns.substring(with: NSRange(location: currentStart,
+                                                         length: currentEnd - currentStart))
+            let leadingWhitespace = (currentRaw as NSString).rangeOfCharacter(from: .whitespacesAndNewlines.inverted).location
+            let current = currentRaw.trimmingCharacters(in: .whitespacesAndNewlines)
             let afterStart = nextBoundary.map { NSMaxRange($0.range) } ?? ns.length
             let afterEnd = laterBoundary?.range.location ?? ns.length
             let after = limitedSentence(ns.substring(with: NSRange(location: afterStart,
                                                                       length: max(0, afterEnd - afterStart))),
                                         fromEnd: false)
             let excerpt = [before, current, after].filter { !$0.isEmpty }.joined(separator: " ")
-            let relative = (excerpt as NSString).range(of: ns.substring(with: selection))
-            guard relative.location != NSNotFound else { return nil }
+            let prefixLength = before.isEmpty ? 0 : (before as NSString).length + 1
+            let leading = leadingWhitespace == NSNotFound ? 0 : leadingWhitespace
+            let relative = NSRange(location: prefixLength + selection.location - currentStart - leading,
+                                   length: selection.length)
+            guard relative.location >= 0, NSMaxRange(relative) <= (excerpt as NSString).length else { return nil }
             return SelectionContext(text: excerpt, selection: relative)
         }
 

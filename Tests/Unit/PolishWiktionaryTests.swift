@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import ForeignLanguageLearner
 
 final class PolishWiktionaryTests: XCTestCase {
@@ -59,6 +60,61 @@ final class PolishWiktionaryTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? PolishWiktionaryError,
                            .ambiguousLemmas(["mama", "mamić", "mieć"]))
+        }
+    }
+
+    func testDiagnosticLogPersistsAndRetainsOnlyNewestEvents() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "PolishDiagnosticTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let fileURL = directory.appending(path: "errors.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = PolishLookupDiagnosticLog(fileURL: fileURL, maximumEntries: 2)
+        let entryID = UUID()
+
+        for index in 1...3 {
+            log.record(error: NSError(domain: NSURLErrorDomain, code: -1_000 - index,
+                                      userInfo: [NSLocalizedDescriptionKey: "Failure \(index)"]),
+                       word: "zamek", entryID: entryID,
+                       timestamp: Date(timeIntervalSince1970: TimeInterval(index)))
+        }
+
+        let persisted = PolishLookupDiagnosticLog(fileURL: fileURL, maximumEntries: 2).events()
+        XCTAssertEqual(persisted.map(\.message), ["Failure 2", "Failure 3"])
+        XCTAssertEqual(persisted.map(\.word), ["zamek", "zamek"])
+        XCTAssertEqual(persisted.map(\.entryID), [entryID, entryID])
+        XCTAssertEqual(persisted.map(\.errorCode), [-1_002, -1_003])
+    }
+
+    @MainActor func testCoordinatorRecordsLookupFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "PolishCoordinatorDiagnosticTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let fileURL = directory.appending(path: "errors.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = PolishLookupDiagnosticLog(fileURL: fileURL)
+        let coordinator = PolishDictionaryLookupCoordinator(provider: FailingPolishDictionaryProvider(),
+                                                             diagnostics: log)
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: nil)
+        entry.wordHelpItems = [.init(sourceText: "zamek", translationText: "замок", isGrammarWord: false)]
+        container.mainContext.insert(item)
+        container.mainContext.insert(entry)
+
+        coordinator.lookup("zamek", for: entry, context: container.mainContext)
+        for _ in 0..<100 where log.events().isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let event = try XCTUnwrap(log.events().last)
+        XCTAssertEqual(event.word, "zamek")
+        XCTAssertEqual(event.entryID, entry.id)
+        XCTAssertEqual(event.errorDomain, NSURLErrorDomain)
+        XCTAssertEqual(event.errorCode, URLError.timedOut.rawValue)
+        guard case .failed = coordinator.state(for: "zamek") else {
+            return XCTFail("Expected the failed UI state")
         }
     }
 
@@ -151,6 +207,12 @@ final class PolishWiktionaryTests: XCTestCase {
       }
     }
     """#
+}
+
+private struct FailingPolishDictionaryProvider: PolishDictionaryProviding {
+    func lookup(_ word: String, preferredLemma: String?) async throws -> PolishDictionaryResult {
+        throw URLError(.timedOut)
+    }
 }
 
 private struct StubLemmaResolver: PolishLemmaResolving {
