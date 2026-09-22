@@ -141,6 +141,7 @@ struct DictionaryEntryDetailView: View {
     @State private var hasAutoStarted = false
     @State private var senseDraft = ""
     @State private var noteDraft = ""
+    @State private var openedAudioIdentity: PhraseAudioSource.Identity?
     let autoStartContext: Bool
 
     init(entry: DictionaryEntry, autoStartContext: Bool = false) {
@@ -151,20 +152,39 @@ struct DictionaryEntryDetailView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Original") { Text(entry.text).textSelection(.enabled) }
+                Section("Russian translation") {
+                    if editing {
+                        TextEditor(text: $draft).frame(minHeight: 100)
+                    } else if let translation = entry.translationText {
+                        Text(translation).textSelection(.enabled)
+                        CopyButton(value: translation, label: "Copy translation",
+                                   identifier: "dictionary.copy-translation")
+                    } else {
+                        Text("Translation is not available yet.").foregroundStyle(.secondary)
+                    }
+                }
+                Section("Original") {
+                    Text(entry.text).textSelection(.enabled)
+                    CopyButton(value: entry.text, label: "Copy original",
+                               identifier: "dictionary.copy-original")
+                }
                 Section("Audio") {
-                    if let item = sourceItem, let start = entry.audioStart, let end = entry.audioEnd, end > start {
-                        Button {
-                            playAudio(item: item, start: start, end: end)
-                        } label: {
-                            Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
-                                  systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    if let source = audioSource {
+                        HStack {
+                            Button {
+                                toggleAudio(source)
+                            } label: {
+                                Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
+                                      systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            }
+                            .accessibilityIdentifier("dictionary.play-audio")
+                            Spacer()
+                            PlaybackRateMenu(playback: playback)
                         }
-                        .accessibilityIdentifier("dictionary.play-audio")
-                        Text("\(formatTime(start))–\(formatTime(end)) · \(item.title)")
+                        Text("\(formatTime(source.identity.range.lowerBound))–\(formatTime(source.identity.range.upperBound)) · \(source.itemTitle)")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Label("Audio is unavailable for this phrase", systemImage: "speaker.slash")
+                        Label("Audio unavailable on this device", systemImage: "speaker.slash")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -173,18 +193,17 @@ struct DictionaryEntryDetailView: View {
                         Text(highlightedContext(contextText))
                             .textSelection(.enabled)
                             .accessibilityIdentifier("dictionary.source-context")
+                        CopyButton(value: contextText, label: "Copy source context",
+                                   identifier: "dictionary.copy-source-context")
                     }
-                }
-                Section("Russian translation") {
-                    if editing { TextEditor(text: $draft).frame(minHeight: 100) }
-                    else if let translation = entry.translationText { Text(translation).textSelection(.enabled) }
-                    else { Text("Translation is not available yet.").foregroundStyle(.secondary) }
                 }
                 Section("Progress") { LabeledContent("Level", value: "\(entry.learningLevel) · \(LearningLevel.title(entry.learningLevel))") }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
                         if let candidate = entry.contextSelectedTranslationText {
                             LabeledContent("Selected text", value: candidate)
+                            CopyButton(value: candidate, label: "Copy selected-text translation",
+                                       identifier: "dictionary.copy-context-selection")
                             if candidate != entry.translationText {
                                 Button("Use as Saved Translation", systemImage: "checkmark.circle") {
                                     useContextTranslation(candidate)
@@ -195,6 +214,8 @@ struct DictionaryEntryDetailView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Sentence translation").font(.caption).foregroundStyle(.secondary)
                                 Text(sentence).textSelection(.enabled)
+                                CopyButton(value: sentence, label: "Copy sentence translation",
+                                           identifier: "dictionary.copy-context-sentence")
                             }
                         }
                         contextProgress
@@ -229,6 +250,14 @@ struct DictionaryEntryDetailView: View {
                     Section("Your interpretation") {
                         TextField("Preferred meaning", text: $senseDraft)
                         TextField("Personal note", text: $noteDraft, axis: .vertical).lineLimit(2...5)
+                        if let value = entry.selectedSenseText, !value.isEmpty {
+                            CopyButton(value: value, label: "Copy preferred meaning",
+                                       identifier: "dictionary.copy-meaning")
+                        }
+                        if let value = entry.userNote, !value.isEmpty {
+                            CopyButton(value: value, label: "Copy personal note",
+                                       identifier: "dictionary.copy-note")
+                        }
                         Button("Save Meaning and Note") { saveInterpretation() }
                             .disabled(senseDraft == (entry.selectedSenseText ?? "") && noteDraft == (entry.userNote ?? ""))
                     }
@@ -257,7 +286,14 @@ struct DictionaryEntryDetailView: View {
                 ToolbarItem(placement: .cancellationAction) { Button(editing ? "Cancel" : "Close") { if editing { editing = false } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
                     if editing { Button("Save") { save() }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-                    else { Button("Edit") { draft = entry.translationText ?? ""; editing = true } }
+                    else {
+                        Button("Edit") {
+                            playback.close()
+                            openedAudioIdentity = nil
+                            draft = entry.translationText ?? ""
+                            editing = true
+                        }
+                    }
                 }
             }
             .interactiveDismissDisabled(editing)
@@ -272,6 +308,7 @@ struct DictionaryEntryDetailView: View {
             }
             .onDisappear {
                 playback.close()
+                openedAudioIdentity = nil
                 dictionaryLookup.cancelAll()
                 if !entry.hasTranslation, entry.translationStatus == .pending {
                     coordinator.enqueue(entry, context: context)
@@ -296,18 +333,18 @@ struct DictionaryEntryDetailView: View {
         }.presentationDetents([.medium, .large])
     }
 
-    private var sourceItem: LearningItem? {
-        sourceItems.first { $0.id == (entry.localSourceItemID ?? entry.sourceItemID) }
+    private var audioSource: PhraseAudioSource? {
+        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems)
     }
 
-    private func playAudio(item: LearningItem, start: Double, end: Double) {
-        let url = MediaImportService.directory(for: item.id).appending(path: item.mediaFilename)
-        if playback.isPlaying {
+    private func toggleAudio(_ source: PhraseAudioSource) {
+        if openedAudioIdentity == source.identity {
             playback.toggle()
         } else {
-            playback.close()
-            playback.open(url: url, position: start, range: start...end)
-            playback.toggle()
+            playback.open(url: source.identity.url, position: source.identity.range.lowerBound,
+                          range: source.identity.range)
+            openedAudioIdentity = source.identity
+            playback.play()
         }
     }
 
@@ -345,6 +382,12 @@ struct DictionaryEntryDetailView: View {
     @ViewBuilder private func wordHelpRow(_ item: WordHelpItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             LabeledContent(item.sourceText, value: item.translationText)
+            HStack {
+                CopyButton(value: item.sourceText, label: "Copy \(item.sourceText)",
+                           identifier: "dictionary.copy-word-source")
+                CopyButton(value: item.translationText, label: "Copy word translation",
+                           identifier: "dictionary.copy-word-translation")
+            }
             if entry.sourceLanguageCode == "pl" {
                 if let result = item.polishDictionaryResult {
                     DisclosureGroup("Polish definition · \(result.headword)") {

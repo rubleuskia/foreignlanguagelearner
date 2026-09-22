@@ -13,7 +13,7 @@ The project also contains a standalone local subtitle-aligner utility. It conver
 - Audio and video playback with timed SRT/WebVTT transcript highlighting.
 - Plain TXT import for selectable, untimed text.
 - Native transcript selection and dictionary capture.
-- Dictionary and learning-round foundations, including portable JSON transfer, contextual sentence translation, on-demand word help, offline Polish form-to-lemma resolution, cached Polish Wiktionary definitions, and translation-oriented workflows.
+- Dictionary and learning workflows, including portable JSON transfer, non-persisting reader translation previews, fixed-size retrying practice rounds, global learned-phrase review, phrase audio and session-local playback speed, contextual sentence translation, on-demand word help, offline Polish form-to-lemma resolution, and cached Polish Wiktionary definitions.
 - XcodeGen project generation, XCTest unit/UI coverage, GitHub Actions CI, and manually triggered signed publishing.
 - Local subtitle alignment with normal and guided modes, diagnostics, review flags, and SRT/WebVTT output.
 

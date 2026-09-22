@@ -14,7 +14,8 @@ struct ReaderView: View {
     @State private var message: String?
     @State private var selectedPart = 0
     @State private var sourceLanguages = [SourceLanguage.polish]
-    @State private var contextualEntry: DictionaryEntry?
+    @State private var translationPreview: SelectionTranslationPreview?
+    @State private var followGeneration = 0
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
@@ -39,27 +40,52 @@ struct ReaderView: View {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
-            TranscriptTextView(document: document, activeSegment: document.activeSegment(at: playback.position), following: $following) { action, text, selectionRange, segment, selectionContext in
+            TranscriptTextView(document: document,
+                               activeSegment: document.activeSegment(at: playback.position),
+                               following: $following,
+                               followGeneration: followGeneration,
+                               onSelectionBegan: {
+                playback.pause()
+                following = false
+            }) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
                 let audio = audioRange(for: selectionRange)
-                let entry = DictionaryEntry(text: text, item: item, segmentIndex: absoluteSegment, context: selectionContext,
-                                            audioStart: audio?.lowerBound, audioEnd: audio?.upperBound)
-                guard !entry.text.isEmpty else { return }
-                context.insert(entry)
-                do {
-                    try context.save()
-                    switch action {
-                    case .addToDictionary:
+                let normalized = DictionaryEntry.normalized(text)
+                guard !normalized.isEmpty else { return }
+                switch action {
+                case .addToDictionary:
+                    let entry = DictionaryEntry(text: normalized, item: item,
+                                                segmentIndex: absoluteSegment,
+                                                context: selectionContext,
+                                                audioStart: audio?.lowerBound,
+                                                audioEnd: audio?.upperBound)
+                    context.insert(entry)
+                    do {
+                        try context.save()
                         translationCoordinator.enqueue(entry, context: context)
                         message = "Added to Dictionary"
-                    case .translateInContext:
-                        contextualEntry = entry
+                    } catch {
+                        context.delete(entry)
+                        message = error.localizedDescription
                     }
+                case .translateInContext:
+                    playback.pause()
+                    following = false
+                    translationPreview = SelectionTranslationPreview(
+                        selectedText: normalized,
+                        sourceLanguageCode: item.sourceLanguageCode,
+                        context: selectionContext,
+                        sourceItemID: item.id,
+                        sourceTitle: item.title,
+                        audioRange: audio
+                    )
                 }
-                catch { context.delete(entry); message = error.localizedDescription }
             }
-            if !following {
-                Button("Follow audio", systemImage: "arrow.down.to.line") { following = true }
+            if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
+                Button("Follow audio", systemImage: "arrow.down.to.line") {
+                    followGeneration += 1
+                    following = true
+                }
                     .padding(8)
             }
         }
@@ -85,8 +111,8 @@ struct ReaderView: View {
             openCurrentPart()
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
-        .sheet(item: $contextualEntry) {
-            DictionaryEntryDetailView(entry: $0, autoStartContext: true)
+        .sheet(item: $translationPreview) {
+            SelectionTranslationView(preview: $0)
         }
         .onChange(of: playback.position) { _, position in
             if abs(item.lastPosition - position) >= 5 {
@@ -133,6 +159,7 @@ struct ReaderView: View {
                 Button { playback.seek(to: min(upperBound, playback.position + 10)); following = true } label: { Image(systemName: "goforward.10") }
                     .accessibilityLabel("Forward 10 seconds")
                 Spacer()
+                PlaybackRateMenu(playback: playback)
                 Text(time(upperBound)).monospacedDigit()
             }
         }.padding().background(.bar)

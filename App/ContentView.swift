@@ -40,7 +40,10 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingImport) { ImportItemView() }
-            .task { translationCoordinator.recover(context: context) }
+            .task {
+                seedLearningUXFixtureIfNeeded()
+                translationCoordinator.recover(context: context)
+            }
             .translationTask(translationCoordinator.configuration,
                              action: translationCoordinator.perform(session:))
             .alert("Could not delete item", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
@@ -62,5 +65,32 @@ struct ContentView: View {
             }
             try context.save()
         } catch { context.rollback(); errorMessage = error.localizedDescription }
+    }
+
+    private func seedLearningUXFixtureIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("--learning-ux-fixture"),
+              (try? context.fetchCount(FetchDescriptor<DictionaryEntry>())) == 0 else { return }
+        let item = LearningItem(id: UUID(), title: "UI test story", mediaKind: "audio",
+                                mediaFilename: "missing.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let practice = DictionaryEntry(
+            text: "dzień dobry", item: item, segmentIndex: 0,
+            context: SelectionContext(text: "Powiedział dzień dobry.",
+                                      selection: NSRange(location: 10, length: 11)),
+            audioStart: 1, audioEnd: 2
+        )
+        practice.translationText = "добрый день"
+        practice.translationOrigin = .manual
+        practice.translationStatus = .ready
+        let learnt = DictionaryEntry(text: "do widzenia", item: item, segmentIndex: nil)
+        learnt.translationText = "до свидания"
+        learnt.translationOrigin = .manual
+        learnt.translationStatus = .ready
+        learnt.learningLevel = 4
+        learnt.createdAt = Date(timeIntervalSince1970: 1)
+        context.insert(item)
+        context.insert(practice)
+        context.insert(learnt)
+        try? context.save()
     }
 }

@@ -16,6 +16,8 @@ Transcript text is bridged to `UITextView` so learners get native selection hand
 
 Automatic transcript following pauses during manual scrolling or text selection. The learner can resume it with “Follow audio.” Overlapping timed segments use the most recently started segment until it ends; gaps have no highlight.
 
+Follow centers the first visual line of the active cue using TextKit 1 after layout. A user-created nonempty selection pauses playback once and disables follow; moving selection handles does not repeat the pause. Explicit Follow clears the selection and recenters without starting playback. Document identity includes cue ranges and source mappings so equal transcript text with changed timing cannot reuse stale highlight or scroll state.
+
 ## Subtitle alignment is a separate tool
 
 Untimed text is aligned outside the app using the local `tools/subtitle-aligner` utility. Guided alignment is available for long recordings with drift; review output can retain zero-duration words but is explicitly flagged rather than pretending timing is accurate.
@@ -26,6 +28,8 @@ Dictionary transfer uses readable JSON with stable entry identity, source contex
 
 Contextual translation remains local and user-triggered. Because Apple Translation has no separate context, dictionary-definition, or grammatical-analysis parameter, the app translates the selected expression and its containing sentence as separate requests and presents both for comparison. Word-by-word help is also explicit and is described as individual translation rather than authoritative semantic or morphological analysis. Existing manual and imported translations are never silently replaced by contextual results. High-fidelity translation is preferred where the OS exposes it, with the compatible standard configuration retained for older supported systems.
 
+Reader “Translate in Context” uses an ephemeral value snapshot and a coordinator with no SwiftData context. It never creates a dictionary entry and ignores late translation responses after retry or dismissal. Saving remains a separate “Add to Dictionary” action. The preview shows phrase and sentence translations as separate results rather than claiming model-level contextual translation.
+
 Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
 
 Polish inflected forms are resolved locally before a fallback Wiktionary request. A reproducible build tool reduces the BSD-licensed SGJP/Morfeusz source feed to unique `surface form → dictionary title` pairs. For the current debugging phase, the complete database is zlib-compressed into the application bundle and expanded into Application Support on first use. Ambiguous forms remain explicit choices for the learner rather than being resolved arbitrarily. A downloadable language pack can replace the bundled resource later without changing the lookup interface.
@@ -33,6 +37,18 @@ Polish inflected forms are resolved locally before a fallback Wiktionary request
 ## Learning parts
 
 Learning content is modeled as virtual parts rather than requiring duplicated media files. This keeps a shared dictionary independent of whether the referenced media exists on another device and supports future practice flows.
+
+## Learning rounds and completion
+
+A learning round snapshots a unique eligible ID set at Start and keeps its original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
+
+Round statistics describe attempts and completion inside that round. The completion screen separately queries every stored level-4 Russian entry with a ready, nonempty translation, so it includes phrases learned before the current round.
+
+## Playback intent, speed and phrase sources
+
+Playback keeps user intent separate from `AVPlayer.rate`, which may be zero while seeking or buffering. Pause clears intent so a pending seek cannot restart audio. Playback speed is owned by each controller, starts at 1×, survives pause and media open/close inside that controller, and is not persisted across screens or launches.
+
+Phrase audio resolves only an entry's matching local source item and a finite range within the item duration. Missing local media remains a text-only experience; the app does not substitute another library item or fetch media from the network.
 
 ## Project and release tooling
 
