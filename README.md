@@ -1,6 +1,6 @@
 # Foreign Language Learner
 
-Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media library, synchronized selectable transcripts, an Apple Translation-powered phrase dictionary, interactive learning rounds, portable JSON dictionary files, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
+Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media library with single-file and multi-track audiobook import, synchronized selectable transcripts, an Apple Translation-powered phrase dictionary, interactive learning rounds, portable JSON dictionary files, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
 
 ## Start developing
 
@@ -15,6 +15,8 @@ For a physical device, set your development team in Xcode and use a registered b
 ## Generate subtitles from a book and audio
 
 Use the standalone [TXT + audio subtitle utility](tools/subtitle-aligner/README.md) to align a matching transcript and narration into SRT/WebVTT for the app. Its README covers installation, Polish examples, chapter offsets, validation, and import steps.
+
+For audiobooks already divided into tracks, the batch command consumes explicit word ranges from a v1 book manifest and publishes a local `.book.zip` only when every track succeeds.
 
 ## Tests
 
@@ -43,4 +45,4 @@ Workflows become available after these files are pushed to GitHub. See [release 
 - `fastlane/`: signed archive and App Store Connect upload.
 - `.github/workflows/`: CI and release pipelines.
 
-The app uses SwiftData and local file storage, with no third-party runtime dependencies, backend, or analytics. The app icon is a development placeholder; replace it before release.
+The app uses SwiftData and local file storage. ZIPFoundation is pinned for streamed local archive inspection; the app has no backend or analytics. The app icon is a development placeholder; replace it before release.

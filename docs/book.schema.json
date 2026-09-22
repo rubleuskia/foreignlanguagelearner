@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://foreign-language-learner.local/schemas/book-v1.json",
+  "title": "Foreign Language Learner audiobook package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "title", "sourceLanguage", "transcript", "tracks"],
+  "properties": {
+    "format": { "const": "foreign-language-learner.book" },
+    "schemaVersion": { "const": 1 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "sourceLanguage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$"
+    },
+    "transcript": { "$ref": "#/$defs/relativeTxtPath" },
+    "textMapping": { "$ref": "#/$defs/textMapping" },
+    "tracks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/track" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["textMapping"] },
+      "then": {
+        "properties": {
+          "tracks": { "items": { "required": ["textRange"] } }
+        }
+      },
+      "else": {
+        "properties": {
+          "tracks": { "items": { "not": { "required": ["textRange"] } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "safeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        { "not": { "pattern": "^(?:/|[A-Za-z]:|.*\\\\)" } },
+        { "not": { "pattern": "(?:^|/)\\.{1,2}(?:/|$)" } },
+        { "not": { "pattern": "//" } }
+      ]
+    },
+    "relativeTxtPath": {
+      "allOf": [
+        { "$ref": "#/$defs/safeRelativePath" },
+        { "pattern": "\\.[tT][xX][tT]$" }
+      ]
+    },
+    "textRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startWord", "endWord"],
+      "properties": {
+        "startWord": { "type": "integer", "minimum": 0 },
+        "endWord": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "textMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalization", "normalizedSHA256", "wordCount"],
+      "properties": {
+        "normalization": { "const": "aligner-nfc-whitespace-v1" },
+        "normalizedSHA256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "wordCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "audio", "alignmentStatus"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "audio": {
+          "allOf": [
+            { "$ref": "#/$defs/safeRelativePath" },
+            { "pattern": "\\.(?:[mM][pP]3|[mM]4[aA]|[wW][aA][vV])$" }
+          ]
+        },
+        "alignmentStatus": { "enum": ["aligned", "review-required", "untimed"] },
+        "subtitle": {
+          "allOf": [
+            { "$ref": "#/$defs/safeRelativePath" },
+            { "pattern": "\\.(?:[sS][rR][tT]|[vV][tT][tT])$" }
+          ]
+        },
+        "textRange": { "$ref": "#/$defs/textRange" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "alignmentStatus": { "const": "untimed" } } },
+          "then": { "not": { "required": ["subtitle"] } },
+          "else": { "required": ["subtitle"] }
+        }
+      ]
+    }
+  }
+}

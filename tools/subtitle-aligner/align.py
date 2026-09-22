@@ -12,10 +12,14 @@ import sys
 import textwrap
 import unicodedata
 
+ALIGNER_CORE_VERSION = "1"
+ALIGNER_WHITESPACE = ("\\u0009-\\u000d\\u001c-\\u001f\\u0020\\u0085\\u00a0\\u1680"
+                      "\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000")
+ALIGNER_WHITESPACE_RE = re.compile(f"[{ALIGNER_WHITESPACE}]+")
 
 def clean_text(text):
     text = unicodedata.normalize("NFC", text.replace("\ufeff", ""))
-    text = " ".join(text.split())
+    text = ALIGNER_WHITESPACE_RE.sub(" ", text).strip(" ")
     if not text:
         raise ValueError("TXT is empty after whitespace normalization.")
     return text
