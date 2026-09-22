@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-09-22 — Reviewed implementation proposals
+
+- Reviewed the AWS alignment, learning UX and multi-track audiobook plans against the current code, resolved contradictory requirements, and added explicit state, timing, persistence, migration and acceptance contracts for implementation.
+- Recorded the user-confirmed cloud testing scope: public job creation without sign-in, private per-job access, and recordings up to 60 minutes. Production authentication and broader hardening are deferred to the general [future improvements backlog](../docs/FUTURE_IMPROVEMENTS.md).
+- These are implementation proposals, not shipped capabilities. Current architectural decisions and the project overview in `DECISIONS.md` and `PROJECT.md` are unchanged; future implementation PRs must update them when behavior changes.
+
 Entries are ordered oldest to newest and summarize the project history recovered from the repository and Codex task history.
 
 - Fixed Force Translation in the dictionary entry screen so it runs immediately in that screen, shows a translating state instead of “queued,” and explains that the operation may take a moment. No architectural or project-overview decision changed.
