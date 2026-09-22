@@ -36,4 +36,36 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["Dictionary"].tap()
         XCTAssertTrue(app.staticTexts["No saved phrases"].waitForExistence(timeout: 5))
     }
+
+    @MainActor
+    func testLearningRoundHidesAnswerThenShowsGlobalLearntList() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+
+        app.buttons["Dictionary"].tap()
+        let learn = app.buttons["dictionary.learn"]
+        XCTAssertTrue(learn.waitForExistence(timeout: 5))
+        learn.tap()
+        let start = app.buttons["learn.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        start.tap()
+
+        XCTAssertTrue(app.staticTexts["learn.translation"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["learn.original"].exists,
+                       "The original must stay hidden before Check")
+        app.buttons["learn.check"].tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Audio unavailable on this device"].exists)
+        app.buttons["learn.right"].tap()
+
+        XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["All learnt phrases"].exists)
+        let learntOriginals = app.staticTexts.matching(identifier: "learn.completion.original")
+        XCTAssertEqual(learntOriginals.count, 1,
+                       "Only valid global level-4 entries belong in the completion list")
+        XCTAssertEqual(learntOriginals.firstMatch.label, "do widzenia",
+                       "The global list includes entries learned before this round")
+    }
 }

@@ -24,17 +24,24 @@ final class DictionaryFeatureTests: XCTestCase {
     func testWrongLearningAnswerMovesEntryToEndUntilAnsweredCorrectly() {
         let first = UUID()
         let second = UUID()
-        var queue = [first, second]
-        var index = 0
+        let initialPresentation = UUID()
+        var round = LearningRoundState(selection: .ten, selectedIDs: [first, second],
+                                       presentationID: initialPresentation)
 
-        index = LearningQueue.advance(&queue, from: index, correct: false)
-        XCTAssertEqual(queue, [first, second, first])
-        XCTAssertEqual(index, 1)
+        XCTAssertTrue(round.recordAnswer(entryID: first, presentationID: initialPresentation,
+                                         right: false, nextPresentationID: UUID()))
+        XCTAssertEqual(round.pendingIDs, [second, first])
+        XCTAssertEqual(round.wrongAttemptCount, 1)
 
-        index = LearningQueue.advance(&queue, from: index, correct: true)
-        index = LearningQueue.advance(&queue, from: index, correct: true)
-        XCTAssertEqual(index, queue.count)
-        XCTAssertEqual(queue.filter { $0 == first }.count, 2)
+        XCTAssertTrue(round.recordAnswer(entryID: second,
+                                         presentationID: round.currentPresentationID,
+                                         right: true, nextPresentationID: UUID()))
+        XCTAssertTrue(round.recordAnswer(entryID: first,
+                                         presentationID: round.currentPresentationID,
+                                         right: true, nextPresentationID: UUID()))
+        XCTAssertTrue(round.isComplete)
+        XCTAssertEqual(round.completedIDs, [second, first])
+        XCTAssertTrue(round.hasValidPartition)
     }
 
     func testPartialSelectionExpandsToUnicodeWordBoundaries() throws {

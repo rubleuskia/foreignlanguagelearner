@@ -1,5 +1,14 @@
 # Project changelog
 
+## 2026-09-22 — Learning and playback UX
+
+- Changed Translate in Context in the reader to an ephemeral preview that translates the phrase and its containing sentence without creating or modifying a dictionary entry.
+- Added reliable selection-triggered pause, TextKit-based transcript centering, explicit Follow recovery, and session-local 0.5×–2× playback speed controls.
+- Added 5, 10, 20 and all-available learning rounds with a fixed unique starting set, retry-at-end behavior for wrong answers, save-before-advance progress, duplicate-event protection, and explicit skipped-entry accounting.
+- Added phrase audio and exact-copy controls across preview, dictionary detail and learning, while keeping original/audio/context hidden until a learning answer is checked.
+- Round completion now lists all valid level-4 Russian phrases from current stored data, including phrases learned before the round.
+- Updated `PROJECT.md` for the expanded supported learning workflow. Project purpose and system boundaries are unchanged; no persistent preference, transfer-schema, backend or multi-track decision was introduced.
+
 ## 2026-09-22 — Reviewed implementation proposals
 
 - Reviewed the AWS alignment, learning UX and multi-track audiobook plans against the current code, resolved contradictory requirements, and added explicit state, timing, persistence, migration and acceptance contracts for implementation.
