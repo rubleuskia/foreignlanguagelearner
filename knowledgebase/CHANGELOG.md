@@ -9,6 +9,12 @@
 - Added the strict v1 book JSON schema and a sequential multi-track alignment CLI with full preflight, reports, fail-closed publishing, and fingerprint-checked single-track reruns.
 - Recorded the track-local timeline, immutable identity, untimed TXT, legacy adapter, migration, import transaction, and batch publishing decisions. Updated the project overview because multi-track ZIP import and batch alignment are now supported workflows.
 
+## 2026-09-23 — Generated Xcode project troubleshooting
+
+- Documented the stale local Xcode project that omitted `SelectionTranslationPreview.swift`, and its repair through `bash scripts/bootstrap.sh`.
+- Added a [prevention and recovery guide](../docs/PREVENTING_GENERATED_PROJECT_DRIFT.md), linked from the README, covering regeneration triggers, build/test commands, CI generation, and safe handling of merge conflicts and concurrent edits.
+- The local unsigned Debug simulator build succeeded after regeneration; no Swift source change was required. This guide documents the existing XcodeGen workflow, with no new automated enforcement. Architectural/product decisions and the project overview in `DECISIONS.md` and `PROJECT.md` are unchanged.
+
 ## 2026-09-22 — Learning and playback UX
 
 - Changed Translate in Context in the reader to an ephemeral preview that translates the phrase and its containing sentence without creating or modifying a dictionary entry.
@@ -17,6 +23,24 @@
 - Added phrase audio and exact-copy controls across preview, dictionary detail and learning, while keeping original/audio/context hidden until a learning answer is checked.
 - Round completion now lists all valid level-4 Russian phrases from current stored data, including phrases learned before the round.
 - Updated `PROJECT.md` for the expanded supported learning workflow. Project purpose and system boundaries are unchanged; no persistent preference, transfer-schema, backend or multi-track decision was introduced.
+
+## 2026-09-22 — Cloud alignment backend implementation
+
+- Added an undeployed AWS backend implementation for one audio + matching TXT alignment job: a
+  capability-authorized HTTP API, version-pinned multipart uploads, DynamoDB state/idempotency and
+  atomic global admission counters, a versioned Standard Step Functions workflow, one CPU Fargate
+  worker per accepted start, manifest-gated publication, cancellation, reconciliation and cleanup.
+- Preserved public testing without sign-in and the 60-minute hard duration ceiling. Job IDs do not
+  grant access; each create request uses a fresh 32-byte client capability, and the service stores
+  only its SHA-256 digest. Existing local import and local alignment behavior is unchanged.
+- Added an OpenAPI contract, hash-locked Linux/x86_64 CPU worker dependencies, immutable image/model
+  build inputs, CDK infrastructure assertions, backend race/validation tests and CI coverage.
+- Recorded the benchmark and deployment gate in `docs/ALIGNMENT_BENCHMARKS.md`. No AWS resources were
+  deployed, no production pricing or 60-minute benchmark is claimed, and the iOS remote upload/UI
+  client remains future implementation work.
+- Recorded the temporary-cloud-processing architecture in `DECISIONS.md` and updated `PROJECT.md`
+  because the repository now contains an optional backend boundary even though the shipped app
+  remains local-first and has no configured service endpoint.
 
 ## 2026-09-22 — Reviewed implementation proposals
 

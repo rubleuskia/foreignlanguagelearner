@@ -36,6 +36,37 @@ Book package v1 is a strict root `manifest.json` plus one UTF-8 TXT and 1–100 
 
 Sequential book playback owns one single-file player. Cross-track seeks, automatic transitions, and end notifications are guarded by a book generation plus track identity. The selected rate and explicit play intent survive file replacement, while pause during a pending seek prevents late completion from restarting audio. Track decode errors stop on the named track and remain retryable.
 
+## Optional cloud alignment uses temporary capability-scoped jobs
+
+The repository contains an undeployed AWS implementation for testing remote audio + TXT alignment.
+It uses API Gateway HTTP API and Lambda for the control plane, DynamoDB on-demand records and atomic
+global counters, a versioned Step Functions Standard workflow, and exactly one CPU-only Fargate task
+for each admitted start. The worker runs in public subnets with a public IPv4 address and no inbound
+rules, avoiding a continuously charged NAT Gateway. S3 is private, versioned, encrypted with SSE-S3,
+and used only for temporary inputs, results and diagnostics.
+
+The test API deliberately has no account sign-in. A client-generated, cryptographically random
+32-byte bearer capability authorizes exactly one job; only its SHA-256 hash is stored. Missing or
+malformed capabilities return 401, while an unknown job and a capability mismatch both return 404.
+This grants private per-job access but does not identify a person, provide account recovery, or
+constitute production abuse protection. Global creation, outstanding-upload, daily-start and active
+compute limits plus an operator kill switch bound the test exposure.
+
+Workers consume immutable S3 version IDs and declared full-file hashes, never unversioned latest
+objects. They may claim a job and record safe progress/output pointers, but only the finalizer can
+publish success after validating a complete manifest and artifact versions. Conditional revisions
+make terminal state, cancellation and admission release single-winner operations. A scheduled
+reconciler repairs uncertain dispatch, discovers tagged tasks when ARN persistence was interrupted,
+stops overdue/cancelled work, expires uploads and deletes every S3 object version according to the
+24-hour access contract. Lifecycle and DynamoDB TTL remain asynchronous fallbacks.
+
+The shared Fargate task role is a trusted backend boundary with bucket/table access; it is not
+per-job IAM isolation. The public test is fixed to Polish, the `base-guided-v1` profile, zero offset,
+both subtitle formats, at most 60 minutes, and no automatic inference retry. Deployment is blocked
+until the benchmark matrix demonstrates time, memory, disk, quality and cost headroom. Account
+ownership, per-user quotas and stronger production abuse controls remain in the general future
+improvements backlog.
+
 ## Dictionary portability and translation
 
 Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need. Apple Translation was selected as the initial on-device integration direction; broader LLM/API integration remains an option for later quality improvements.

@@ -12,6 +12,8 @@ Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media li
 
 For a physical device, set your development team in Xcode and use a registered bundle identifier. Project settings are generated: persist changes in `project.yml`, then regenerate. The default bundle identifier is a placeholder until registered in your Apple account.
 
+If a newly added Swift type is reported as missing, regenerate the ignored Xcode project with `bash scripts/bootstrap.sh` before changing imports or access control. See [generated project drift prevention](docs/PREVENTING_GENERATED_PROJECT_DRIFT.md) for the diagnosis and workflow.
+
 ## Generate subtitles from a book and audio
 
 Use the standalone [TXT + audio subtitle utility](tools/subtitle-aligner/README.md) to align a matching transcript and narration into SRT/WebVTT for the app. Its README covers installation, Polish examples, chapter offsets, validation, and import steps.
@@ -45,4 +47,4 @@ Workflows become available after these files are pushed to GitHub. See [release 
 - `fastlane/`: signed archive and App Store Connect upload.
 - `.github/workflows/`: CI and release pipelines.
 
-The app uses SwiftData and local file storage. ZIPFoundation is pinned for streamed local archive inspection; the app has no backend or analytics. The app icon is a development placeholder; replace it before release.
+The shipped app uses SwiftData and local file storage. ZIPFoundation is pinned for streamed local archive inspection; the app has no configured backend endpoint or analytics. The repository's undeployed cloud-alignment backend remains gated on its documented benchmarks. The app icon is a development placeholder; replace it before release.

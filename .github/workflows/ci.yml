@@ -1,4 +1,4 @@
-name: iOS CI
+name: CI
 on:
   push:
     branches: [main]
@@ -11,6 +11,28 @@ concurrency:
   group: ios-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  alignment-backend:
+    name: Alignment backend contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: infra/alignment/package-lock.json
+      - name: Python contracts and existing aligner regression suite
+        run: |
+          python -m unittest discover -s backend -p 'test_*.py' -v
+          python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
+          python -m compileall -q backend tools/subtitle-aligner/worker
+      - name: CDK type and infrastructure assertions
+        working-directory: infra/alignment
+        run: npm ci && npm test
   test:
     name: Build and test
     runs-on: macos-26

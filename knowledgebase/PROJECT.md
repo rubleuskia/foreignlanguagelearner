@@ -17,16 +17,20 @@ The project also contains a standalone local subtitle-aligner utility. It conver
 - Dictionary and learning workflows, including portable JSON transfer, non-persisting reader translation previews, fixed-size retrying practice rounds, global learned-phrase review, phrase audio and session-local playback speed, contextual sentence translation, on-demand word help, offline Polish form-to-lemma resolution, and cached Polish Wiktionary definitions.
 - XcodeGen project generation, XCTest unit/UI coverage, GitHub Actions CI, and manually triggered signed publishing.
 - Local subtitle alignment with normal and guided modes, diagnostics, review flags, SRT/WebVTT output, and manifest-driven sequential audiobook batch/rerun support.
+- An undeployed AWS implementation for optional temporary audio + TXT alignment jobs, with a public
+  test contract, per-job bearer capabilities, strict global admission limits and a 60-minute ceiling.
 
 ## Boundaries
 
-The app has no backend or analytics. Media and saved dictionary data remain local unless the user explicitly exports a dictionary file. Apple Translation uses installed on-device language models. Polish inflected-form analysis uses a bundled SGJP-derived database entirely on device; definition lookup then contacts the public Polish Wiktionary API only after an explicit per-word action and caches successful results for later offline use. Cloud sync, lock-screen controls, background playback, in-app alignment, track editing/replacement after import, automatic TXT chapter detection, and gapless playback remain future work.
+The shipped app has no configured backend endpoint or analytics. Media and saved dictionary data remain local unless the user explicitly exports a dictionary file. Apple Translation uses installed on-device language models. Polish inflected-form analysis uses a bundled SGJP-derived database entirely on device; definition lookup then contacts the public Polish Wiktionary API only after an explicit per-word action and caches successful results for later offline use. The repository's cloud alignment backend has not been deployed or connected to iOS; its benchmark and explicit deployment gate must pass before public testing. Cloud sync, lock-screen controls, background playback, in-app alignment, track editing/replacement after import, automatic TXT chapter detection, gapless playback, and library-item deletion remain future work or are not yet established as shipped behavior.
 
 ## Repository map
 
 - `App/` — SwiftUI UI, SwiftData models, playback, import, transcript, dictionary, and learning services.
 - `Tests/` — unit and UI tests.
 - `tools/subtitle-aligner/` — local TXT + audio alignment utility.
+- `backend/alignment/` — cloud alignment domain logic, Lambda handlers and OpenAPI contract.
+- `infra/alignment/` — AWS CDK stack and infrastructure assertions for the undeployed test backend.
 - `tools/polish-lemma-importer/` — reproducible SGJP-to-SQLite morphology-pack builder.
 - `docs/` — detailed operational and feature documentation.
 - `project.yml` — XcodeGen source of truth.
