@@ -249,6 +249,30 @@ During development, a real `base`/CPU English smoke test produced 3 cues for 17 
 
 Changes to subtitle serialization should also be checked against the app's actual Swift parser. Existing app tests run through `bash scripts/test.sh` when the iOS simulator platform is installed. The utility is not installed by iOS CI and is not embedded in the app.
 
+## Multi-track audiobook batch
+
+`batch_align.py` consumes an unpacked `foreign-language-learner.book` v1 directory. The manifest must contain a verified `textMapping` and one contiguous, half-open `textRange` for every track. It validates all paths, text ranges, hashes, and audio inputs before loading one model and then processes tracks sequentially with local timestamps:
+
+```sh
+python3 tools/subtitle-aligner/batch_align.py \
+  --manifest /path/to/unpacked-book/manifest.json \
+  --output /path/to/new-output
+```
+
+Complete success produces `batch-report.json`, per-track diagnostics, an importable `book/` directory, and `book.book.zip`. A failed track leaves successful independent artifacts for review, exits with status 1, and does not publish a book package.
+
+To realign one track while reusing fingerprint-matched successful artifacts from an earlier output:
+
+```sh
+python3 tools/subtitle-aligner/batch_align.py \
+  --manifest /path/to/unpacked-book/manifest.json \
+  --previous-output /path/to/previous-output \
+  --track-id 008 \
+  --output /path/to/new-output
+```
+
+The earlier output is never modified. Reuse fails closed when an unselected track is missing, failed, or differs by audio, normalized text slice, language, model identity, core version, or grouping configuration.
+
 ## Engine choice and limitations
 
 [Stable-ts](https://github.com/jianfch/stable-ts#alignment) provides direct untimed-text alignment, fitting this utility's initial TXT + audio contract. Its repository was archived on May 30, 2026 and development is paused. The pinned package is a prototype dependency with an explicit maintenance risk; evaluate a replacement before depending on it for unattended production processing.

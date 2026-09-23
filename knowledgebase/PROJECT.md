@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Foreign Language Learner is a native SwiftUI iPhone and iPad application for learning from spoken content. A learner imports local audio or video with a matching transcript, follows synchronized text while listening, selects words or phrases, saves them to a personal dictionary, and practices them later.
+Foreign Language Learner is a native SwiftUI iPhone and iPad application for learning from spoken content. A learner imports local audio or video, or a ZIP containing a multi-track audiobook, reads matching full text and available per-track subtitles, selects words or phrases, saves them to a personal dictionary, and practices them later.
 
-The project also contains a standalone local subtitle-aligner utility. It converts matching UTF-8 text and narration into timed SRT/WebVTT files that the app can import.
+The project also contains a standalone local subtitle-aligner utility. It converts matching UTF-8 text and narration into timed SRT/WebVTT files and can batch an explicitly mapped multi-track book into an importable package.
 
 ## Current scope
 
-- iOS 17+; Swift 6; SwiftUI; iPhone and iPad.
+- iOS 18+; Swift 6; SwiftUI; iPhone and iPad.
 - Local media library backed by SwiftData and Application Support files.
+- Previewed raw ZIP and strict manifest-package audiobook import with 1–100 physical audio tracks, sequential playback, global seek, local progress, and crash recovery.
 - Audio and video playback with timed SRT/WebVTT transcript highlighting.
-- Plain TXT import for selectable, untimed text.
+- Plain TXT import for selectable, untimed text, including full-book reading that never invents track boundaries.
 - Native transcript selection and dictionary capture.
 - Dictionary and learning workflows, including portable JSON transfer, non-persisting reader translation previews, fixed-size retrying practice rounds, global learned-phrase review, phrase audio and session-local playback speed, contextual sentence translation, on-demand word help, offline Polish form-to-lemma resolution, and cached Polish Wiktionary definitions.
 - XcodeGen project generation, XCTest unit/UI coverage, GitHub Actions CI, and manually triggered signed publishing.
-- Local subtitle alignment with normal and guided modes, diagnostics, review flags, and SRT/WebVTT output.
+- Local subtitle alignment with normal and guided modes, diagnostics, review flags, SRT/WebVTT output, and manifest-driven sequential audiobook batch/rerun support.
 
 ## Boundaries
 
-The app has no backend or analytics. Media and saved dictionary data remain local unless the user explicitly exports a dictionary file. Apple Translation uses installed on-device language models. Polish inflected-form analysis uses a bundled SGJP-derived database entirely on device; definition lookup then contacts the public Polish Wiktionary API only after an explicit per-word action and caches successful results for later offline use. Cloud sync, lock-screen controls, background playback, automatic alignment inside the app, and library-item deletion remain future work or are not yet established as shipped behavior.
+The app has no backend or analytics. Media and saved dictionary data remain local unless the user explicitly exports a dictionary file. Apple Translation uses installed on-device language models. Polish inflected-form analysis uses a bundled SGJP-derived database entirely on device; definition lookup then contacts the public Polish Wiktionary API only after an explicit per-word action and caches successful results for later offline use. Cloud sync, lock-screen controls, background playback, in-app alignment, track editing/replacement after import, automatic TXT chapter detection, and gapless playback remain future work.
 
 ## Repository map
 

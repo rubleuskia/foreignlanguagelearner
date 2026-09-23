@@ -4,9 +4,15 @@
 
 Media is copied into Application Support and metadata/transcript segments are stored with SwiftData. Imports do not require a server or network access, and failed imports clean up their copied files.
 
+Multi-track books use an additive Codable `LearningTrack` array on `LearningItem`. Track IDs are immutable within an imported book and source identity is `(local item UUID, track ID)`. Legacy items remain single-file records exposed through a synthetic `legacy` track adapter; virtual `LearningPart` ranges remain a legacy single-file concept. Additive store compatibility is verified with persistent reopen coverage, and storage failures never fall back to an empty store.
+
+Archive and database changes use a staged transaction protocol with a durable journal. A generated book directory is renamed into the library before the complete SwiftData item is saved; failed saves remove the inserted model and moved directory. Startup recovery derives every path from validated UUIDs. Deletion first moves files into a transaction-specific trash directory, then saves the database deletion, restoring files if that save fails.
+
 ## Timed transcript model
 
 The implementation uses “transcript segment” for a timed subtitle passage. SRT and WebVTT are the synchronized formats; TXT stays selectable but untimed. Highlighting is cue-level rather than word-level, while the subtitle utility preserves word timing in JSON for inspection and future work.
+
+Audiobook subtitle times are always local to one physical track. Global playback time is calculated from unrounded verified track durations with half-open track intervals; editable offsets are not stored. Full-book TXT has no inferred audio boundaries. Timed selection stores local cue bounds only when it also stores a `sourceTrackID`; a missing track ID on a multi-track source makes phrase audio unavailable rather than guessing the first track.
 
 ## Native selection
 
@@ -21,6 +27,14 @@ Follow centers the first visual line of the active cue using TextKit 1 after lay
 ## Subtitle alignment is a separate tool
 
 Untimed text is aligned outside the app using the local `tools/subtitle-aligner` utility. Guided alignment is available for long recordings with drift; review output can retain zero-duration words but is explicitly flagged rather than pretending timing is accurate.
+
+Multi-track batch alignment requires explicit contiguous word ranges and a normalized transcript hash. It preflights all tracks before loading one model, processes sequentially, and publishes an importable package only when every track is aligned or explicitly marked for review. Single-track reruns reuse only artifacts whose complete input/configuration fingerprint still matches.
+
+## Multi-track package and playback
+
+Book package v1 is a strict root `manifest.json` plus one UTF-8 TXT and 1–100 referenced audio tracks, with optional manifest-linked per-track SRT/VTT. Unknown fields and unreferenced strict-package files are rejected. Raw ZIP imports use natural path ordering only as an editable preview suggestion; SRT/VTT files in raw archives are never linked by filename similarity.
+
+Sequential book playback owns one single-file player. Cross-track seeks, automatic transitions, and end notifications are guarded by a book generation plus track identity. The selected rate and explicit play intent survive file replacement, while pause during a pending seek prevents late completion from restarting audio. Track decode errors stop on the named track and remain retryable.
 
 ## Dictionary portability and translation
 
@@ -48,7 +62,7 @@ Round statistics describe attempts and completion inside that round. The complet
 
 Playback keeps user intent separate from `AVPlayer.rate`, which may be zero while seeking or buffering. Pause clears intent so a pending seek cannot restart audio. Playback speed is owned by each controller, starts at 1×, survives pause and media open/close inside that controller, and is not persisted across screens or launches.
 
-Phrase audio resolves only an entry's matching local source item and a finite range within the item duration. Missing local media remains a text-only experience; the app does not substitute another library item or fetch media from the network.
+Phrase audio resolves only an entry's matching local source item and a finite range within the selected legacy file or exact multi-track track duration. Source identity includes the optional track ID; a multi-track entry without a valid track ID is unavailable rather than falling back to another track. Missing local media remains a text-only experience; the app does not substitute another library item or fetch media from the network.
 
 ## Project and release tooling
 

@@ -7,6 +7,7 @@ struct ContentView: View {
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \LearningItem.createdAt, order: .reverse) private var items: [LearningItem]
     @State private var showingImport = false
+    @State private var showingBookImport = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -18,12 +19,13 @@ struct ContentView: View {
                     List {
                         ForEach(items) { item in
                         NavigationLink {
-                            ReaderView(item: item)
+                            if item.tracks.isEmpty { ReaderView(item: item) }
+                            else { BookReaderView(item: item) }
                         } label: {
                             Label {
                                 VStack(alignment: .leading) {
                                     Text(item.title)
-                                    Text(item.parts.isEmpty ? "\(Int(item.duration / 60)) min · \(item.segments.count) transcript segments" : "\(item.parts.count) parts · \(item.segments.count) transcript segments")
+                                    Text(summary(for: item))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                             } icon: { Image(systemName: item.mediaKind == "video" ? "video" : "waveform") }
@@ -36,13 +38,21 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { NavigationLink("Dictionary") { DictionaryView() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Upload item", systemImage: "plus") { showingImport = true }.accessibilityIdentifier("library.upload")
+                    Menu("More import options", systemImage: "ellipsis.circle") {
+                        Button("Single audio or video") { showingImport = true }
+                        Button("Audiobook ZIP") { showingBookImport = true }
+                            .accessibilityIdentifier("library.upload-book")
+                    } primaryAction: { showingImport = true }
+                    .accessibilityIdentifier("library.upload")
                 }
             }
             .sheet(isPresented: $showingImport) { ImportItemView() }
+            .sheet(isPresented: $showingBookImport) { BookImportView() }
             .task {
                 seedLearningUXFixtureIfNeeded()
                 translationCoordinator.recover(context: context)
+                do { try LibraryRecoveryService.recover(context: context) }
+                catch { errorMessage = error.localizedDescription }
             }
             .translationTask(translationCoordinator.configuration,
                              action: translationCoordinator.perform(session:))
@@ -51,12 +61,12 @@ struct ContentView: View {
     }
 
     private func deleteItems(at offsets: IndexSet) {
+        var fileTransactions: [LibraryDeleteTransaction] = []
         do {
             for index in offsets {
                 let item = items[index]
                 let itemID = item.id
-                let directory = MediaImportService.directory(for: item.id)
-                if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
+                fileTransactions.append(try LibraryFileTransactionService.beginDelete(itemID: itemID))
                 for entry in try context.fetch(FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.localSourceItemID == itemID })) {
                     translationCoordinator.cancel(entry.id)
                     context.delete(entry)
@@ -64,7 +74,28 @@ struct ContentView: View {
                 context.delete(item)
             }
             try context.save()
-        } catch { context.rollback(); errorMessage = error.localizedDescription }
+            fileTransactions.forEach { LibraryFileTransactionService.complete($0) }
+        } catch {
+            context.rollback()
+            fileTransactions.forEach { LibraryFileTransactionService.rollback($0) }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func summary(for item: LearningItem) -> String {
+        guard !item.tracks.isEmpty else {
+            return item.parts.isEmpty
+                ? "\(Int(item.duration / 60)) min · \(item.segments.count) transcript segments"
+                : "\(item.parts.count) parts · \(item.segments.count) transcript segments"
+        }
+        let state: String
+        switch BookSynchronizationState.resolve(item.tracks) {
+        case .synced: state = "Synced"
+        case .reviewRequired: state = "Review required"
+        case .partlySynced(let review): state = review ? "Partly synced · review" : "Partly synced"
+        case .untimed: state = "Untimed"
+        }
+        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(state)"
     }
 
     private func seedLearningUXFixtureIfNeeded() {

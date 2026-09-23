@@ -1,5 +1,14 @@
 # Project changelog
 
+## 2026-09-23 — Multi-track audiobook import and playback
+
+- Added previewed local ZIP and strict `.book.zip` import for 1–100 audio tracks, generated stable track identities, sequential playback, cross-track global seeking, per-track resume positions, and full-book untimed reading.
+- Added manifest-linked per-track SRT/WebVTT reading and dictionary audio references keyed by `(item ID, track ID)` so equal local cue times on different tracks resolve to the correct file. Plain full-text selections remain deliberately untimed.
+- Added streamed archive limits and CRC/path/collision checks, staging journals, save rollback, startup recovery, and reversible library deletion so filesystem changes do not masquerade as database transactions.
+- Extended the shared selection preview, phrase-audio resolver, playback intent/rate controller, transcript follow behavior, dictionary detail, and learning round UI with track-aware behavior while preserving their existing lifecycle and accessibility contracts.
+- Added the strict v1 book JSON schema and a sequential multi-track alignment CLI with full preflight, reports, fail-closed publishing, and fingerprint-checked single-track reruns.
+- Recorded the track-local timeline, immutable identity, untimed TXT, legacy adapter, migration, import transaction, and batch publishing decisions. Updated the project overview because multi-track ZIP import and batch alignment are now supported workflows.
+
 ## 2026-09-22 — Learning and playback UX
 
 - Changed Translate in Context in the reader to an ephemeral preview that translates the phrase and its containing sentence without creating or modifying a dictionary entry.

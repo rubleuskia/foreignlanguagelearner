@@ -23,6 +23,73 @@ struct LearningPart: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+enum TrackAlignmentStatus: String, Codable, Sendable, CaseIterable {
+    case aligned
+    case reviewRequired = "review-required"
+    case untimed
+
+    var hasTimedTranscript: Bool { self != .untimed }
+}
+
+struct LearningTrack: Codable, Equatable, Sendable, Identifiable {
+    var id: String
+    var title: String
+    var mediaFilename: String
+    var subtitleFilename: String?
+    var duration: Double
+    var alignmentStatus: TrackAlignmentStatus
+    var lastPosition: Double
+    var isCompleted: Bool
+
+    init(id: String, title: String, mediaFilename: String, subtitleFilename: String? = nil,
+         duration: Double, alignmentStatus: TrackAlignmentStatus = .untimed,
+         lastPosition: Double = 0, isCompleted: Bool = false) {
+        self.id = id
+        self.title = title
+        self.mediaFilename = mediaFilename
+        self.subtitleFilename = subtitleFilename
+        self.duration = duration
+        self.alignmentStatus = alignmentStatus
+        self.lastPosition = lastPosition
+        self.isCompleted = isCompleted
+    }
+}
+
+struct BookMediaDescriptor: Equatable, Sendable {
+    struct Track: Equatable, Sendable, Identifiable {
+        let id: String
+        let title: String
+        let mediaFilename: String
+        let subtitleFilename: String?
+        let duration: Double
+        let alignmentStatus: TrackAlignmentStatus
+    }
+
+    let tracks: [Track]
+    let isLegacy: Bool
+
+    @MainActor init(item: LearningItem) {
+        if item.tracks.isEmpty {
+            tracks = [.init(id: "legacy", title: item.title, mediaFilename: item.mediaFilename,
+                            subtitleFilename: item.transcriptFilename, duration: item.duration,
+                            alignmentStatus: item.segments.first?.start == nil ? .untimed : .aligned)]
+            isLegacy = true
+        } else {
+            tracks = item.tracks.map {
+                .init(id: $0.id, title: $0.title, mediaFilename: $0.mediaFilename,
+                      subtitleFilename: $0.subtitleFilename, duration: $0.duration,
+                      alignmentStatus: $0.alignmentStatus)
+            }
+            isLegacy = false
+        }
+    }
+
+    func track(id: String?) -> Track? {
+        guard let id else { return isLegacy ? tracks.first : nil }
+        return tracks.first { $0.id == id }
+    }
+}
+
 enum LearningPartPlanner {
     static func makeParts(segments: [TranscriptSegment], duration: Double, targetDuration: Double) -> [LearningPart] {
         guard duration > 0, targetDuration > 0,
@@ -85,9 +152,12 @@ struct TranscriptDocument: Sendable {
     var segments: [TranscriptSegment]
     var parts: [LearningPart] = []
     var sourceLanguageCode: String = "pl"
+    var tracks: [LearningTrack] = []
+    var lastTrackID: String? = nil
 
     init(id: UUID, title: String, mediaKind: String, mediaFilename: String,
-         transcriptFilename: String, duration: Double, segments: [TranscriptSegment], parts: [LearningPart] = [], sourceLanguageCode: String = "pl") {
+         transcriptFilename: String, duration: Double, segments: [TranscriptSegment], parts: [LearningPart] = [], sourceLanguageCode: String = "pl",
+         tracks: [LearningTrack] = [], lastTrackID: String? = nil) {
         self.id = id
         self.title = title
         self.createdAt = .now
@@ -99,6 +169,8 @@ struct TranscriptDocument: Sendable {
         self.segments = segments
         self.parts = parts
         self.sourceLanguageCode = sourceLanguageCode
+        self.tracks = tracks
+        self.lastTrackID = lastTrackID
     }
 
     func partIndex(containing position: Double) -> Int {
@@ -125,6 +197,7 @@ struct TranscriptDocument: Sendable {
     var localSourceItemID: UUID?
     var audioStart: Double?
     var audioEnd: Double?
+    var sourceTrackID: String? = nil
     var contextText: String?
     var contextSelectionLocation: Int?
     var contextSelectionLength: Int?
@@ -138,7 +211,7 @@ struct TranscriptDocument: Sendable {
     var userNote: String?
 
     init(text: String, item: LearningItem, segmentIndex: Int?, context: SelectionContext? = nil,
-         audioStart: Double? = nil, audioEnd: Double? = nil) {
+         audioStart: Double? = nil, audioEnd: Double? = nil, sourceTrackID: String? = nil) {
         id = UUID()
         self.text = Self.normalized(text)
         sourceItemID = item.id
@@ -149,6 +222,7 @@ struct TranscriptDocument: Sendable {
         localSourceItemID = item.id
         self.audioStart = audioStart
         self.audioEnd = audioEnd
+        self.sourceTrackID = sourceTrackID
         contextText = context?.text
         contextSelectionLocation = context?.selection.location
         contextSelectionLength = context?.selection.length
@@ -172,6 +246,7 @@ struct TranscriptDocument: Sendable {
         self.learningLevel = min(4, max(1, learningLevel))
         self.audioStart = nil
         self.audioEnd = nil
+        self.sourceTrackID = nil
         self.contextText = context?.text
         self.contextSelectionLocation = context?.selection.location
         self.contextSelectionLength = context?.selection.length

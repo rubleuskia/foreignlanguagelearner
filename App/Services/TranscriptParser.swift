@@ -48,7 +48,11 @@ enum TranscriptParser {
             segments.append(.init(start: start, end: end, text: body))
         }
         guard !segments.isEmpty else { throw ParseError.invalid("No subtitle segments were found.") }
-        return TranscriptDocument(segments: segments.sorted { $0.start! < $1.start! })
+        let stable = segments.enumerated().sorted {
+            if $0.element.start == $1.element.start { return $0.offset < $1.offset }
+            return $0.element.start! < $1.element.start!
+        }.map(\.element)
+        return TranscriptDocument(segments: stable)
     }
 
     static func timestamp(_ value: String) -> Double? {

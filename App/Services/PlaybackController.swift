@@ -19,6 +19,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     private(set) var wantsToPlay = false
     private(set) var selectedRate: PlaybackRate = .normal
     var errorMessage: String?
+    var didReachEnd: (() -> Void)?
 
     private var observer: Any?
     private var endObserver: NSObjectProtocol?
@@ -28,8 +29,9 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     private var seekInProgress = false
     private var reachedEnd = false
 
-    func open(url: URL, position: Double, range: ClosedRange<Double>? = nil) {
-        close()
+    func open(url: URL, position: Double, range: ClosedRange<Double>? = nil,
+              completion: (@MainActor @Sendable (Bool) -> Void)? = nil) {
+        close(keepAudioSession: true)
         errorMessage = nil
         playbackRange = Self.validRange(range)
         let item = AVPlayerItem(url: url)
@@ -46,6 +48,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         ) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self, self.observationGeneration == generation,
+                      self.player.currentItem === item,
                       !self.seekInProgress else { return }
                 let seconds = time.seconds
                 guard seconds.isFinite else { return }
@@ -55,16 +58,19 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
                 }
                 if let end = self.playbackRange?.upperBound,
                    self.wantsToPlay, self.position >= end - 0.03 {
-                    self.finishPlayback()
+                    self.finishPlayback(item: item, generation: generation)
                 }
             }
         }
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.finishPlayback() }
+        ) { [weak self, weak item] _ in
+            MainActor.assumeIsolated {
+                guard let item else { return }
+                self?.finishPlayback(item: item, generation: generation)
+            }
         }
-        seek(to: self.position)
+        seek(to: self.position, completion: completion)
     }
 
     func setRate(_ rate: PlaybackRate) {
@@ -104,8 +110,12 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         wantsToPlay ? pause() : play()
     }
 
-    func seek(to seconds: Double) {
-        guard player.currentItem != nil, seconds.isFinite else { return }
+    func seek(to seconds: Double,
+              completion: (@MainActor @Sendable (Bool) -> Void)? = nil) {
+        guard player.currentItem != nil, seconds.isFinite else {
+            completion?(false)
+            return
+        }
         position = clamped(seconds)
         reachedEnd = false
         seekGeneration += 1
@@ -114,20 +124,24 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         player.seek(
             to: CMTime(seconds: position, preferredTimescale: 600),
             toleranceBefore: .zero, toleranceAfter: .zero
-        ) { [weak self] _ in
+        ) { [weak self] finished in
             MainActor.assumeIsolated {
-                guard let self, self.seekGeneration == generation else { return }
+                guard let self, self.seekGeneration == generation else {
+                    completion?(false)
+                    return
+                }
                 self.seekInProgress = false
                 let actual = self.player.currentTime().seconds
                 if actual.isFinite { self.position = self.clamped(actual) }
                 if self.wantsToPlay {
                     self.player.playImmediately(atRate: self.selectedRate.rawValue)
                 }
+                completion?(finished)
             }
         }
     }
 
-    func close() {
+    func close(keepAudioSession: Bool = false) {
         seekGeneration += 1
         observationGeneration += 1
         seekInProgress = false
@@ -142,7 +156,10 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         player.replaceCurrentItem(with: nil)
         playbackRange = nil
         position = 0
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        didReachEnd = nil
+        if !keepAudioSession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     private var isAtEnd: Bool {
@@ -150,12 +167,14 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         return end.isFinite && position >= end - 0.03
     }
 
-    private func finishPlayback() {
+    private func finishPlayback(item: AVPlayerItem, generation: Int) {
+        guard observationGeneration == generation, player.currentItem === item else { return }
         player.pause()
         wantsToPlay = false
         isPlaying = false
         reachedEnd = true
         if let end = playbackRange?.upperBound { position = end }
+        didReachEnd?()
     }
 
     private func clamped(_ seconds: Double) -> Double {

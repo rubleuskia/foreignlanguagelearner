@@ -9,10 +9,12 @@ struct SelectionTranslationPreview: Identifiable, Equatable, Sendable {
     let sourceItemID: UUID
     let sourceTitle: String
     let audioRange: ClosedRange<Double>?
+    let sourceTrackID: String?
 
     init(id: UUID = UUID(), selectedText: String, sourceLanguageCode: String,
          targetLanguageCode: String = "ru", context: SelectionContext?,
-         sourceItemID: UUID, sourceTitle: String, audioRange: ClosedRange<Double>?) {
+         sourceItemID: UUID, sourceTitle: String, audioRange: ClosedRange<Double>?,
+         sourceTrackID: String? = nil) {
         self.id = id
         self.selectedText = selectedText
         self.sourceLanguageCode = sourceLanguageCode
@@ -21,5 +23,6 @@ struct SelectionTranslationPreview: Identifiable, Equatable, Sendable {
         self.sourceItemID = sourceItemID
         self.sourceTitle = sourceTitle
         self.audioRange = audioRange
+        self.sourceTrackID = sourceTrackID
     }
 }

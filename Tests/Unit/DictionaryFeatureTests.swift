@@ -124,6 +124,9 @@ final class DictionaryFeatureTests: XCTestCase {
         let entry = DictionaryEntry(text: "dzień dobry", item: item, segmentIndex: 0,
                                     context: SelectionContext(text: "Powiedział: dzień dobry.",
                                                               selection: NSRange(location: 12, length: 11)))
+        entry.sourceTrackID = "chapter-2"
+        entry.audioStart = 3
+        entry.audioEnd = 4
         entry.translationText = "добрый день"
         entry.translationStatus = .ready
         entry.translationOrigin = .manual
@@ -156,6 +159,9 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(entry.translationText, "добрый день!")
         XCTAssertEqual(entry.translationOrigin, .imported)
         XCTAssertEqual(entry.learningLevel, 3, "Translation-only imports preserve learning progress")
+        XCTAssertEqual(entry.sourceTrackID, "chapter-2")
+        XCTAssertEqual(entry.audioStart, 3)
+        XCTAssertEqual(entry.audioEnd, 4)
     }
 
     @MainActor func testDictionaryExportIncludesPolishLookupDiagnostics() throws {
