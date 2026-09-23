@@ -77,3 +77,7 @@ DerivedData/
 
 # JetBrains IDE
 .idea/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

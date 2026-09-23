@@ -18,6 +18,24 @@
 - Round completion now lists all valid level-4 Russian phrases from current stored data, including phrases learned before the round.
 - Updated `PROJECT.md` for the expanded supported learning workflow. Project purpose and system boundaries are unchanged; no persistent preference, transfer-schema, backend or multi-track decision was introduced.
 
+## 2026-09-22 — Cloud alignment backend implementation
+
+- Added an undeployed AWS backend implementation for one audio + matching TXT alignment job: a
+  capability-authorized HTTP API, version-pinned multipart uploads, DynamoDB state/idempotency and
+  atomic global admission counters, a versioned Standard Step Functions workflow, one CPU Fargate
+  worker per accepted start, manifest-gated publication, cancellation, reconciliation and cleanup.
+- Preserved public testing without sign-in and the 60-minute hard duration ceiling. Job IDs do not
+  grant access; each create request uses a fresh 32-byte client capability, and the service stores
+  only its SHA-256 digest. Existing local import and local alignment behavior is unchanged.
+- Added an OpenAPI contract, hash-locked Linux/x86_64 CPU worker dependencies, immutable image/model
+  build inputs, CDK infrastructure assertions, backend race/validation tests and CI coverage.
+- Recorded the benchmark and deployment gate in `docs/ALIGNMENT_BENCHMARKS.md`. No AWS resources were
+  deployed, no production pricing or 60-minute benchmark is claimed, and the iOS remote upload/UI
+  client remains future implementation work.
+- Recorded the temporary-cloud-processing architecture in `DECISIONS.md` and updated `PROJECT.md`
+  because the repository now contains an optional backend boundary even though the shipped app
+  remains local-first and has no configured service endpoint.
+
 ## 2026-09-22 — Reviewed implementation proposals
 
 - Reviewed the AWS alignment, learning UX and multi-track audiobook plans against the current code, resolved contradictory requirements, and added explicit state, timing, persistence, migration and acceptance contracts for implementation.

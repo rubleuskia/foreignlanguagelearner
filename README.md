@@ -45,4 +45,4 @@ Workflows become available after these files are pushed to GitHub. See [release 
 - `fastlane/`: signed archive and App Store Connect upload.
 - `.github/workflows/`: CI and release pipelines.
 
-The app uses SwiftData and local file storage. ZIPFoundation is pinned for streamed local archive inspection; the app has no backend or analytics. The app icon is a development placeholder; replace it before release.
+The shipped app uses SwiftData and local file storage. ZIPFoundation is pinned for streamed local archive inspection; the app has no configured backend endpoint or analytics. The repository's undeployed cloud-alignment backend remains gated on its documented benchmarks. The app icon is a development placeholder; replace it before release.

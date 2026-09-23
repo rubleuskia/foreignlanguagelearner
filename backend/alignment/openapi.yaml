@@ -1,0 +1,316 @@
+openapi: 3.1.0
+info:
+  title: Foreign Language Learner Alignment API
+  version: 1.0.0-public-test
+  description: >-
+    Capability-authorized public-test API. Every operation requires a different
+    per-job 32-byte base64url bearer token; job IDs are not credentials.
+servers:
+  - url: https://replace-with-development-api.example
+security:
+  - JobCapability: []
+paths:
+  /v1/alignments:
+    post:
+      operationId: createAlignment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/Create' }
+        '200': { $ref: '#/components/responses/Create' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimit' }
+  /v1/alignments/{id}:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    get:
+      operationId: getAlignment
+      responses:
+        '200':
+          description: Current state; progress_percent is always null in v1.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/alignments/{id}/upload-urls:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    post:
+      operationId: createUploadUrls
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [part_numbers]
+              properties:
+                part_numbers:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  uniqueItems: true
+                  items: { type: integer, minimum: 1 }
+                include_text: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Short-lived signed requests. Send every returned header exactly.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parts]
+                properties:
+                  parts:
+                    type: array
+                    items: { $ref: '#/components/schemas/SignedPart' }
+                  text_upload: { $ref: '#/components/schemas/SignedRequest' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimit' }
+  /v1/alignments/{id}/upload:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    get:
+      operationId: getUpload
+      responses:
+        '200':
+          description: Server-observed multipart state for relaunch recovery.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id, upload_complete, parts, upload_expires_at]
+                properties:
+                  job_id: { type: string, format: uuid }
+                  upload_complete: { type: boolean }
+                  upload_expires_at: { type: string, format: date-time }
+                  parts:
+                    type: array
+                    items:
+                      type: object
+                      required: [part_number, etag, size_bytes]
+                      properties:
+                        part_number: { type: integer }
+                        etag: { type: string }
+                        size_bytes: { type: integer }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/alignments/{id}/complete-upload:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    post:
+      operationId: completeUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [parts]
+              properties:
+                parts:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [part_number, etag]
+                    properties:
+                      part_number: { type: integer, minimum: 1 }
+                      etag: { type: string, minLength: 1 }
+      responses:
+        '200': { description: Inputs pinned to immutable S3 versions. }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /v1/alignments/{id}/start:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    post:
+      operationId: startAlignment
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        '202':
+          description: Durable start intent or its replayed current state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimit' }
+  /v1/alignments/{id}/result:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    get:
+      operationId: getAlignmentResult
+      responses:
+        '200':
+          description: Version-pinned short-lived downloads.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Result' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /v1/alignments/{id}/diagnostics:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    get:
+      operationId: getAlignmentDiagnostics
+      responses:
+        '200': { description: Present private artifacts for failed or reviewed jobs only. }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /v1/alignments/{id}/cancel:
+    parameters: [ { $ref: '#/components/parameters/JobId' } ]
+    post:
+      operationId: cancelAlignment
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        '202':
+          description: Cancellation requested, or the existing terminal result when completion won.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+components:
+  securitySchemes:
+    JobCapability:
+      type: http
+      scheme: bearer
+      bearerFormat: unpadded base64url encoding of exactly 32 random bytes
+  parameters:
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    CreateRequest:
+      type: object
+      additionalProperties: false
+      required: [language, profile_id, allow_untimed_words, audio, text]
+      properties:
+        language: { const: pl }
+        profile_id: { const: base-guided-v1 }
+        allow_untimed_words: { type: boolean }
+        audio:
+          type: object
+          additionalProperties: false
+          required: [extension, size_bytes, sha256]
+          properties:
+            extension: { enum: [mp3, m4a, wav] }
+            size_bytes: { type: integer, minimum: 1, maximum: 1000000000 }
+            sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        text:
+          type: object
+          additionalProperties: false
+          required: [size_bytes, sha256]
+          properties:
+            size_bytes: { type: integer, minimum: 1, maximum: 10000000 }
+            sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    SignedRequest:
+      type: object
+      required: [url, headers]
+      properties:
+        url: { type: string, format: uri }
+        headers: { type: object, additionalProperties: { type: string } }
+    SignedPart:
+      allOf:
+        - $ref: '#/components/schemas/SignedRequest'
+        - type: object
+          required: [part_number]
+          properties:
+            part_number: { type: integer }
+    CreateResponse:
+      type: object
+      required: [job_id, status, upload_expires_at, part_size_bytes, part_count]
+      properties:
+        job_id: { type: string, format: uuid }
+        status: { const: awaiting_upload }
+        upload_expires_at: { type: string, format: date-time }
+        part_size_bytes: { const: 16777216 }
+        part_count: { type: integer, minimum: 1 }
+        text_upload: { $ref: '#/components/schemas/SignedRequest' }
+    JobStatus:
+      type: object
+      required: [job_id, status, progress_percent, created_at, updated_at, result_available]
+      properties:
+        job_id: { type: string, format: uuid }
+        status:
+          enum: [awaiting_upload, starting, running, succeeded, succeeded_with_review, failed, cancelling, cancelled, expired]
+        stage: { enum: [downloading, aligning, validating, uploading, null] }
+        progress_percent: { type: 'null' }
+        error_code: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        requires_review: { type: [boolean, 'null'] }
+        result_available: { type: boolean }
+        result_expires_at: { type: [string, 'null'], format: date-time }
+    Artifact:
+      type: object
+      required: [url, size_bytes, sha256]
+      properties:
+        url: { type: string, format: uri }
+        size_bytes: { type: integer, minimum: 1, maximum: 9999999 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    Result:
+      type: object
+      required: [job_id, artifacts, url_expires_at, result_expires_at, requires_review, counts]
+      properties:
+        job_id: { type: string, format: uuid }
+        artifacts:
+          type: object
+          additionalProperties: false
+          required: [srt, vtt, json]
+          properties:
+            srt: { $ref: '#/components/schemas/Artifact' }
+            vtt: { $ref: '#/components/schemas/Artifact' }
+            json: { $ref: '#/components/schemas/Artifact' }
+        url_expires_at: { type: string, format: date-time }
+        result_expires_at: { type: string, format: date-time }
+        requires_review: { type: boolean }
+        counts: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+        job_id: { type: string, format: uuid }
+  responses:
+    Create:
+      description: New job (201) or exact replay (200).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateResponse' }
+    Error:
+      description: Stable machine code and safe message; job_id omitted before creation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimit:
+      description: Global public-test limit reached.
+      headers:
+        Retry-After:
+          required: true
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
