@@ -2,7 +2,7 @@ name: ForeignLanguageLearner
 options:
   minimumXcodeGenVersion: 2.45.0
   deploymentTarget:
-    iOS: '18.0'
+    iOS: '26.0'
 settings:
   base:
     SWIFT_VERSION: '6.0'
