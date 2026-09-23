@@ -12,6 +12,8 @@ Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media li
 
 For a physical device, set your development team in Xcode and use a registered bundle identifier. Project settings are generated: persist changes in `project.yml`, then regenerate. The default bundle identifier is a placeholder until registered in your Apple account.
 
+If a newly added Swift type is reported as missing, regenerate the ignored Xcode project with `bash scripts/bootstrap.sh` before changing imports or access control. See [generated project drift prevention](docs/PREVENTING_GENERATED_PROJECT_DRIFT.md) for the diagnosis and workflow.
+
 ## Generate subtitles from a book and audio
 
 Use the standalone [TXT + audio subtitle utility](tools/subtitle-aligner/README.md) to align a matching transcript and narration into SRT/WebVTT for the app. Its README covers installation, Polish examples, chapter offsets, validation, and import steps.
