@@ -75,6 +75,21 @@ Contextual translation remains local and user-triggered. Because Apple Translati
 
 Reader “Translate in Context” uses an ephemeral value snapshot and a coordinator with no SwiftData context. It never creates a dictionary entry and ignores late translation responses after retry or dismissal. Saving remains a separate “Add to Dictionary” action. The preview shows phrase and sentence translations as separate results rather than claiming model-level contextual translation.
 
+## Planned Foundation Models contextual analysis
+
+The reviewed replacement for contextual Translation is gated on physical-device verification that
+the on-device model supports Polish input and Russian output with acceptable translation and
+explanation quality. Until that gate passes, the app keeps its current iOS 18 deployment target and
+Apple Translation contextual workflow. The repository may contain an isolated iOS 26 probe,
+domain-only contracts, deterministic request-building tests, and a frozen legacy-store fixture;
+these preparation artifacts do not make the feature shipped or supported.
+
+If the gate passes, the target design uses separate persisted dictionary and ephemeral reader
+owners, one bounded application-wide model scheduler, typed structured output, additive SwiftData
+fields, and explicit user confirmation before a generated candidate replaces a saved translation.
+The full implementation contract lives in
+`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`.
+
 Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
 
 Polish inflected forms are resolved locally before a fallback Wiktionary request. A reproducible build tool reduces the BSD-licensed SGJP/Morfeusz source feed to unique `surface form → dictionary title` pairs. For the current debugging phase, the complete database is zlib-compressed into the application bundle and expanded into Application Support on first use. Ambiguous forms remain explicit choices for the learner rather than being resolved arbitrarily. A downloadable language pack can replace the bundled resource later without changing the lookup interface.
