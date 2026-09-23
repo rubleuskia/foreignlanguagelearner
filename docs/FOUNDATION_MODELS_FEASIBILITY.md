@@ -22,9 +22,10 @@ production project. It uses:
 - separate normal and user-confirmed airplane-mode runs, local JSON export, and 0–2 evaluator
   scoring for every response.
 
-The probe was compiled for generic physical iOS with deployment target 26.0. It is not linked into
-the production app. The production app remains on its current iOS 18 deployment target and current
-Apple Translation workflow until this gate passes.
+The probe was compiled for generic physical iOS with deployment target 26.0. The production target
+is also set to iOS 26.0 and now contains an isolated `FoundationModelsContextProvider` that calls
+typed `LanguageModelSession.respond`. It is not wired into the UI or shipped contextual workflow;
+the current Apple Translation route remains active until this gate passes.
 
 ## Fixed evaluation set
 
@@ -102,11 +103,12 @@ isolated probe, domain contracts, request builder, tests, and a frozen legacy-st
   tightening exact-selection validation, the focused 14-test builder/fixture suite also passed.
   Production Debug and Release schemes built successfully, and the frozen fixture generator ran
   successfully.
-- Limitation: the production provider, scheduler, persistence migration, UI replacement, metrics,
-  and legacy-removal work were not part of the initial pre-gate preparation.
+- Added: the production provider and iOS 26 deployment setting so the API can be tested on a device.
+- Limitation: the provider is not wired into the UI; scheduler, persistence migration, metrics, and
+  legacy-removal work remain blocked until the gate passes.
 
 ### Stages 2–6 — blocked
 
-- No production provider, scheduler, persistence migration, UI replacement, deployment-target
-  change, or removal of the existing contextual Translation route is included.
+- No production scheduler, persistence migration, UI replacement, or removal of the existing
+  contextual Translation route is included.
 - Continue only after the physical-device and bilingual quality gate above passes.

@@ -79,8 +79,9 @@ Reader “Translate in Context” uses an ephemeral value snapshot and a coordin
 
 The reviewed replacement for contextual Translation is gated on physical-device verification that
 the on-device model supports Polish input and Russian output with acceptable translation and
-explanation quality. Until that gate passes, the app keeps its current iOS 18 deployment target and
-Apple Translation contextual workflow. The repository may contain an isolated iOS 26 probe,
+explanation quality. Until that gate passes, the app keeps its current Apple Translation contextual
+workflow. The production target is iOS 26.0 to compile an isolated provider for device testing, but
+the provider is not wired into the UI. The repository may contain an isolated iOS 26 probe,
 domain-only contracts, deterministic request-building tests, and a frozen legacy-store fixture;
 these preparation artifacts do not make the feature shipped or supported.
 

@@ -7,7 +7,9 @@
 - Added an isolated iOS 26 Foundation Models probe, reusable domain/request-building contracts,
   Unicode/UTF-16 coverage, and a frozen legacy SwiftData store fixture for later migration testing.
 - The gate has not been run on an eligible device, so production behavior and the iOS 18 deployment
-  target are unchanged. Recorded the planned architecture decision; `PROJECT.md` is unchanged.
+  target are unchanged. The production target is now iOS 26.0 and includes an isolated provider for
+  device testing; the existing contextual UI/workflow remains unchanged. Recorded the planned
+  architecture decision; `PROJECT.md` is unchanged.
 
 ## 2026-09-23 — Multi-track audiobook import and playback
 
