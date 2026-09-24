@@ -127,6 +127,7 @@ private struct DictionaryRow: View {
 struct DictionaryEntryDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Environment(DictionaryTranslationCoordinator.self) private var coordinator
     @Query private var sourceItems: [LearningItem]
     @Bindable var entry: DictionaryEntry
@@ -200,9 +201,18 @@ struct DictionaryEntryDetailView: View {
                 Section("Progress") { LabeledContent("Level", value: "\(entry.learningLevel) · \(LearningLevel.title(entry.learningLevel))") }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
+                        if let explanation = entry.contextTranslationText {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Word explanations").font(.caption).foregroundStyle(.secondary)
+                                Text(explanation).textSelection(.enabled)
+                                CopyButton(value: explanation, label: "Copy word explanations",
+                                           identifier: "dictionary.copy-context-words")
+                            }
+                            if entry.contextSelectedTranslationText != nil { Divider() }
+                        }
                         if let candidate = entry.contextSelectedTranslationText {
-                            LabeledContent("Selected text", value: candidate)
-                            CopyButton(value: candidate, label: "Copy selected-text translation",
+                            LabeledContent("Overall translation", value: candidate)
+                            CopyButton(value: candidate, label: "Copy overall translation",
                                        identifier: "dictionary.copy-context-selection")
                             if candidate != entry.translationText {
                                 Button("Use as Saved Translation", systemImage: "checkmark.circle") {
@@ -210,21 +220,14 @@ struct DictionaryEntryDetailView: View {
                                 }
                             }
                         }
-                        if let sentence = entry.contextTranslationText {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Sentence translation").font(.caption).foregroundStyle(.secondary)
-                                Text(sentence).textSelection(.enabled)
-                                CopyButton(value: sentence, label: "Copy sentence translation",
-                                           identifier: "dictionary.copy-context-sentence")
-                            }
-                        }
                         contextProgress
                         Button(entry.contextTranslationText == nil ? "Translate in Context" : "Refresh Context Translation",
                                systemImage: "character.book.closed") {
-                            contextual.translateContext(for: entry, context: context)
+                            contextual.translateContext(for: entry, context: context,
+                                                        service: contextAnalysisService)
                         }
                         .accessibilityIdentifier("dictionary.context-translate")
-                        Text("The selected expression and its sentence are translated separately so you can compare the likely meaning. Existing manual or imported translations are preserved.")
+                        Text("Each selected word is explained in context, followed by a natural translation of the complete phrase. Existing manual or imported translations are preserved.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
@@ -303,12 +306,14 @@ struct DictionaryEntryDetailView: View {
                 noteDraft = entry.userNote ?? ""
                 if autoStartContext, !hasAutoStarted {
                     hasAutoStarted = true
-                    contextual.translateContext(for: entry, context: context)
+                    contextual.translateContext(for: entry, context: context,
+                                                service: contextAnalysisService)
                 }
             }
             .onDisappear {
                 playback.close()
                 openedAudioIdentity = nil
+                contextual.cancelCurrentRequest()
                 dictionaryLookup.cancelAll()
                 if !entry.hasTranslation, entry.translationStatus == .pending {
                     coordinator.enqueue(entry, context: context)

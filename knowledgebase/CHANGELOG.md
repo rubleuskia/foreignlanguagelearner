@@ -1,5 +1,27 @@
 # Project changelog
 
+## 2026-09-24 — Direct OpenAI contextual translation with user key
+
+- Replaced both contextual Apple Translation routes with one bounded application-wide service that
+  calls the OpenAI Responses API and requires strict structured output for the selected phrase and
+  its contextual explanation. Word-by-word and ordinary automatic translation remain on Apple
+  Translation.
+- Added an explicit cloud opt-in, model selection, and user-provided OpenAI API key management. The
+  key is stored only in the device Keychain and is sent directly to OpenAI; it is not bundled with
+  the app, written to `UserDefaults`, or added to the repository. Usage is billed to its owner.
+- Preserved ephemeral reader previews and separately persisted dictionary results, stale-response
+  guards, the last successful result on failure, and explicit acceptance before replacing a saved
+  translation. Added request/error/decoding tests and documented the BYOK boundary.
+- Context explanation now returns and validates one concise contextual grammar/meaning line for
+  every selected word, preserves source order and duplicates, and shows the natural translation of
+  the complete phrase after the word breakdown.
+- Added a prompt editor backed by an optional `UserDefaults` override, with the production default
+  kept in code and an explicit reset action. The application still appends its non-editable strict
+  output and untrusted-context safety contract to every request.
+- Recorded the direct-BYOK cloud architecture in `DECISIONS.md` and updated `PROJECT.md` because
+  contextual translation is no longer local-only. No relay or project-owned API credential is part
+  of this release.
+
 ## 2026-09-23 — Multi-track audiobook import and playback
 
 - Added previewed local ZIP and strict `.book.zip` import for 1–100 audio tracks, generated stable track identities, sequential playback, cross-track global seeking, per-track resume positions, and full-book untimed reading.
