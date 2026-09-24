@@ -37,7 +37,14 @@ struct ContentView: View {
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { NavigationLink("Dictionary") { DictionaryView() } }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink {
+                        ContextualTranslationSettingsView()
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("library.settings")
+
                     Menu("More import options", systemImage: "ellipsis.circle") {
                         Button("Single audio or video") { showingImport = true }
                         Button("Audiobook ZIP") { showingBookImport = true }

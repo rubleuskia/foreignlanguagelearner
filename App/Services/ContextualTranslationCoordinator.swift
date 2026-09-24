@@ -144,16 +144,67 @@ final class ContextualTranslationCoordinator {
     private(set) var status: ContextualTranslationStatus = .idle
     private var request: Request?
     private var modelContext: ModelContext?
+    private var contextTask: Task<Void, Never>?
 
-    func translateContext(for entry: DictionaryEntry, context: ModelContext) {
+    func translateContext(for entry: DictionaryEntry, context: ModelContext,
+                          service: any ContextAnalysisServing) {
         guard let sentence = ContextSentenceExtractor.sentence(for: entry) else {
             status = .failed("No surrounding sentence is available for this entry.")
             return
         }
-        begin(entry: entry, sentence: sentence, mode: .context, tokens: [], context: context)
+        guard let contextText = entry.contextText,
+              let location = entry.contextSelectionLocation,
+              let length = entry.contextSelectionLength else {
+            status = .failed(ContextAnalysisError.invalidContext.userMessage)
+            return
+        }
+        contextTask?.cancel()
+        modelContext = context
+        entry.contextAnalysisRevision += 1
+        try? context.save()
+        let snapshot = Request(entryID: entry.id, revision: entry.contextAnalysisRevision,
+                               selectedText: entry.text, sentence: sentence,
+                               source: entry.sourceLanguageCode, target: entry.targetLanguageCode,
+                               mode: .context, tokens: [])
+        let analysisRequest: ContextAnalysisRequest
+        do {
+            analysisRequest = try ContextAnalysisRequestBuilder.build(.init(
+                subject: .dictionaryEntry(entry.id), revision: snapshot.revision,
+                expectedSelectedText: entry.text,
+                context: SelectionContext(text: contextText,
+                                          selection: NSRange(location: location, length: length)),
+                sourceLanguage: entry.sourceLanguageCode,
+                targetLanguage: entry.targetLanguageCode,
+                promptVersion: OpenAIContextAnalysisProvider.promptVersion
+            ))
+        } catch let error as ContextAnalysisError {
+            status = .failed(error.userMessage)
+            return
+        } catch {
+            status = .failed(ContextAnalysisError.unknown.userMessage)
+            return
+        }
+        request = snapshot
+        status = .translatingContext
+        contextTask = Task { [weak self] in
+            do {
+                let result = try await service.analyze(analysisRequest)
+                try Task.checkCancellation()
+                self?.completeContext(snapshot, selected: result.directTranslation,
+                                      explanation: result.contextExplanation)
+            } catch is CancellationError {
+                self?.cancel(snapshot)
+            } catch let error as ContextAnalysisError {
+                self?.fail(snapshot, message: error.userMessage)
+            } catch {
+                self?.fail(snapshot, message: ContextAnalysisError.unknown.userMessage)
+            }
+        }
     }
 
     func translateWords(for entry: DictionaryEntry, context: ModelContext) {
+        contextTask?.cancel()
+        contextTask = nil
         guard let sentence = ContextSentenceExtractor.sentence(for: entry) else {
             status = .failed("No surrounding sentence is available for this entry.")
             return
@@ -188,21 +239,7 @@ final class ContextualTranslationCoordinator {
 
             switch request.mode {
             case .context:
-                await setStatus(.translatingContext, for: request)
-                let requests = [
-                    TranslationSession.Request(sourceText: request.selectedText, clientIdentifier: "selection"),
-                    TranslationSession.Request(sourceText: request.sentence.text, clientIdentifier: "sentence")
-                ]
-                let responses = try await session.translations(from: requests)
-                let values = Dictionary(uniqueKeysWithValues: responses.compactMap { response in
-                    response.clientIdentifier.map { ($0, response.targetText) }
-                })
-                guard let selected = values["selection"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      let sentence = values["sentence"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !selected.isEmpty, !sentence.isEmpty else {
-                    throw ContextualTranslationError.emptyResult
-                }
-                await completeContext(request, selected: selected, sentence: sentence)
+                return
             case .words:
                 await setStatus(.translatingWords, for: request)
                 var unique: [String] = []
@@ -236,6 +273,13 @@ final class ContextualTranslationCoordinator {
         if case .failed = status { status = .idle }
     }
 
+    func cancelCurrentRequest() {
+        contextTask?.cancel()
+        contextTask = nil
+        request = nil
+        status = .idle
+    }
+
     private func begin(entry: DictionaryEntry, sentence: ContextSentence, mode: Mode,
                        tokens: [BreakdownToken], context: ModelContext) {
         modelContext = context
@@ -257,18 +301,11 @@ final class ContextualTranslationCoordinator {
         status = value
     }
 
-    private func completeContext(_ request: Request, selected: String, sentence: String) {
+    private func completeContext(_ request: Request, selected: String, explanation: String) {
         guard let entry = currentEntry(for: request) else { return }
         entry.contextSelectedTranslationText = selected
-        entry.contextTranslationText = sentence
+        entry.contextTranslationText = explanation
         entry.contextAnalysisUpdatedAt = .now
-        if !entry.hasTranslation {
-            entry.translationText = selected
-            entry.translationOrigin = .apple
-            entry.translationUpdatedAt = .now
-            entry.translationStatus = .ready
-            entry.translationErrorCode = nil
-        }
         finish(request)
     }
 
@@ -291,28 +328,21 @@ final class ContextualTranslationCoordinator {
 
     private func fail(_ request: Request, message: String) {
         guard self.request?.revision == request.revision else { return }
-        if let entry = currentEntry(for: request), !entry.hasTranslation, request.mode == .context {
-            entry.translationStatus = .failed
-            entry.translationErrorCode = message
-            try? modelContext?.save()
-        }
+        contextTask = nil
         status = .failed(message)
         self.request = nil
     }
 
     private func cancel(_ request: Request) {
         guard self.request?.revision == request.revision else { return }
-        if let entry = currentEntry(for: request), !entry.hasTranslation, request.mode == .context {
-            entry.translationStatus = .pending
-            entry.translationErrorCode = nil
-            try? modelContext?.save()
-        }
+        contextTask = nil
         status = .idle
         self.request = nil
     }
 
     private func finish(_ request: Request) {
         guard self.request?.revision == request.revision else { return }
+        contextTask = nil
         try? modelContext?.save()
         status = .idle
         self.request = nil
