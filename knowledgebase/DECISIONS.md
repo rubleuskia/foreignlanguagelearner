@@ -69,11 +69,33 @@ improvements backlog.
 
 ## Dictionary portability and translation
 
-Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need. Apple Translation was selected as the initial on-device integration direction; broader LLM/API integration remains an option for later quality improvements.
+Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
 
-Contextual translation remains local and user-triggered. Because Apple Translation has no separate context, dictionary-definition, or grammatical-analysis parameter, the app translates the selected expression and its containing sentence as separate requests and presents both for comparison. Word-by-word help is also explicit and is described as individual translation rather than authoritative semantic or morphological analysis. Existing manual and imported translations are never silently replaced by contextual results. High-fidelity translation is preferred where the OS exposes it, with the compatible standard configuration retained for older supported systems.
+Ordinary automatic translation and word-by-word help use Apple Translation. Contextual translation
+instead uses OpenAI Responses API structured output so one request resolves the selected expression
+against its saved surrounding text and returns a direct translation plus a short explanation. It is
+explicitly enabled by the user and is not an offline feature.
 
-Reader “Translate in Context” uses an ephemeral value snapshot and a coordinator with no SwiftData context. It never creates a dictionary entry and ignores late translation responses after retry or dismissal. Saving remains a separate “Add to Dictionary” action. The preview shows phrase and sentence translations as separate results rather than claiming model-level contextual translation.
+The app follows a BYOK boundary: the user supplies an OpenAI API key, which is stored with
+`kSecAttrAccessibleWhenUnlockedThisDeviceOnly` in Keychain and sent in the HTTPS authorization
+header directly to OpenAI. The app contains no shared credential, relay URL, account system, or
+project-operated quota. Costs and rate limits belong to the key owner's OpenAI account. A relay is
+deferred unless a future product version supplies shared credentials, sells quota, or requires
+centralized authentication and abuse controls.
+
+The production translation prompt has a versioned default in code and may be overridden locally in
+settings for experimentation. Reset removes the override instead of copying another default into
+preferences. The strict output contract and instruction that selected text/context are untrusted
+data remain application-owned and are appended after either prompt; users can tune translation
+behavior without disabling decoding and prompt-injection boundaries.
+
+Both dictionary and reader use one bounded application-wide analysis service with at most one
+active and one queued request. Reader results remain ephemeral and cannot create or mutate a
+dictionary entry. Dictionary results are persisted separately from the primary translation;
+existing manual/imported text changes only through explicit acceptance. Request identity and
+revision checks reject stale completion after retry or dismissal, and failed refresh does not erase
+the previous successful pair. The full contract lives in
+`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`.
 
 Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
 

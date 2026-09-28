@@ -4,6 +4,13 @@ import UIKit
 import XCTest
 @testable import ForeignLanguageLearner
 
+private struct NeverCompletingContextAnalysisService: ContextAnalysisServing {
+    func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
+        try await Task.sleep(for: .seconds(60))
+        throw CancellationError()
+    }
+}
+
 final class LearningUXTests: XCTestCase {
     func testRoundSelectionCountsForZeroThreeAndTwentyFiveAvailable() {
         XCTAssertEqual(LearningRoundSelection.five.count(available: 0), 0)
@@ -145,25 +152,36 @@ final class LearningUXTests: XCTestCase {
             sourceItemID: item.id, sourceTitle: item.title, audioRange: nil
         )
         let coordinator = SelectionTranslationCoordinator(preview: preview)
-        coordinator.start()
+        let service = NeverCompletingContextAnalysisService()
+        coordinator.start(service: service)
         let first = try XCTUnwrap(coordinator.currentRequest())
-        var values = [first.phraseRequestID: "молния"]
-        values[try XCTUnwrap(first.sentenceRequestID)] = "В куртке сломалась молния."
-        coordinator.acceptTranslations(token: first.token, previewID: preview.id, values: values)
+        coordinator.acceptResult(
+            token: first.token,
+            previewID: preview.id,
+            result: ContextualPhraseResult(
+                directTranslation: "молния",
+                contextExplanation: "В этом контексте речь идёт о застёжке."
+            )
+        )
         XCTAssertEqual(coordinator.selectedTranslation, "молния")
         XCTAssertEqual(coordinator.status, .ready)
 
-        coordinator.retry()
+        coordinator.retry(service: service)
         let failed = try XCTUnwrap(coordinator.currentRequest())
-        coordinator.acceptTranslations(token: failed.token, previewID: preview.id,
-                                       values: [failed.phraseRequestID: "   "])
-        XCTAssertEqual(coordinator.status,
-                       .failed("Translation returned no usable phrase translation."))
-        coordinator.retry()
+        coordinator.acceptResult(
+            token: failed.token,
+            previewID: preview.id,
+            result: ContextualPhraseResult(directTranslation: "   ", contextExplanation: "explanation")
+        )
+        XCTAssertEqual(coordinator.status, .failed(ContextAnalysisError.invalidOutput.userMessage))
+        coordinator.retry(service: service)
         let dismissed = try XCTUnwrap(coordinator.currentRequest())
         coordinator.dismiss()
-        coordinator.acceptTranslations(token: dismissed.token, previewID: preview.id,
-                                       values: [dismissed.phraseRequestID: "stale"])
+        coordinator.acceptResult(
+            token: dismissed.token,
+            previewID: preview.id,
+            result: ContextualPhraseResult(directTranslation: "stale", contextExplanation: "stale")
+        )
         XCTAssertNil(coordinator.selectedTranslation)
         XCTAssertEqual(coordinator.status, .idle)
 

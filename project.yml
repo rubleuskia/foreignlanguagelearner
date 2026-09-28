@@ -27,6 +27,7 @@ targets:
         buildPhase: resources
     dependencies:
       - sdk: libsqlite3.tbd
+      - sdk: Security.framework
       - package: ZIPFoundation
     settings:
       base:

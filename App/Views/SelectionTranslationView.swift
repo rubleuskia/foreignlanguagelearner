@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SelectionTranslationView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Query private var sourceItems: [LearningItem]
     let preview: SelectionTranslationPreview
     @State private var coordinator: SelectionTranslationCoordinator
@@ -17,12 +18,8 @@ struct SelectionTranslationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Phrase translation") {
-                    translationContent
-                    if let value = coordinator.selectedTranslation {
-                        CopyButton(value: value, label: "Copy phrase translation",
-                                   identifier: "preview.copy-translation")
-                    }
+                Section("Context explanation") {
+                    analysisContent
                 }
                 Section("Original") {
                     Text(preview.selectedText).textSelection(.enabled)
@@ -35,17 +32,6 @@ struct SelectionTranslationView: View {
                         Text(sentence).textSelection(.enabled)
                         CopyButton(value: sentence, label: "Copy source sentence",
                                    identifier: "preview.copy-source-sentence")
-                    }
-                    Section("Sentence translation") {
-                        if let value = coordinator.sentenceTranslation {
-                            Text(value).textSelection(.enabled)
-                            CopyButton(value: value, label: "Copy sentence translation",
-                                       identifier: "preview.copy-sentence-translation")
-                        } else if case .failed(let message) = coordinator.status {
-                            Text(message).foregroundStyle(.red)
-                        } else {
-                            ProgressView()
-                        }
                     }
                 } else if coordinator.contextUnavailable {
                     Section("Source context") {
@@ -60,8 +46,7 @@ struct SelectionTranslationView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
-            .task { coordinator.start() }
-            .translationTask(coordinator.configuration, action: coordinator.perform(session:))
+            .task { coordinator.start(service: contextAnalysisService) }
             .onDisappear {
                 coordinator.dismiss()
                 playback.close()
@@ -75,19 +60,34 @@ struct SelectionTranslationView: View {
         .presentationDetents([.medium, .large])
     }
 
-    @ViewBuilder private var translationContent: some View {
+    @ViewBuilder private var analysisContent: some View {
         switch coordinator.status {
         case .idle, .preparing:
             HStack { ProgressView(); Text("Preparing translation…") }
         case .translating:
             HStack { ProgressView(); Text("Translating phrase…") }
         case .ready:
-            if let value = coordinator.selectedTranslation {
-                Text(value).textSelection(.enabled)
+            if let explanation = coordinator.contextExplanation,
+               let translation = coordinator.selectedTranslation {
+                Text(explanation)
+                    .textSelection(.enabled)
+                CopyButton(value: explanation, label: "Copy word explanations",
+                           identifier: "preview.copy-word-explanations")
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Overall translation")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(translation).textSelection(.enabled)
+                }
+                CopyButton(value: translation, label: "Copy phrase translation",
+                           identifier: "preview.copy-translation")
             }
         case .failed(let message):
             Text(message).foregroundStyle(.red)
-            Button("Retry", systemImage: "arrow.clockwise") { coordinator.retry() }
+            Button("Retry", systemImage: "arrow.clockwise") {
+                coordinator.retry(service: contextAnalysisService)
+            }
         }
     }
 
