@@ -3,16 +3,18 @@ import SwiftUI
 
 struct SelectionTranslationView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Query private var sourceItems: [LearningItem]
-    let preview: SelectionTranslationPreview
+    private var preview: SelectionTranslationPreview { coordinator.preview }
+    let saveOnOpen: Bool
     @State private var coordinator: SelectionTranslationCoordinator
     @State private var playback = PlaybackController()
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
 
-    init(preview: SelectionTranslationPreview) {
-        self.preview = preview
-        _coordinator = State(initialValue: SelectionTranslationCoordinator(preview: preview))
+    init(coordinator: SelectionTranslationCoordinator, saveOnOpen: Bool = false) {
+        self.saveOnOpen = saveOnOpen
+        _coordinator = State(initialValue: coordinator)
     }
 
     var body: some View {
@@ -20,6 +22,15 @@ struct SelectionTranslationView: View {
             Form {
                 Section("Context explanation") {
                     analysisContent
+                }
+                Section {
+                    Button(coordinator.savedEntryID != nil ? "Added to Dictionary" : "Add to Dictionary",
+                           systemImage: coordinator.savedEntryID != nil ? "checkmark.circle.fill" : "text.badge.plus") {
+                        coordinator.saveToDictionary(context: context, service: contextAnalysisService)
+                    }
+                    .disabled(coordinator.savedEntryID != nil || coordinator.isSaving)
+                    .accessibilityIdentifier("preview.add-to-dictionary")
+                    if coordinator.isSaving { Text("Translating before saving…").foregroundStyle(.secondary) }
                 }
                 Section("Original") {
                     Text(preview.selectedText).textSelection(.enabled)
@@ -40,22 +51,26 @@ struct SelectionTranslationView: View {
                     }
                 }
                 Section("Source") { Text(preview.sourceTitle) }
+                Section { ExportLogsButton() }
             }
             .navigationTitle("Translate in Context")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
-            .task { coordinator.start(service: contextAnalysisService) }
+            .task {
+                if saveOnOpen { coordinator.saveToDictionary(context: context, service: contextAnalysisService) }
+                else { coordinator.start(service: contextAnalysisService) }
+            }
             .onDisappear {
                 coordinator.dismiss()
                 playback.close()
                 openedAudioIdentity = nil
             }
-            .alert("Playback error", isPresented: Binding(
-                get: { playback.errorMessage != nil },
-                set: { if !$0 { playback.errorMessage = nil } }
-            )) { Button("OK") {} } message: { Text(playback.errorMessage ?? "") }
+            .alert("Translation or playback error", isPresented: Binding(
+                get: { coordinator.errorMessage != nil || playback.errorMessage != nil },
+                set: { if !$0 { coordinator.errorMessage = nil; playback.errorMessage = nil } }
+            )) { Button("OK") {} } message: { Text(coordinator.errorMessage ?? playback.errorMessage ?? "") }
         }
         .presentationDetents([.medium, .large])
     }

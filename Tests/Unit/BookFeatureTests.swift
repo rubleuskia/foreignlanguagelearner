@@ -4,6 +4,29 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class BookFeatureTests: XCTestCase {
+    @MainActor func testLocalSeekStaysInsideActiveTrackInLongBook() {
+        let item = LearningItem(id: UUID(), title: "Long book", mediaKind: "audio", mediaFilename: "",
+                                transcriptFilename: "transcript.txt", duration: 36000, segments: [],
+                                tracks: [
+                                    LearningTrack(id: "one", title: "One", mediaFilename: "one.m4a", duration: 18000),
+                                    LearningTrack(id: "two", title: "Two", mediaFilename: "two.m4a", duration: 18000)
+                                ])
+        let controller = BookPlaybackController()
+        controller.open(item: item)
+        defer { controller.close() }
+        controller.selectTrack("two")
+        controller.seekLocal(36000)
+        XCTAssertEqual(controller.playback.position, 18000)
+        XCTAssertEqual(controller.activeTrackID, "two")
+        controller.seekLocal(-10)
+        XCTAssertEqual(controller.playback.position, 0)
+        XCTAssertEqual(controller.activeTrackID, "two")
+        controller.seekLocal(42)
+        controller.seekLocal(.nan)
+        XCTAssertEqual(controller.playback.position, 42)
+        XCTAssertFalse(controller.wantsToPlay)
+    }
+
     func testTimelineUsesHalfOpenBoundariesAndExactTotal() throws {
         let timeline = try BookTimeline(tracks: [("one", 60), ("two", 90), ("three", 30)])
         XCTAssertEqual(try timeline.location(at: 0), .init(index: 0, trackID: "one", localTime: 0))

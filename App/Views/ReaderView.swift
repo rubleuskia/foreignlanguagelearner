@@ -16,6 +16,7 @@ struct ReaderView: View {
     @State private var sourceLanguages = [SourceLanguage.polish]
     @State private var translationPreview: SelectionTranslationPreview?
     @State private var followGeneration = 0
+    @State private var translationCache = SelectionTranslationCache()
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
@@ -52,34 +53,14 @@ struct ReaderView: View {
                 let audio = audioRange(for: selectionRange)
                 let normalized = DictionaryEntry.normalized(text)
                 guard !normalized.isEmpty else { return }
-                switch action {
-                case .addToDictionary:
-                    let entry = DictionaryEntry(text: normalized, item: item,
-                                                segmentIndex: absoluteSegment,
-                                                context: selectionContext,
-                                                audioStart: audio?.lowerBound,
-                                                audioEnd: audio?.upperBound)
-                    context.insert(entry)
-                    do {
-                        try context.save()
-                        translationCoordinator.enqueue(entry, context: context)
-                        message = "Added to Dictionary"
-                    } catch {
-                        context.delete(entry)
-                        message = error.localizedDescription
-                    }
-                case .translateInContext:
-                    playback.pause()
-                    following = false
-                    translationPreview = SelectionTranslationPreview(
-                        selectedText: normalized,
-                        sourceLanguageCode: item.sourceLanguageCode,
-                        context: selectionContext,
-                        sourceItemID: item.id,
-                        sourceTitle: item.title,
-                        audioRange: audio
-                    )
-                }
+                playback.pause()
+                following = false
+                translationPreview = .init(
+                    selectedText: normalized, sourceLanguageCode: item.sourceLanguageCode,
+                    context: selectionContext, sourceItemID: item.id, sourceTitle: item.title,
+                    audioRange: audio, segmentIndex: absoluteSegment,
+                    saveOnOpen: action == .addToDictionary
+                )
             }
             if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
@@ -112,7 +93,7 @@ struct ReaderView: View {
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
         .sheet(item: $translationPreview) {
-            SelectionTranslationView(preview: $0)
+            SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen)
         }
         .onChange(of: playback.position) { _, position in
             if abs(item.lastPosition - position) >= 5 {
@@ -150,7 +131,7 @@ struct ReaderView: View {
                 if !editing { playback.seek(to: scrubPosition); following = true }
             }.accessibilityLabel("Playback position")
             HStack {
-                Text(time(playback.position)).monospacedDigit()
+                Text(time(playback.position - lowerBound)).monospacedDigit()
                 Spacer()
                 Button { playback.seek(to: max(lowerBound, playback.position - 10)); following = true } label: { Image(systemName: "gobackward.10") }
                     .accessibilityLabel("Back 10 seconds")
@@ -160,7 +141,7 @@ struct ReaderView: View {
                     .accessibilityLabel("Forward 10 seconds")
                 Spacer()
                 PlaybackRateMenu(playback: playback)
-                Text(time(upperBound)).monospacedDigit()
+                Text(time(upperBound - lowerBound)).monospacedDigit()
             }
         }.padding().background(.bar)
     }
@@ -233,7 +214,7 @@ struct ReaderView: View {
                 entry.sourceLanguageCode = code
                 entry.translationRevision += 1
                 entry.invalidateGeneratedContextAnalysis()
-                if entry.translationOrigin == .apple || entry.translationOrigin == nil {
+                if entry.translationOrigin == .apple || entry.translationOrigin == .openAI || entry.translationOrigin == nil {
                     entry.translationText = nil
                     entry.translationOrigin = nil
                     entry.translationStatus = .pending

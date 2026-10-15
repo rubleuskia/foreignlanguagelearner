@@ -59,8 +59,9 @@ import Observation
     }
 
     func seekLocal(_ seconds: Double) {
+        guard seconds.isFinite, let activeTrack else { return }
         let currentGeneration = generation
-        playback.seek(to: seconds) { [weak self] valid in
+        playback.seek(to: min(max(0, seconds), activeTrack.duration)) { [weak self] valid in
             guard let self, valid, self.generation == currentGeneration else { return }
             self.refreshPosition()
             if self.wantsToPlay { self.playback.play() }

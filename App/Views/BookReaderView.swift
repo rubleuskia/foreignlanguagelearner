@@ -10,7 +10,6 @@ struct BookReaderView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     let item: LearningItem
     @State private var playback = BookPlaybackController()
     @State private var mode: ReadingMode = .track
@@ -24,6 +23,7 @@ struct BookReaderView: View {
     @State private var selectionPreview: SelectionTranslationPreview?
     @State private var lastSavedPosition = 0.0
     @State private var followGeneration = 0
+    @State private var translationCache = SelectionTranslationCache()
 
     private var activeTrack: LearningTrack? { item.tracks.first { $0.id == playback.activeTrackID } }
     private var displayedDocument: TranscriptDocument? {
@@ -54,6 +54,8 @@ struct BookReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { playback.open(item: item); loadFullText() }
         .onChange(of: playback.activeTrackID) { _, _ in
+            scrubbing = false
+            scrubPosition = playback.localPosition
             followGeneration += 1
             following = true
             loadTrackTranscript()
@@ -67,7 +69,7 @@ struct BookReaderView: View {
         }
         .onChange(of: scenePhase) { _, phase in if phase != .active { savePosition() } }
         .onDisappear { savePosition(); playback.close() }
-        .sheet(item: $selectionPreview) { SelectionTranslationView(preview: $0) }
+        .sheet(item: $selectionPreview) { SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen) }
         .alert("Book", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }
@@ -97,36 +99,15 @@ struct BookReaderView: View {
                     return
                 }
                 let audio = mode == .track ? audioRange(for: selectionRange, document: document) : nil
-                switch action {
-                case .translateInContext:
-                    playback.pause()
-                    following = false
-                    selectionPreview = .init(
-                        selectedText: text,
-                        sourceLanguageCode: item.sourceLanguageCode,
-                        context: selectionContext,
-                        sourceItemID: item.id,
-                        sourceTitle: item.title,
-                        audioRange: audio,
-                        sourceTrackID: audio == nil ? nil : trackID
-                    )
-                case .addToDictionary:
-                    let entry = DictionaryEntry(text: text, item: item,
-                                                segmentIndex: mode == .track ? segment : nil,
-                                                context: selectionContext,
-                                                audioStart: audio?.lowerBound, audioEnd: audio?.upperBound,
-                                                sourceTrackID: audio == nil ? nil : trackID)
-                    guard !entry.text.isEmpty else { return }
-                    context.insert(entry)
-                    do {
-                        try context.save()
-                        translationCoordinator.enqueue(entry, context: context)
-                        message = "Added to Dictionary"
-                    } catch {
-                        context.delete(entry)
-                        message = error.localizedDescription
-                    }
-                }
+                playback.pause()
+                following = false
+                selectionPreview = .init(
+                    selectedText: text, sourceLanguageCode: item.sourceLanguageCode,
+                    context: selectionContext, sourceItemID: item.id, sourceTitle: item.title,
+                    audioRange: audio, sourceTrackID: audio == nil ? nil : trackID,
+                    segmentIndex: mode == .track ? segment : nil,
+                    saveOnOpen: action == .addToDictionary
+                )
             }
         } else if let transcriptError {
             ContentUnavailableView("Transcript unavailable", systemImage: "exclamationmark.triangle",
@@ -163,27 +144,27 @@ struct BookReaderView: View {
                 .font(.caption)
             }
             Slider(value: Binding(
-                get: { scrubbing ? scrubPosition : playback.globalPosition },
+                get: { scrubbing ? scrubPosition : playback.localPosition },
                 set: { scrubPosition = $0 }
-            ), in: 0...max(playback.totalDuration, 0.01)) { editing in
+            ), in: 0...max(activeTrack?.duration ?? 0, 0.01)) { editing in
                 scrubbing = editing
-                if !editing { savePosition(); playback.seek(global: scrubPosition); following = true }
+                if !editing { savePosition(); playback.seekLocal(scrubPosition); following = true }
             }
-            .accessibilityLabel("Book playback position")
+            .accessibilityLabel("Track playback position")
             HStack {
-                Text(time(playback.globalPosition)).monospacedDigit()
+                Text(time(scrubbing ? scrubPosition : playback.localPosition)).monospacedDigit()
                 Spacer()
-                Button { playback.seek(global: max(0, playback.globalPosition - 10)); following = true } label: {
+                Button { playback.seekLocal(playback.localPosition - 10); following = true } label: {
                     Image(systemName: "gobackward.10")
                 }
                 Button { playback.toggle(); if playback.wantsToPlay { following = true } } label: {
                     Image(systemName: playback.wantsToPlay ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
                 }
-                Button { playback.seek(global: min(playback.totalDuration, playback.globalPosition + 10)); following = true } label: {
+                Button { playback.seekLocal(playback.localPosition + 10); following = true } label: {
                     Image(systemName: "goforward.10")
                 }
                 Spacer()
-                Text(time(playback.totalDuration)).monospacedDigit()
+                Text(time(activeTrack?.duration ?? 0)).monospacedDigit()
             }
         }
         .padding()
