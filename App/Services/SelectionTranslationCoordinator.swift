@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 enum SelectionTranslationStatus: Equatable {
     case idle
@@ -27,6 +28,63 @@ final class SelectionTranslationCoordinator {
     private var request: RequestSnapshot?
     private var task: Task<Void, Never>?
     private var revision = 0
+    private var saveContext: ModelContext?
+    private(set) var savedEntryID: UUID?
+    var errorMessage: String?
+    var isSaving: Bool { saveContext != nil }
+
+    func saveToDictionary(context: ModelContext, service: any ContextAnalysisServing) {
+        guard savedEntryID == nil, saveContext == nil else { return }
+        saveContext = context
+        if status == .ready { persistResult() }
+        else if request == nil { begin(service: service) }
+    }
+
+    private func persistResult() {
+        guard let context = saveContext, let selectedTranslation, let contextExplanation else { return }
+        saveContext = nil
+        let itemID = preview.sourceItemID
+        do {
+            let descriptor = FetchDescriptor<LearningItem>(predicate: #Predicate { $0.id == itemID })
+            guard let item = try context.fetch(descriptor).first else {
+                reportFailure(ContextAnalysisError.invalidContext.userMessage, code: .invalidContext)
+                return
+            }
+            let entry = DictionaryEntry(text: preview.selectedText, item: item,
+                                        segmentIndex: preview.segmentIndex, context: preview.context,
+                                        audioStart: preview.audioRange?.lowerBound,
+                                        audioEnd: preview.audioRange?.upperBound,
+                                        sourceTrackID: preview.sourceTrackID)
+            entry.sourceLanguageCode = preview.sourceLanguageCode
+            entry.targetLanguageCode = preview.targetLanguageCode
+            entry.translationText = selectedTranslation
+            entry.translationOrigin = .openAI
+            entry.translationStatus = .ready
+            entry.translationUpdatedAt = .now
+            entry.contextSelectedTranslationText = selectedTranslation
+            entry.contextTranslationText = contextExplanation
+            entry.contextAnalysisUpdatedAt = .now
+            context.insert(entry)
+            do {
+                try context.save()
+                savedEntryID = entry.id
+            } catch {
+                context.delete(entry)
+                throw error
+            }
+        } catch {
+            // Keep the successful result so saving can be retried without another model request.
+            errorMessage = ContextAnalysisError.persistence.userMessage
+            Task { await DiagnosticLog.shared.record(.init(event: "dictionary_save_failed", error: .persistence)) }
+        }
+    }
+
+    private func reportFailure(_ message: String, code: ContextAnalysisError = .invalidOutput) {
+        saveContext = nil
+        status = .failed(message)
+        errorMessage = message
+        Task { await DiagnosticLog.shared.record(.init(event: "selection_translation_failed", error: code)) }
+    }
 
     init(preview: SelectionTranslationPreview) {
         self.preview = preview
@@ -45,7 +103,9 @@ final class SelectionTranslationCoordinator {
     }
 
     func dismiss() {
-        invalidateRequest(resetStatus: true)
+        saveContext = nil
+        errorMessage = nil
+        invalidateRequest(resetStatus: status != .ready)
     }
 
     func currentRequest() -> RequestSnapshot? { request }
@@ -55,7 +115,10 @@ final class SelectionTranslationCoordinator {
               preview.id == previewID else { return }
         let direct = result.directTranslation.trimmingCharacters(in: .whitespacesAndNewlines)
         let explanation = result.contextExplanation.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !direct.isEmpty, !explanation.isEmpty else {
+        let needsBreakdown = !ContextAnalysisWords.wordsToExplain(
+            in: preview.selectedText, language: preview.sourceLanguageCode
+        ).isEmpty
+        guard !direct.isEmpty, !needsBreakdown || !explanation.isEmpty else {
             fail(token: token, previewID: previewID,
                  message: ContextAnalysisError.invalidOutput.userMessage)
             return
@@ -66,21 +129,23 @@ final class SelectionTranslationCoordinator {
         task = nil
         activeToken = nil
         request = nil
+        persistResult()
     }
 
-    func fail(token: UUID, previewID: UUID, message: String) {
+    func fail(token: UUID, previewID: UUID, message: String, code: ContextAnalysisError = .invalidOutput) {
         guard request?.token == token, request?.previewID == previewID,
               preview.id == previewID else { return }
         task = nil
         activeToken = nil
         request = nil
-        status = .failed(message)
+        reportFailure(message, code: code)
     }
 
     private func begin(service: any ContextAnalysisServing) {
+        errorMessage = nil
         guard let context = preview.context else {
             contextUnavailable = true
-            status = .failed(ContextAnalysisError.invalidContext.userMessage)
+            reportFailure(ContextAnalysisError.invalidContext.userMessage, code: .invalidContext)
             return
         }
         let sentence = ContextSentenceExtractor.sentence(text: context.text,
@@ -98,10 +163,10 @@ final class SelectionTranslationCoordinator {
                 promptVersion: OpenAIContextAnalysisProvider.promptVersion
             ))
         } catch let error as ContextAnalysisError {
-            status = .failed(error.userMessage)
+            reportFailure(error.userMessage, code: error)
             return
         } catch {
-            status = .failed(ContextAnalysisError.unknown.userMessage)
+            reportFailure(ContextAnalysisError.unknown.userMessage, code: .unknown)
             return
         }
         let snapshot = RequestSnapshot(token: analysisRequest.requestID,
@@ -117,12 +182,14 @@ final class SelectionTranslationCoordinator {
                                    result: result)
             } catch is CancellationError {
                 self?.cancel(token: snapshot.token, previewID: snapshot.previewID)
+            } catch ContextAnalysisError.cancelled {
+                self?.cancel(token: snapshot.token, previewID: snapshot.previewID)
             } catch let error as ContextAnalysisError {
                 self?.fail(token: snapshot.token, previewID: snapshot.previewID,
-                           message: error.userMessage)
+                           message: error.userMessage, code: error)
             } catch {
                 self?.fail(token: snapshot.token, previewID: snapshot.previewID,
-                           message: ContextAnalysisError.unknown.userMessage)
+                           message: ContextAnalysisError.unknown.userMessage, code: .unknown)
             }
         }
     }
@@ -132,6 +199,7 @@ final class SelectionTranslationCoordinator {
         task = nil
         activeToken = nil
         request = nil
+        saveContext = nil
         status = .idle
     }
 
@@ -141,5 +209,32 @@ final class SelectionTranslationCoordinator {
         activeToken = nil
         request = nil
         if resetStatus { status = .idle }
+    }
+}
+
+/// Retain the last selection in this reader, including context and audio identity.
+/// Reopening its popup reuses a successful result; another selection never inherits it.
+@MainActor
+final class SelectionTranslationCache {
+    private var last: SelectionTranslationCoordinator?
+
+    func coordinator(for preview: SelectionTranslationPreview) -> SelectionTranslationCoordinator {
+        if let last {
+            let previous = last.preview
+            if previous.selectedText == preview.selectedText,
+               previous.context == preview.context,
+               previous.sourceItemID == preview.sourceItemID,
+               previous.sourceLanguageCode == preview.sourceLanguageCode,
+               previous.targetLanguageCode == preview.targetLanguageCode,
+               previous.sourceTrackID == preview.sourceTrackID,
+               previous.audioRange == preview.audioRange,
+               previous.segmentIndex == preview.segmentIndex {
+                return last
+            }
+            last.dismiss()
+        }
+        let coordinator = SelectionTranslationCoordinator(preview: preview)
+        last = coordinator
+        return coordinator
     }
 }

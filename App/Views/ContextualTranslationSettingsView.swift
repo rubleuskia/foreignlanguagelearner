@@ -42,6 +42,7 @@ struct ContextualTranslationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Diagnostics") { ExportLogsButton() }
             Section("Translation prompt") {
                 TextEditor(text: $prompt)
                     .font(.footnote.monospaced())

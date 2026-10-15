@@ -104,8 +104,7 @@ private struct DictionaryRow: View {
                 Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
             }
             Spacer()
-            Text("\(entry.learningLevel) · \(LearningLevel.title(entry.learningLevel))")
-                .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4).background(.quaternary, in: Capsule())
+            LearningLevelBadge(level: entry.learningLevel)
         }.contentShape(Rectangle())
     }
     private var statusText: String {
@@ -198,10 +197,10 @@ struct DictionaryEntryDetailView: View {
                                    identifier: "dictionary.copy-source-context")
                     }
                 }
-                Section("Progress") { LabeledContent("Level", value: "\(entry.learningLevel) · \(LearningLevel.title(entry.learningLevel))") }
+                Section("Progress") { LabeledContent("Level") { LearningLevelBadge(level: entry.learningLevel) } }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
-                        if let explanation = entry.contextTranslationText {
+                        if let explanation = entry.contextTranslationText, !explanation.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Word explanations").font(.caption).foregroundStyle(.secondary)
                                 Text(explanation).textSelection(.enabled)
@@ -227,7 +226,7 @@ struct DictionaryEntryDetailView: View {
                                                         service: contextAnalysisService)
                         }
                         .accessibilityIdentifier("dictionary.context-translate")
-                        Text("Each selected word is explained in context, followed by a natural translation of the complete phrase. Existing manual or imported translations are preserved.")
+                        Text("Content words are explained in context; common function words are omitted from the breakdown. The overall translation includes the complete phrase. Existing manual or imported translations are preserved.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
@@ -269,6 +268,7 @@ struct DictionaryEntryDetailView: View {
                     Text(entry.sourceTitle)
                     LabeledContent("Languages", value: "\(SourceLanguage.name(for: entry.sourceLanguageCode)) → Russian")
                 }
+                Section { ExportLogsButton() }
                 Section("Automatic translation") {
                     Button(entry.hasTranslation ? "Translate Again" : "Force Translation",
                            systemImage: "character.book.closed") {
@@ -553,5 +553,25 @@ private struct DictionaryImportPreviewView: View {
             pending.forEach { coordinator.enqueue($0, context: context) }
             dismiss()
         } catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct LearningLevelBadge: View {
+    let level: Int
+    private var color: Color {
+        switch level {
+        case 1: .orange
+        case 2: .blue
+        case 3: .purple
+        default: .green
+        }
+    }
+    var body: some View {
+        Text("\(level) · \(LearningLevel.title(level))")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(color.opacity(0.15), in: Capsule())
+            .accessibilityLabel("Level \(level), \(LearningLevel.title(level))")
     }
 }

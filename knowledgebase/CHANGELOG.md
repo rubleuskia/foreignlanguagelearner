@@ -1,5 +1,16 @@
 # Project changelog
 
+## 2026-10-15 — Background audio, contextual dictionary capture and track controls
+
+- Enabled the iOS background audio mode alongside the existing spoken-audio playback session so audio can continue when the screen locks. Physical-device lock-screen playback and automatic track transitions still require a device smoke test.
+- Changed the book slider, elapsed/total time and 10-second seeks to use the current track. Legacy virtual-part timers now also show part-relative time.
+- Added Add to Dictionary to the contextual translation popup. Both reader capture actions use the same contextual result; direct capture obtains it before saving, and reopening the same last selection reuses its successful result. Saved entries contain the phrase, primary translation, word breakdown, context and exact audio source. Duplicate taps and dismissed requests cannot insert extra entries.
+- Versioned the production prompt and strict response schema to return source word, lemma and concise comma-separated meanings, with blank lines between words and the overall contextual phrase translation below. Removed requests for grammatical commentary. Existing custom prompts remain, with the concise output contract enforced after them.
+- Contextual word breakdowns now omit common conjunctions, prepositions and connecting words (including Polish ale, i, z, przed/pred and na), using a language-specific list with case/punctuation normalization. Short content words stay visible; function-word-only selections still translate and save normally. The v4 request carries the exact filtered word list while the overall translation retains the full phrase. This refines the existing workflow; project purpose and major boundaries are unchanged.
+- Added model-error alerts with OK, bounded persistent diagnostic metadata and Export logs in Settings, the selection popup and dictionary details. Logs exclude credentials, prompt/input text and response bodies. Failed dictionary context saves restore the previous result and surface an error.
+- Added distinct orange, blue, purple and green progress badges while retaining level numbers and names.
+- Updated DECISIONS.md and PROJECT.md for the new capture workflow, diagnostic export and background playback. Project purpose is unchanged.
+
 ## 2026-09-24 — Direct OpenAI contextual translation with user key
 
 - Replaced both contextual Apple Translation routes with one bounded application-wide service that

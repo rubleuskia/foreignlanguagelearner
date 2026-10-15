@@ -303,10 +303,31 @@ final class ContextualTranslationCoordinator {
 
     private func completeContext(_ request: Request, selected: String, explanation: String) {
         guard let entry = currentEntry(for: request) else { return }
+        let needsBreakdown = !ContextAnalysisWords.wordsToExplain(
+            in: entry.text, language: entry.sourceLanguageCode
+        ).isEmpty
+        guard !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !needsBreakdown || !explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            fail(request, message: ContextAnalysisError.invalidOutput.userMessage)
+            return
+        }
+        let previous = (entry.contextSelectedTranslationText, entry.contextTranslationText,
+                        entry.contextAnalysisUpdatedAt)
         entry.contextSelectedTranslationText = selected
         entry.contextTranslationText = explanation
         entry.contextAnalysisUpdatedAt = .now
-        finish(request)
+        do {
+            try modelContext?.save()
+            contextTask = nil
+            status = .idle
+            self.request = nil
+        } catch {
+            entry.contextSelectedTranslationText = previous.0
+            entry.contextTranslationText = previous.1
+            entry.contextAnalysisUpdatedAt = previous.2
+            fail(request, message: ContextAnalysisError.persistence.userMessage)
+            Task { await DiagnosticLog.shared.record(.init(event: "dictionary_save_failed", error: .persistence)) }
+        }
     }
 
     private func completeWords(_ request: Request, items: [WordHelpItem]) {

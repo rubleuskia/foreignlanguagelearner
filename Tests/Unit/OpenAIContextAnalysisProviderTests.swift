@@ -49,7 +49,7 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
     func testResponsesRequestUsesUserKeySelectedModelAndStructuredFields() async throws {
         let response = try successResponse(
             direct: " молния ",
-            words: [["source_word": "zamek", "explanation": " существительное; здесь означает застёжку-молнию "]]
+            words: [["source_word": "zamek", "lemma": " zamek ", "meaning": " молния "]]
         )
         let client = ScriptedHTTPClient([.success(response)])
         let provider = OpenAIContextAnalysisProvider(
@@ -61,7 +61,7 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
 
         XCTAssertEqual(result.directTranslation, "молния")
         XCTAssertEqual(result.contextExplanation,
-                       "zamek — существительное; здесь означает застёжку-молнию")
+                       "zamek — zamek — молния")
         XCTAssertEqual(result.diagnostics, .init(model: .mini, providerRequestID: "resp-1"))
         let requests = await client.requests
         let sent = try XCTUnwrap(requests.first)
@@ -81,7 +81,7 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
         let itemSchema = try XCTUnwrap(wordArray["items"] as? [String: Any])
         XCTAssertEqual(itemSchema["additionalProperties"] as? Bool, false)
         XCTAssertEqual(Set(itemSchema["required"] as? [String] ?? []),
-                       Set(["source_word", "explanation"]))
+                       Set(["source_word", "lemma", "meaning"]))
         let input = try XCTUnwrap(object["input"] as? String).data(using: .utf8)!
         let inputObject = try XCTUnwrap(JSONSerialization.jsonObject(with: input) as? [String: Any])
         XCTAssertEqual(inputObject["selected_text"] as? String, "zamek")
@@ -112,9 +112,9 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
             sourceLanguage: "pl", targetLanguage: "ru", promptVersion: "context-analysis-v2"
         )
         let response = try successResponse(direct: "У третьей было обаяние.", words: [
-            ["source_word": "trzecia", "explanation": "порядковое числительное; «третья»"],
-            ["source_word": "miała", "explanation": "форма глагола mieć в прошедшем времени"],
-            ["source_word": "wdzięki", "explanation": "существительное; «обаяние»"],
+            ["source_word": "trzecia", "lemma": "trzeci", "meaning": "третий"],
+            ["source_word": "miała", "lemma": "mieć", "meaning": "иметь"],
+            ["source_word": "wdzięki", "lemma": "wdzięk", "meaning": "обаяние, прелесть"],
         ])
         let provider = OpenAIContextAnalysisProvider(
             apiKey: "test-api-key", model: .mini,
@@ -124,9 +124,11 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
         let result = try await provider.analyze(analysisRequest)
 
         XCTAssertEqual(result.contextExplanation, """
-        trzecia — порядковое числительное; «третья»
-        miała — форма глагола mieć в прошедшем времени
-        wdzięki — существительное; «обаяние»
+        trzecia — trzeci — третий
+
+        miała — mieć — иметь
+
+        wdzięki — wdzięk — обаяние, прелесть
         """)
         XCTAssertEqual(result.directTranslation, "У третьей было обаяние.")
     }
@@ -186,6 +188,89 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
         }
     }
 
+    func testIncompleteOrMismatchedWordBreakdownsAreRejected() async throws {
+        let invalid: [[[String: String]]] = [
+            [],
+            [["source_word": "zamek", "meaning": "молния"]],
+            [["source_word": "zamek", "lemma": " ", "meaning": "молния"]],
+            [["source_word": "zamek", "lemma": "zamek", "meaning": " "]],
+            [["source_word": "other", "lemma": "zamek", "meaning": "молния"]],
+            [["source_word": "zamek", "lemma": "zamek", "meaning": String(repeating: "a", count: 2100)]],
+        ]
+        for words in invalid {
+            let response = try successResponse(words: words)
+            let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini,
+                                                         client: ScriptedHTTPClient([.success(response)]))
+            do {
+                _ = try await provider.analyze(request())
+                XCTFail("Expected invalid response to be rejected")
+            } catch {
+                XCTAssertTrue([ContextAnalysisError.invalidOutput, .decodingFailure].contains(error as? ContextAnalysisError ?? .unknown))
+            }
+        }
+    }
+
+    func testFunctionWordsAreOmittedButCompletePhraseIsSentAndTranslated() async throws {
+        let phrase = "Ale, kot i kot z domu przed oknem na stole."
+        let client = ScriptedHTTPClient([.success(try successResponse(
+            direct: "Но кот и кот из дома перед окном на столе.", words: [
+                ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+                ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+                ["source_word": "domu", "lemma": "dom", "meaning": "дом"],
+                ["source_word": "oknem", "lemma": "okno", "meaning": "окно"],
+                ["source_word": "stole.", "lemma": "stół", "meaning": "стол"],
+            ]
+        ))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        let result = try await provider.analyze(phraseRequest(phrase))
+        XCTAssertEqual(result.contextExplanation,
+                       "kot — kot — кот\n\nkot — kot — кот\n\ndomu — dom — дом\n\noknem — okno — окно\n\nstole. — stół — стол")
+        XCTAssertEqual(result.directTranslation, "Но кот и кот из дома перед окном на столе.")
+        let requests = await client.requests
+        let body = try XCTUnwrap(requests.first?.httpBody)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let input = try XCTUnwrap(object["input"] as? String)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any])
+        XCTAssertEqual(payload["selected_text"] as? String, phrase)
+        XCTAssertEqual(payload["words_to_explain"] as? [String], ["kot", "kot", "domu", "oknem", "stole."])
+        XCTAssertTrue((object["instructions"] as? String)?.contains("Do not add them back") == true)
+    }
+
+    func testOnlyFunctionWordsReturnsOverallTranslationWithEmptyBreakdown() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse(direct: "но и", words: []))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        let result = try await provider.analyze(phraseRequest("ale i"))
+        XCTAssertEqual(result.directTranslation, "но и")
+        XCTAssertEqual(result.contextExplanation, "")
+    }
+
+    func testUnexpectedFunctionWordInBreakdownIsRejected() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse(direct: "и кот", words: [
+            ["source_word": "i", "lemma": "i", "meaning": "и"],
+            ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+        ]))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        do {
+            _ = try await provider.analyze(phraseRequest("i kot"))
+            XCTFail("Excluded words must not reappear in the breakdown")
+        } catch { XCTAssertEqual(error as? ContextAnalysisError, .invalidOutput) }
+    }
+
+    func testFunctionWordFilterUsesLanguageNotWordLength() {
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(
+            in: "ALE, i z pred przed na oraz do przy ze pod kot dom dni", language: "pl-PL"
+        ), ["kot", "dom", "dni"])
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(in: "the cat and dog", language: "en"), ["cat", "dog"])
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(in: "ale", language: "en"), ["ale"])
+    }
+
+    private func phraseRequest(_ text: String) -> ContextAnalysisRequest {
+        .init(requestID: UUID(), subject: .preview(UUID()), revision: 1, selectedText: text,
+              contextFragment: text, selectionLocationUTF16: 0, selectionLengthUTF16: text.utf16.count,
+              contextWasReduced: false, sourceLanguage: "pl", targetLanguage: "ru",
+              promptVersion: OpenAIContextAnalysisProvider.promptVersion)
+    }
+
     private func request() -> ContextAnalysisRequest {
         ContextAnalysisRequest(
             requestID: UUID(), subject: .preview(UUID()), revision: 1, selectedText: "zamek",
@@ -203,7 +288,7 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
         direct: String = "молния",
         words: [[String: String]] = [[
             "source_word": "zamek",
-            "explanation": "существительное; здесь означает застёжку-молнию",
+            "lemma": "zamek", "meaning": "молния",
         ]]
     ) throws
         -> (Data, HTTPURLResponse) {

@@ -22,6 +22,19 @@ actor ContextAnalysisService: ContextAnalysisServing {
     private var pending: Job?
 
     func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
+        do {
+            return try await analyzeConfigured(request)
+        } catch {
+            let code = (error as? ContextAnalysisError) ?? .unknown
+            if code != .cancelled, !(error is CancellationError) {
+                await DiagnosticLog.shared.record(.init(event: "context_analysis_failed", error: code,
+                                                        requestID: request.requestID))
+            }
+            throw error
+        }
+    }
+
+    private func analyzeConfigured(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
         guard ContextAnalysisSettings.isCloudAnalysisEnabled() else {
             throw ContextAnalysisError.missingConfiguration
         }

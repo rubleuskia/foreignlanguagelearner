@@ -25,6 +25,12 @@ targets:
         excludes: [Resources]
       - path: App/Resources
         buildPhase: resources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIBackgroundModes: [audio]
     dependencies:
       - sdk: libsqlite3.tbd
       - sdk: Security.framework

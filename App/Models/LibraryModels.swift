@@ -280,7 +280,7 @@ struct TranscriptDocument: Sendable {
 }
 
 enum TranslationStatus: String, Codable, Sendable { case pending, translating, needsDownload, ready, failed, unsupported }
-enum TranslationOrigin: String, Codable, Sendable { case apple, manual, imported }
+enum TranslationOrigin: String, Codable, Sendable { case apple, manual, imported, openAI }
 
 struct SelectionContext: Equatable, Sendable {
     var text: String

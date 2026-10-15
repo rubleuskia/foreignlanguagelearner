@@ -90,12 +90,36 @@ data remain application-owned and are appended after either prompt; users can tu
 behavior without disabling decoding and prompt-injection boundaries.
 
 Both dictionary and reader use one bounded application-wide analysis service with at most one
-active and one queued request. Reader results remain ephemeral and cannot create or mutate a
-dictionary entry. Dictionary results are persisted separately from the primary translation;
+active and one queued request. Reader Translate in Context remains a preview until an explicit
+Add to Dictionary action. That action saves both the primary contextual translation and word
+breakdown; direct Add to Dictionary first requests contextual analysis, so failed analysis creates
+no partial entry. Capture therefore requires the existing cloud opt-in and user key. A reader
+retains only its last successful selection result, keyed by text, full selection context, source,
+languages and audio identity, for reuse if the popup is reopened. Dismissal cancels pending saving;
+duplicate taps cannot insert twice. New contextual translations use the `openAI` origin in the
+existing raw-string field and portable JSON contract.
+
+The v4 request includes `words_to_explain`: whitespace-delimited selected tokens after a
+language-specific function-word filter (Polish, English, German, French and Spanish). Filtering
+ignores case and surrounding punctuation, never token length; unsupported languages keep their
+words. The strict output must match this exact list, including order and repetitions, with source
+word, lemma and meaning. The complete selected text and context still reach the model for the
+overall phrase translation. Function-word-only selections have an empty breakdown and a required
+nonempty overall translation, which remains saveable. UI formatting adds blank lines and hides
+empty breakdown controls. The application-owned contract excludes grammar commentary even with a custom
+prompt. Empty overall translations, missing expected words, mismatched and oversized results are rejected. Existing dictionary
+results are persisted separately from the primary translation;
 existing manual/imported text changes only through explicit acceptance. Request identity and
 revision checks reject stale completion after retry or dismissal, and failed refresh does not erase
 the previous successful pair. The full contract lives in
-`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`.
+`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`; the explicit reader-save and v4 output
+rules above supersede its earlier preview-only and explanation-format assumptions.
+
+Context errors display an acknowledgement alert and write bounded local JSON diagnostics (last
+200 events). Logs contain timestamp, event/error code, model, request UUID, prompt version and HTTP
+status when available. API keys, headers, prompt/input text and model response bodies are excluded.
+Export logs uses the system file exporter and is available from settings and translation details.
+No diagnostic upload is automatic.
 
 Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
 
@@ -112,6 +136,13 @@ A learning round snapshots a unique eligible ID set at Start and keeps its origi
 Round statistics describe attempts and completion inside that round. The completion screen separately queries every stored level-4 Russian entry with a ready, nonempty translation, so it includes phrases learned before the current round.
 
 ## Playback intent, speed and phrase sources
+
+The generated application Info.plist declares background audio, paired with the existing
+`AVAudioSession` playback/spokenAudio category. Screen inactivity does not pause the reader.
+Background playback is supported; lock-screen media controls remain outside this change.
+Book reader controls use the active physical track's local position and duration; local seeks
+are clamped to that track. The global timeline remains internal for persistence and cross-track
+navigation. Legacy virtual-part timers display offsets from that part's start.
 
 Playback keeps user intent separate from `AVPlayer.rate`, which may be zero while seeking or buffering. Pause clears intent so a pending seek cannot restart audio. Playback speed is owned by each controller, starts at 1×, survives pause and media open/close inside that controller, and is not persisted across screens or launches.
 
