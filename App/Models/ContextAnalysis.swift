@@ -130,3 +130,32 @@ enum ContextAnalysisText {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
+
+/// Filter function words by language, never by token length: short content words still matter.
+enum ContextAnalysisWords {
+    static func wordsToExplain(in text: String, language: String) -> [String] {
+        let code = language.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? language
+        let excluded = functionWords[code] ?? []
+        return text.split(whereSeparator: \.isWhitespace).map(String.init).filter { word in
+            let normalized = word.trimmingCharacters(in: .punctuationCharacters).lowercased()
+            return !normalized.isEmpty && !excluded.contains(normalized)
+        }
+    }
+
+    private static let functionWords: [String: Set<String>] = [
+        "pl": ["a", "aby", "acz", "aczkolwiek", "ale", "albo", "ani", "aż", "bez", "bo", "bowiem",
+               "by", "chociaż", "choć", "czy", "czyli", "dla", "do", "gdy", "gdyby", "gdyż", "i",
+               "iż", "jak", "jakby", "jeśli", "jeżeli", "ku", "lecz", "lub", "mimo", "między",
+               "na", "nad", "o", "obok", "od", "oraz", "oto", "pod", "podczas", "po", "pomimo",
+               "ponad", "ponieważ", "poprzez", "poza", "pred", "przed", "przez", "przy", "się",
+               "u", "w", "we", "według", "więc", "wobec", "wśród", "z", "za", "zamiast", "ze", "że", "żeby"],
+        "en": ["a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "into",
+               "nor", "of", "on", "or", "the", "to", "with", "without"],
+        "de": ["aber", "als", "am", "an", "auf", "aus", "bei", "das", "der", "die", "ein", "eine",
+               "für", "im", "in", "mit", "nach", "oder", "ohne", "und", "von", "vor", "zu", "zum", "zur"],
+        "fr": ["à", "au", "aux", "avec", "car", "dans", "de", "des", "du", "en", "et", "la", "le",
+               "les", "mais", "ou", "par", "pour", "sans", "sur", "un", "une"],
+        "es": ["a", "al", "con", "de", "del", "el", "en", "la", "las", "los", "o", "para", "pero",
+               "por", "sin", "un", "una", "y"]
+    ]
+}

@@ -122,6 +122,24 @@ final class SelectionDictionarySaveTests: XCTestCase {
         XCTAssertFalse(coordinator.isSaving)
     }
 
+    func testFunctionWordOnlyResultCanBeSavedWithoutBreakdown() throws {
+        let (container, item, _) = try fixture()
+        let preview = SelectionTranslationPreview(
+            selectedText: "ale i", sourceLanguageCode: "pl",
+            context: .init(text: "ale i", selection: NSRange(location: 0, length: 5)),
+            sourceItemID: item.id, sourceTitle: item.title, audioRange: nil)
+        let coordinator = SelectionTranslationCoordinator(preview: preview)
+        coordinator.saveToDictionary(context: container.mainContext, service: CountingAnalysisService())
+        let pending = try XCTUnwrap(coordinator.currentRequest())
+        coordinator.acceptResult(token: pending.token, previewID: preview.id,
+                                 result: .init(directTranslation: "но и", contextExplanation: ""))
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertNotNil(coordinator.savedEntryID)
+        let entry = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<DictionaryEntry>()).first)
+        XCTAssertEqual(entry.translationText, "но и")
+        XCTAssertEqual(entry.contextTranslationText, "")
+    }
+
     func testAppDeclaresBackgroundAudio() {
         XCTAssertTrue((Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []).contains("audio"))
     }

@@ -200,7 +200,7 @@ struct DictionaryEntryDetailView: View {
                 Section("Progress") { LabeledContent("Level") { LearningLevelBadge(level: entry.learningLevel) } }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
-                        if let explanation = entry.contextTranslationText {
+                        if let explanation = entry.contextTranslationText, !explanation.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Word explanations").font(.caption).foregroundStyle(.secondary)
                                 Text(explanation).textSelection(.enabled)
@@ -226,7 +226,7 @@ struct DictionaryEntryDetailView: View {
                                                         service: contextAnalysisService)
                         }
                         .accessibilityIdentifier("dictionary.context-translate")
-                        Text("Each selected word is explained in context, followed by a natural translation of the complete phrase. Existing manual or imported translations are preserved.")
+                        Text("Content words are explained in context; common function words are omitted from the breakdown. The overall translation includes the complete phrase. Existing manual or imported translations are preserved.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 

@@ -303,8 +303,11 @@ final class ContextualTranslationCoordinator {
 
     private func completeContext(_ request: Request, selected: String, explanation: String) {
         guard let entry = currentEntry(for: request) else { return }
+        let needsBreakdown = !ContextAnalysisWords.wordsToExplain(
+            in: entry.text, language: entry.sourceLanguageCode
+        ).isEmpty
         guard !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              !needsBreakdown || !explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             fail(request, message: ContextAnalysisError.invalidOutput.userMessage)
             return
         }

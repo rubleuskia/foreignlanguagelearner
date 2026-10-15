@@ -84,11 +84,13 @@ struct SelectionTranslationView: View {
         case .ready:
             if let explanation = coordinator.contextExplanation,
                let translation = coordinator.selectedTranslation {
-                Text(explanation)
-                    .textSelection(.enabled)
-                CopyButton(value: explanation, label: "Copy word explanations",
-                           identifier: "preview.copy-word-explanations")
-                Divider()
+                if !explanation.isEmpty {
+                    Text(explanation)
+                        .textSelection(.enabled)
+                    CopyButton(value: explanation, label: "Copy word explanations",
+                               identifier: "preview.copy-word-explanations")
+                    Divider()
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Overall translation")
                         .font(.caption)

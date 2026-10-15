@@ -20,10 +20,10 @@ actor URLSessionContextAnalysisHTTPClient: ContextAnalysisHTTPClient {
 
 struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
     static let endpoint = URL(string: "https://api.openai.com/v1/responses")!
-    static let promptVersion = "context-analysis-v3"
+    static let promptVersion = "context-analysis-v4"
     static let defaultPrompt = """
     You are a concise contextual translator.
-    For each selected word, return its dictionary form (lemma) in source_language and its
+    For each word in words_to_explain, return its dictionary form (lemma) in source_language and its
     meaning in target_language. If several meanings apply, separate them with commas.
     Use context to resolve ambiguity. Analyze only selected_text.
     Do not include grammatical commentary, part of speech, gender, number, case, tense,
@@ -31,8 +31,12 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
     """
     static let requiredInstructions = """
     # Required application contract
-    Return one word_explanations item for every whitespace-delimited word in selected_text,
-    in the original order, including repeated words. Copy each source_word exactly from selected_text.
+    Return exactly one word_explanations item for every entry in words_to_explain,
+    in the supplied order, including repeated words. Copy each source_word exactly from that list.
+    The application has excluded conjunctions, prepositions and connecting function words
+    (for example Polish ale, i, z, przed, na). Do not add them back to the word breakdown.
+    If words_to_explain is empty, return an empty word_explanations array.
+    Always translate ALL of selected_text in phrase_translation, including the omitted function words.
     Each item must contain source_word, lemma, and meaning. The lemma is only the base form;
     meaning contains only concise translations, comma-separated if needed, without grammar details.
     Translate the complete selected phrase naturally in phrase_translation, using its context.
@@ -174,13 +178,13 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
             let meaning = item.meaning.trimmingCharacters(in: .whitespacesAndNewlines)
             return (word, lemma, meaning)
         }
-        let expectedWords = request.selectedText.split(whereSeparator: \.isWhitespace).map(String.init)
+        let expectedWords = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage)
         guard wordLines.count == expectedWords.count,
               zip(wordLines, expectedWords).allSatisfy({ $0.0.0 == $0.1 && !$0.0.1.isEmpty && !$0.0.2.isEmpty }) else {
             throw ContextAnalysisError.invalidOutput
         }
         let explanation = wordLines.map { "\($0.0) — \($0.1) — \($0.2)" }.joined(separator: "\n\n")
-        guard !direct.isEmpty, !explanation.isEmpty,
+        guard !direct.isEmpty,
               direct.utf16.count <= ContextAnalysisLimits.maximumDirectTranslationUTF16,
               explanation.utf16.count <= ContextAnalysisLimits.maximumContextExplanationUTF16 else {
             throw ContextAnalysisError.invalidOutput
@@ -224,6 +228,7 @@ private struct OpenAIInput: Encodable {
     let sourceLanguage: String
     let targetLanguage: String
     let selectedText: String
+    let wordsToExplain: [String]
     let context: String
     let selectionLocationUTF16: Int
     let selectionLengthUTF16: Int
@@ -233,6 +238,7 @@ private struct OpenAIInput: Encodable {
         sourceLanguage = request.sourceLanguage
         targetLanguage = request.targetLanguage
         selectedText = request.selectedText
+        wordsToExplain = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage)
         context = request.contextFragment
         selectionLocationUTF16 = request.selectionLocationUTF16
         selectionLengthUTF16 = request.selectionLengthUTF16
@@ -243,6 +249,7 @@ private struct OpenAIInput: Encodable {
         case sourceLanguage = "source_language"
         case targetLanguage = "target_language"
         case selectedText = "selected_text"
+        case wordsToExplain = "words_to_explain"
         case context
         case selectionLocationUTF16 = "selection_location_utf16"
         case selectionLengthUTF16 = "selection_length_utf16"

@@ -210,6 +210,67 @@ final class OpenAIContextAnalysisProviderTests: XCTestCase {
         }
     }
 
+    func testFunctionWordsAreOmittedButCompletePhraseIsSentAndTranslated() async throws {
+        let phrase = "Ale, kot i kot z domu przed oknem na stole."
+        let client = ScriptedHTTPClient([.success(try successResponse(
+            direct: "Но кот и кот из дома перед окном на столе.", words: [
+                ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+                ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+                ["source_word": "domu", "lemma": "dom", "meaning": "дом"],
+                ["source_word": "oknem", "lemma": "okno", "meaning": "окно"],
+                ["source_word": "stole.", "lemma": "stół", "meaning": "стол"],
+            ]
+        ))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        let result = try await provider.analyze(phraseRequest(phrase))
+        XCTAssertEqual(result.contextExplanation,
+                       "kot — kot — кот\n\nkot — kot — кот\n\ndomu — dom — дом\n\noknem — okno — окно\n\nstole. — stół — стол")
+        XCTAssertEqual(result.directTranslation, "Но кот и кот из дома перед окном на столе.")
+        let requests = await client.requests
+        let body = try XCTUnwrap(requests.first?.httpBody)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let input = try XCTUnwrap(object["input"] as? String)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any])
+        XCTAssertEqual(payload["selected_text"] as? String, phrase)
+        XCTAssertEqual(payload["words_to_explain"] as? [String], ["kot", "kot", "domu", "oknem", "stole."])
+        XCTAssertTrue((object["instructions"] as? String)?.contains("Do not add them back") == true)
+    }
+
+    func testOnlyFunctionWordsReturnsOverallTranslationWithEmptyBreakdown() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse(direct: "но и", words: []))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        let result = try await provider.analyze(phraseRequest("ale i"))
+        XCTAssertEqual(result.directTranslation, "но и")
+        XCTAssertEqual(result.contextExplanation, "")
+    }
+
+    func testUnexpectedFunctionWordInBreakdownIsRejected() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse(direct: "и кот", words: [
+            ["source_word": "i", "lemma": "i", "meaning": "и"],
+            ["source_word": "kot", "lemma": "kot", "meaning": "кот"],
+        ]))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini, client: client)
+        do {
+            _ = try await provider.analyze(phraseRequest("i kot"))
+            XCTFail("Excluded words must not reappear in the breakdown")
+        } catch { XCTAssertEqual(error as? ContextAnalysisError, .invalidOutput) }
+    }
+
+    func testFunctionWordFilterUsesLanguageNotWordLength() {
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(
+            in: "ALE, i z pred przed na oraz do przy ze pod kot dom dni", language: "pl-PL"
+        ), ["kot", "dom", "dni"])
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(in: "the cat and dog", language: "en"), ["cat", "dog"])
+        XCTAssertEqual(ContextAnalysisWords.wordsToExplain(in: "ale", language: "en"), ["ale"])
+    }
+
+    private func phraseRequest(_ text: String) -> ContextAnalysisRequest {
+        .init(requestID: UUID(), subject: .preview(UUID()), revision: 1, selectedText: text,
+              contextFragment: text, selectionLocationUTF16: 0, selectionLengthUTF16: text.utf16.count,
+              contextWasReduced: false, sourceLanguage: "pl", targetLanguage: "ru",
+              promptVersion: OpenAIContextAnalysisProvider.promptVersion)
+    }
+
     private func request() -> ContextAnalysisRequest {
         ContextAnalysisRequest(
             requestID: UUID(), subject: .preview(UUID()), revision: 1, selectedText: "zamek",

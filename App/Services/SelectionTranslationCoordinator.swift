@@ -115,7 +115,10 @@ final class SelectionTranslationCoordinator {
               preview.id == previewID else { return }
         let direct = result.directTranslation.trimmingCharacters(in: .whitespacesAndNewlines)
         let explanation = result.contextExplanation.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !direct.isEmpty, !explanation.isEmpty else {
+        let needsBreakdown = !ContextAnalysisWords.wordsToExplain(
+            in: preview.selectedText, language: preview.sourceLanguageCode
+        ).isEmpty
+        guard !direct.isEmpty, !needsBreakdown || !explanation.isEmpty else {
             fail(token: token, previewID: previewID,
                  message: ContextAnalysisError.invalidOutput.userMessage)
             return

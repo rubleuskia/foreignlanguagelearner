@@ -99,15 +99,20 @@ languages and audio identity, for reuse if the popup is reopened. Dismissal canc
 duplicate taps cannot insert twice. New contextual translations use the `openAI` origin in the
 existing raw-string field and portable JSON contract.
 
-The v3 structured output contains a source word, lemma and meaning for every whitespace-delimited
-selected word, including repeated words. UI formatting adds blank lines and the overall contextual
-phrase translation. The application-owned contract excludes grammar commentary even with a custom
-prompt. Empty, incomplete, mismatched and oversized results are rejected. Existing dictionary
+The v4 request includes `words_to_explain`: whitespace-delimited selected tokens after a
+language-specific function-word filter (Polish, English, German, French and Spanish). Filtering
+ignores case and surrounding punctuation, never token length; unsupported languages keep their
+words. The strict output must match this exact list, including order and repetitions, with source
+word, lemma and meaning. The complete selected text and context still reach the model for the
+overall phrase translation. Function-word-only selections have an empty breakdown and a required
+nonempty overall translation, which remains saveable. UI formatting adds blank lines and hides
+empty breakdown controls. The application-owned contract excludes grammar commentary even with a custom
+prompt. Empty overall translations, missing expected words, mismatched and oversized results are rejected. Existing dictionary
 results are persisted separately from the primary translation;
 existing manual/imported text changes only through explicit acceptance. Request identity and
 revision checks reject stale completion after retry or dismissal, and failed refresh does not erase
 the previous successful pair. The full contract lives in
-`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`; the explicit reader-save and v3 output
+`docs/FOUNDATION_MODELS_CONTEXTUAL_TRANSLATION_PLAN.md`; the explicit reader-save and v4 output
 rules above supersede its earlier preview-only and explanation-format assumptions.
 
 Context errors display an acknowledgement alert and write bounded local JSON diagnostics (last
