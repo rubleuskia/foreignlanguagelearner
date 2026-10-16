@@ -30,8 +30,17 @@ class SubtitleTests(unittest.TestCase):
         words = [word(" " + w, i * 20, i * 20 + 1) for i, w in enumerate(book.split())]
         with self.assertRaises(ValueError):
             plan_chunks("unrelated content", {"segments": [{"words": words}]}, 300)
-        self.assertEqual(plan_chunks(book, {"segments": [{"words": words}]}, 200),
+        self.assertEqual(plan_chunks(book, {"segments": [{"words": words}]}, 200, target_seconds=60),
                          [(0, 0.0), (3, 60.0), (6, 120.0), (10, 200)])
+
+    def test_guided_default_bounds_dense_matches_to_short_audio_windows(self):
+        book = " ".join(f"word{i}" for i in range(100))
+        words = [word(" " + w, i * .5, i * .5 + .4) for i, w in enumerate(book.split())]
+        cuts = plan_chunks(book, {"segments": [{"words": words}]}, 50)
+        passages = list(zip(cuts, cuts[1:]))
+        self.assertTrue(all(0 < end - start <= 30 for (_, start), (_, end) in passages))
+        restored = [w for ((a, _), (b, _)) in passages for w in book.split()[a:b]]
+        self.assertEqual(restored, book.split())
 
     def test_untimed_words_retained_only_with_opt_in(self):
         words = [word("—", 0, 0), word(" Tak.", 0, 1), word(" Koniec.", 1, 1)]

@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-16 — EPUB preparation for audiobook subtitles
+
+- Added a local EPUB extraction step that follows spine order, preserves inline text and punctuation, removes semantic notes/navigation, and writes UTF-8 sections plus a source/skip index. The explicit Wolne Lektury profile also removes fundraising, annotation and publishing pages.
+- Prepared the supplied 39-part Lalka book from EPUB: 34,399 cues per format over 32 hours, validated with the app parser/manifest validator and retained as local review-required artifacts. Added a conversion report documenting source mapping, fixes and remaining timing limitations.
+- Documented chapter-to-audio matching and the existing per-track alignment/package workflow. EPUB extraction does not infer audio boundaries or change the iOS import formats.
+- Shortened guided alignment targets from 60 to 20 seconds after longer windows produced local timing drift in the Lalka recordings. Bumped the alignment core version so cached output from the previous behavior is not silently reused.
+- Added extraction and guided-window regression tests and updated the architecture and project overview for EPUB as a supported local preparation source. Project purpose is unchanged.
+
 ## 2026-10-15 — Background audio, contextual dictionary capture and track controls
 
 - Enabled the iOS background audio mode alongside the existing spoken-audio playback session so audio can continue when the screen locks. Physical-device lock-screen playback and automatic track transitions still require a device smoke test.

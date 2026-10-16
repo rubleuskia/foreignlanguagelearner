@@ -3,7 +3,7 @@ import difflib
 import re
 
 
-def plan_chunks(text, transcription, duration, target_seconds=60):
+def plan_chunks(text, transcription, duration, target_seconds=20):
     book = text.split()
     words = [w for s in transcription["segments"] for w in s["words"]]
     normalize = lambda value: re.sub(r"[^\w]", "", value.lower())
