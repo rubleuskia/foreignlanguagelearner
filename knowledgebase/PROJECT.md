@@ -4,7 +4,7 @@
 
 Foreign Language Learner is a native SwiftUI iPhone and iPad application for learning from spoken content. A learner imports local audio or video, or a ZIP containing a multi-track audiobook, reads matching full text and available per-track subtitles, selects words or phrases, saves them to a personal dictionary, and practices them later.
 
-The project also contains a standalone local subtitle-aligner utility. It converts matching UTF-8 text and narration into timed SRT/WebVTT files and can batch an explicitly mapped multi-track book into an importable package.
+The project also contains a standalone local subtitle-aligner utility. It extracts reviewable UTF-8 sections from EPUB when needed, converts matching text and narration into timed SRT/WebVTT files and can batch an explicitly mapped multi-track book into an importable package.
 
 ## Current scope
 

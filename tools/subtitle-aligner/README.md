@@ -1,8 +1,8 @@
-# TXT + audio → synchronized subtitles
+# TXT/EPUB + audio → synchronized subtitles
 
-A local command-line utility for turning a **matching UTF-8 book transcript and an audio recording** into **SRT and WebVTT** files that Foreign Language Learner can import. Alignment estimates when the supplied words are spoken; no timestamps are required in the TXT.
+A local command-line utility for turning a **matching UTF-8 book transcript and an audio recording** (with a separate EPUB-to-text preparation step) into **SRT and WebVTT** files that Foreign Language Learner can import. Alignment estimates when the supplied words are spoken; no timestamps are required in the TXT.
 
-For the actual experiments, failures, fixes, and limits of the Polish sample conversion, see the [detailed conversion report](../../docs/SUBTITLE_CONVERSION_REPORT.md).
+For experiments, failures, fixes, and limits, see the [Polish sample conversion report](../../docs/SUBTITLE_CONVERSION_REPORT.md) and the [39-track Lalka EPUB preparation report](../../docs/LALKA_SUBTITLE_PREPARATION.md).
 
 This utility lives outside the iOS target. Run it on a development computer, review the result, then import the audio and one subtitle file into the app. It does not modify the book, audio, Xcode project, or library database.
 
@@ -76,7 +76,7 @@ Success prints cue/word counts and exits with status 0. Input, alignment, and or
 
 ### Long recordings and review output
 
-If direct alignment drifts, add `--guided`. This first produces a rough speech transcript, finds ordered runs of at least four matching normalized words in the supplied book, and uses those anchors to align passages of approximately one minute. The subtitle text still comes from the supplied TXT, not the rough transcript. A gap exceeding three minutes without a usable anchor fails with an instruction to prepare shorter excerpts. Matching is heuristic: repeated passages and poor recognition can still lead to incorrect anchors. Guided mode loads decoded 16 kHz audio into memory and performs both transcription and alignment, so it uses more memory and computation.
+If direct alignment drifts, add `--guided`. This first produces a rough speech transcript, finds ordered runs of at least four matching normalized words in the supplied book, and uses those anchors to align passages targeting 20 seconds (actual cuts depend on available matches). The subtitle text still comes from the supplied TXT, not the rough transcript. A gap exceeding three minutes without a usable anchor fails with an instruction to prepare shorter excerpts. Matching is heuristic: repeated passages and poor recognition can still lead to incorrect anchors. Guided mode loads decoded 16 kHz audio into memory and performs both transcription and alignment, so it uses more memory and computation.
 
 Some engines assign zero duration to punctuation or short spoken words. By default, this fails validation. To produce **review subtitles** while retaining those words, explicitly add `--allow-untimed-words`. They remain in neighboring positive-duration cues; raw word timestamps are not invented. The JSON records `requires_review: true` and an `untimed_words` list (zero-based word indexes and input-relative times). A wholly untimed result still fails. Trailing untimed text may extend the last cue's text beyond layout targets. This mode does not relax text equality, negative timing, or overlap checks, and it does not certify timing quality.
 
@@ -112,6 +112,36 @@ Download both yourself and prepare a matching excerpt first. The downloaded TXT 
 6. **Match the audio interval.** A 3-minute audio clip needs only the words spoken in that clip. Do not pair it with an entire chapter.
 
 The automatic cleanup only removes BOM characters, normalizes Unicode, and collapses whitespace. It does not remove footnotes or infer missing narration. Paragraph breaks become spaces; subtitle grouping is computed from word timings and punctuation.
+
+### EPUB sources
+
+When the book is supplied as a DRM-free EPUB, extract its reading text before alignment:
+
+```sh
+python3 tools/subtitle-aligner/epub_text.py \
+  --epub /path/to/book.epub \
+  --output /path/to/new-extraction
+```
+
+The extractor reads the OPF **spine order**, rather than sorting chapter filenames. It writes
+`transcript.txt`, numbered UTF-8 files under `sections/`, and `epub-index.json` with source EPUB
+hash, metadata, original XHTML paths, headings, word counts and reasons for skipped documents.
+Inline emphasis and punctuation remain joined correctly; semantic footnotes, note references,
+navigation, hidden content and soft hyphens are removed. It uses Python's standard library and
+loads no speech model. Existing output directories are refused.
+
+For EPUBs from Wolne Lektury, add `--profile wolne-lektury`. This explicitly selects their
+`book-text` content, removes numbered annotation links and fundraising blocks, and excludes their
+known title/annotations/support/license pages. These publisher rules are **not** applied to other
+EPUBs by default. Inspect the index and extracted text: EPUB files differ, and generic extraction
+cannot establish which material the narrator reads.
+
+An EPUB section is not automatically an audio track. Match the extracted chapter headings and
+order against the actual recordings, check spoken introductions/outros, and use only the matching
+text for each track. Keep original MP3 timelines when applying offsets. For a multi-track package,
+construct the existing manifest's contiguous `textRange` and `textMapping` from the verified
+chapter texts, then use the batch workflow below. The iOS importer continues to consume TXT and
+SRT/VTT; EPUB extraction runs locally outside the app.
 
 ### PDF sources
 
@@ -231,6 +261,8 @@ Pauses between cues intentionally have no active highlight. Review unusually sho
 
 Files:
 
+- `epub_text.py`: dependency-free spine-ordered EPUB extraction and source/skip index.
+- `test_epub_text.py`: reading order, notes, inline text, publisher cleanup and unsafe-path tests.
 - `align.py`: command-line interface, engine adapter, validation, cue grouping, and serializers.
 - `guided.py`: rough-transcription anchors and bounded passage alignment for long recordings.
 - `requirements.txt`: pinned direct alignment dependency.

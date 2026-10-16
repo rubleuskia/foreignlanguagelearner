@@ -26,7 +26,7 @@ Follow centers the first visual line of the active cue using TextKit 1 after lay
 
 ## Subtitle alignment is a separate tool
 
-Untimed text is aligned outside the app using the local `tools/subtitle-aligner` utility. Guided alignment is available for long recordings with drift; review output can retain zero-duration words but is explicitly flagged rather than pretending timing is accurate.
+Untimed text is aligned outside the app using the local `tools/subtitle-aligner` utility. DRM-free EPUB sources first pass through a separate standard-library extractor following the OPF spine. It writes reviewable text sections and an index with EPUB hash, source paths and skipped-document reasons. Publisher-specific cleanup is opt-in (`wolne-lektury`); extracted sections never automatically imply audio boundaries. The alignment input remains verified UTF-8 text, and iOS still imports TXT/SRT/VTT. Guided alignment targets 20-second passages, using rough-transcription anchors, after the 60-second target caused local drift in long Polish recordings. Sparse matches can still create longer passages and a gap over 180 seconds fails. Review output can retain zero-duration words but is explicitly flagged rather than pretending timing is accurate.
 
 Multi-track batch alignment requires explicit contiguous word ranges and a normalized transcript hash. It preflights all tracks before loading one model, processes sequentially, and publishes an importable package only when every track is aligned or explicitly marked for review. Single-track reruns reuse only artifacts whose complete input/configuration fingerprint still matches.
 
