@@ -229,6 +229,76 @@ final class LearningUXTests: XCTestCase {
         ))
     }
 
+    func testFollowReadingZoneAndForcedReturn() throws {
+        func offset(_ lineY: CGFloat, force: Bool = false) -> CGFloat? {
+            TranscriptFollowLayout.followOffsetY(
+                lineRect: CGRect(x: 0, y: lineY - 10, width: 20, height: 20),
+                currentOffset: 200, boundsHeight: 500, contentHeight: 2000,
+                adjustedTop: 20, adjustedBottom: 30, force: force
+            )
+        }
+        XCTAssertNil(offset(400), "A cue inside the reading zone must not move the text")
+        XCTAssertNil(offset(490), "The lower edge is still inside the reading zone")
+        XCTAssertEqual(try XCTUnwrap(offset(500)), 300, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(offset(350)), 150, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(offset(430, force: true)), 230, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(TranscriptFollowLayout.followOffsetY(
+            lineRect: CGRect(x: 0, y: 50, width: 20, height: 20),
+            currentOffset: 0, boundsHeight: 500, contentHeight: 100,
+            adjustedTop: 20, adjustedBottom: 30, force: true
+        )), -20, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testFollowRecomputesAfterLayoutAndExplicitResume() throws {
+        final class RecordingTextView: UITextView {
+            var destinations = [CGPoint]()
+            override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+                destinations.append(contentOffset)
+                super.setContentOffset(contentOffset, animated: false)
+            }
+        }
+        let document = TranscriptDocument(segments: (0..<30).map {
+            .init(start: Double($0), end: Double($0 + 1),
+                  text: "A passage with several words for testing transcript layout.")
+        })
+        let representable = TranscriptTextView(
+            document: document, activeSegment: 15, following: .constant(true),
+            followGeneration: 0, onSelectionBegan: {}, handleSelection: { _, _, _, _, _ in }
+        )
+        let coordinator = representable.makeCoordinator()
+        let storage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(layoutManager)
+        layoutManager.addTextContainer(container)
+        let view = RecordingTextView(frame: .zero, textContainer: container)
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        view.font = .systemFont(ofSize: 17)
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        coordinator.applyFollow(to: view)
+        let original = try XCTUnwrap(view.destinations.last).y
+        view.destinations.removeAll()
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Unchanged layout must not restart scrolling")
+
+        view.textContainerInset.top += 100
+        view.layoutIfNeeded()
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(try XCTUnwrap(view.destinations.last).y, original + 100, accuracy: 1)
+
+        view.setContentOffset(.zero, animated: false)
+        coordinator.resetFollow(in: view)
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(try XCTUnwrap(view.destinations.last).y, original + 100, accuracy: 1)
+
+        view.selectedRange = NSRange(location: 10, length: 4)
+        view.destinations.removeAll()
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Selection must prevent automatic movement")
+    }
+
     @MainActor
     func testTextKitUsesFirstVisualLineOfLongCueAndSelectionPausesOnce() throws {
         var following = true

@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-16 — Smoother transcript following
+
+- Keep the active cue stationary inside a 35–60% reading zone; smoothly move its first visual line to 40% when it leaves that zone. Respect Reduce Motion and stop following on manual scrolling or selection.
+- Recalculate after text layout and content geometry changes, and explicitly resume after playback and seek actions in both readers.
+- Added reading-zone, layout-change, repeated-layout, selection and explicit-resume regression coverage.
+- Updated the follow behavior decision. Project purpose, supported workflows and major boundaries are unchanged.
+
 ## 2026-10-15 — Background audio, contextual dictionary capture and track controls
 
 - Enabled the iOS background audio mode alongside the existing spoken-audio playback session so audio can continue when the screen locks. Physical-device lock-screen playback and automatic track transitions still require a device smoke test.

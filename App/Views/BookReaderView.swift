@@ -148,19 +148,19 @@ struct BookReaderView: View {
                 set: { scrubPosition = $0 }
             ), in: 0...max(activeTrack?.duration ?? 0, 0.01)) { editing in
                 scrubbing = editing
-                if !editing { savePosition(); playback.seekLocal(scrubPosition); following = true }
+                if !editing { savePosition(); playback.seekLocal(scrubPosition); followGeneration += 1; following = true }
             }
             .accessibilityLabel("Track playback position")
             HStack {
                 Text(time(scrubbing ? scrubPosition : playback.localPosition)).monospacedDigit()
                 Spacer()
-                Button { playback.seekLocal(playback.localPosition - 10); following = true } label: {
+                Button { playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true } label: {
                     Image(systemName: "gobackward.10")
                 }
-                Button { playback.toggle(); if playback.wantsToPlay { following = true } } label: {
+                Button { playback.toggle(); if playback.wantsToPlay { followGeneration += 1; following = true } } label: {
                     Image(systemName: playback.wantsToPlay ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
                 }
-                Button { playback.seekLocal(playback.localPosition + 10); following = true } label: {
+                Button { playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true } label: {
                     Image(systemName: "goforward.10")
                 }
                 Spacer()
