@@ -17,16 +17,43 @@ struct DictionaryView: View {
     @State private var importPreview: DictionaryImportPreview?
     @State private var errorMessage: String?
 
+    private var learningEntries: [DictionaryEntry] { entries.filter { $0.learningLevel != 4 } }
+    private var learntEntries: [DictionaryEntry] { entries.filter { $0.learningLevel == 4 } }
+
     var body: some View {
-        Group {
+        List {
+            Section("Learning progress") {
+                ForEach(1...4, id: \.self) { level in
+                    HStack {
+                        LearningLevelBadge(level: level)
+                        Spacer()
+                        Text(entries.count(where: { $0.learningLevel == level }).formatted())
+                            .font(.headline.monospacedDigit())
+                            .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                    }
+                }
+            }
             if entries.isEmpty {
                 ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Select text in a transcript and choose Add to Dictionary."))
+                    .listRowBackground(Color.clear)
             } else {
-                List {
-                    ForEach(entries) { entry in
-                        Button { selectedEntry = entry } label: { DictionaryRow(entry: entry) }
-                            .buttonStyle(.plain)
-                    }.onDelete(perform: deleteEntries)
+                if !learningEntries.isEmpty {
+                    Section("In progress") {
+                        ForEach(learningEntries) { entry in
+                            entryButton(entry)
+                        }
+                        .onDelete { deleteEntries($0, from: learningEntries) }
+                    }
+                }
+                Section("Learnt phrases") {
+                    if learntEntries.isEmpty {
+                        Text("No learnt phrases yet").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(learntEntries) { entry in
+                            entryButton(entry)
+                        }
+                        .onDelete { deleteEntries($0, from: learntEntries) }
+                    }
                 }
             }
         }
@@ -60,9 +87,19 @@ struct DictionaryView: View {
         } message: { Text(errorMessage ?? "") }
     }
 
-    private func deleteEntries(_ offsets: IndexSet) {
+    private func entryButton(_ entry: DictionaryEntry) -> some View {
+        Button { selectedEntry = entry } label: { DictionaryRow(entry: entry) }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dictionary.entry.\(entry.text)")
+    }
+
+    private func deleteEntries(_ offsets: IndexSet, from sectionEntries: [DictionaryEntry]) {
         do {
-            for index in offsets { translationCoordinator.cancel(entries[index].id); context.delete(entries[index]) }
+            for index in offsets {
+                let entry = sectionEntries[index]
+                translationCoordinator.cancel(entry.id)
+                context.delete(entry)
+            }
             try context.save()
         } catch { context.rollback(); errorMessage = error.localizedDescription }
     }

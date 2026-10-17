@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-17 — Dictionary learning statistics
+
+- Added live dictionary counts for all four learning levels, including zero counts. Level-4 entries now appear only in a separate Learnt phrases section at the end of the list.
+- Both sections retain entry details and swipe-to-delete; deletion uses the corresponding section to avoid removing a different entry. Counts include every saved entry, regardless of translation status.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
 ## 2026-10-17 — Phrase audio boundaries
 
 - Removed the extra 0.75-second tail from phrase capture in both readers. Play phrase now uses only the selected subtitle cues.

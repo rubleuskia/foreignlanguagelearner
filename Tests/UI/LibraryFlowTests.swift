@@ -97,4 +97,29 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
     }
 
+    @MainActor
+    func testDictionaryStatisticsAndLearntSectionUpdateAfterDeletion() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        for (level, expected) in [(1, "1"), (2, "0"), (3, "0"), (4, "1")] {
+            let count = app.staticTexts["dictionary.stats.level.\(level)"]
+            XCTAssertTrue(count.waitForExistence(timeout: 5))
+            XCTAssertEqual(count.label, expected)
+        }
+        XCTAssertTrue(app.staticTexts["In progress"].exists)
+        XCTAssertTrue(app.staticTexts["Learnt phrases"].exists)
+        let learnt = app.buttons["dictionary.entry.do widzenia"]
+        if !learnt.isHittable { app.swipeUp() }
+        learnt.swipeLeft()
+        app.buttons["Delete"].tap()
+        XCTAssertFalse(learnt.exists)
+        XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
+        XCTAssertTrue(app.staticTexts["No learnt phrases yet"].exists)
+        app.swipeDown()
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label, "0")
+    }
+
 }
