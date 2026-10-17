@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-17 — Simplified dictionary detail
+
+- Reordered dictionary detail to source phrase with inline playback, Russian translation, then Meaning in context. Source context, progress and other details follow.
+- Removed the legacy Word-by-word help UI and contextual-result copy buttons. Existing saved word-help data remains intact.
+- Updated DECISIONS.md and PROJECT.md for the simplified detail workflow; project purpose and major boundaries are unchanged.
+
+
 ## 2026-10-17 — Dictionary learning statistics
 
 - Added live dictionary counts for all four learning levels, including zero counts. Level-4 entries now appear only in a separate Learnt phrases section at the end of the list.

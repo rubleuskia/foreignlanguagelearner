@@ -69,6 +69,8 @@ improvements backlog.
 
 ## Dictionary portability and translation
 
+Dictionary detail prioritizes the source phrase with an inline playback button, followed by the saved translation and Meaning in context. Legacy Word-by-word help and its per-word definition UI are no longer exposed on this card; stored word-help data remains compatible. Contextual explanations and the overall translation remain selectable without dedicated copy buttons.
+
 Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
 
 Ordinary automatic translation and word-by-word help use Apple Translation. Contextual translation
