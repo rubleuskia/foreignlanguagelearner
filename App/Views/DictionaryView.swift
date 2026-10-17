@@ -11,7 +11,6 @@ struct DictionaryView: View {
     @State private var showingLearn = false
     @State private var exporting = false
     @State private var exportFile: DictionaryJSONFile?
-    @State private var includeContext = true
     @State private var importing = false
     @State private var importMode: DictionaryImportMode = .merge
     @State private var importPreview: DictionaryImportPreview?
@@ -64,9 +63,9 @@ struct DictionaryView: View {
                     .disabled(!entries.contains(where: \.isLearningEligible))
                     .accessibilityIdentifier("dictionary.learn")
                 Menu("Transfer", systemImage: "arrow.up.arrow.down") {
-                    Toggle("Include source context", isOn: $includeContext)
-                    Button("Export Dictionary + Diagnostics", systemImage: "square.and.arrow.up") { prepareExport() }
+                    Button("Export Dictionary Backup", systemImage: "square.and.arrow.up") { prepareExport() }
                     Menu("Import Dictionary") {
+                        Button(DictionaryImportMode.restore.rawValue) { importMode = .restore; importing = true }
                         Button(DictionaryImportMode.merge.rawValue) { importMode = .merge; importing = true }
                         Button(DictionaryImportMode.translations.rawValue) { importMode = .translations; importing = true }
                     }
@@ -105,7 +104,7 @@ struct DictionaryView: View {
     }
 
     private func prepareExport() {
-        do { exportFile = try DictionaryTransferService.export(entries: entries, includeContext: includeContext); exporting = true }
+        do { exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true); exporting = true }
         catch { errorMessage = error.localizedDescription }
     }
 
@@ -448,10 +447,25 @@ private struct DictionaryImportPreviewView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Mode") { Text(preview.mode.rawValue) }
+                Section("Mode") {
+                    Text(preview.mode.rawValue)
+                    if preview.mode == .restore {
+                        Text("Restores saved details and learning progress for matching entries. Other entries stay in the dictionary.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("Audio files are not included. Saved audio links work only while the original source book is available on this device.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if preview.document.schemaVersion == 1 {
+                        Text("This older backup does not contain word explanations, personal notes or audio links.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Section("Changes") {
                     LabeledContent("New entries", value: "\(preview.additions)")
                     LabeledContent("Translation updates", value: "\(preview.translationChanges)")
+                    if preview.mode == .restore {
+                        LabeledContent("Entries to restore", value: "\(preview.restorations)")
+                    }
                     LabeledContent("Conflicts kept local", value: "\(preview.conflicts)")
                     LabeledContent("Unchanged", value: "\(preview.unchanged)")
                     LabeledContent("Skipped", value: "\(preview.skipped)")
@@ -468,6 +482,9 @@ private struct DictionaryImportPreviewView: View {
     }
     private func apply() {
         do {
+            if preview.mode == .restore {
+                for entry in preview.document.entries { coordinator.cancel(entry.id) }
+            }
             let pending = try DictionaryTransferService.apply(preview, context: context)
             pending.forEach { coordinator.enqueue($0, context: context) }
             dismiss()

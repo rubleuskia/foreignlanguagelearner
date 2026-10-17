@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-17 — Complete dictionary metadata backups
+
+- Dictionary JSON v2 now includes contextual breakdown and phrase translation, notes and preferred meaning, legacy word-help/cached definitions, timestamps, translation origin/status, and exact source/track/cue/audio links. Export always includes source context in the UI and checks its own output against importer validation.
+- Added Restore backup with a preview of matching records to restore. It restores saved progress and details even when the translation is unchanged, keeps unrelated records and conflicting identities, and rolls back a failed save. Merge and translations-only modes retain their conservative update behavior. Interrupted translations are requeued safely.
+- Preserved v1 import compatibility and added ISO 8601 fractional-second support. Added limits and validation for extended data and audio ranges, including overflow-safe UTF-16 context selection validation.
+- Audio/media files are not embedded; restored links require the original local book identity and files. Reimporting a book with a new ID does not automatically reconnect audio. Old backups cannot recover fields that were never exported. Added docs/DICTIONARY_BACKUP.md and updated DECISIONS.md and PROJECT.md; project purpose and media-storage boundaries are unchanged.
+
+
 ## 2026-10-17 — Simplified dictionary detail
 
 - Reordered dictionary detail to source phrase with inline playback, Russian translation, then Meaning in context. Source context, progress and other details follow.
