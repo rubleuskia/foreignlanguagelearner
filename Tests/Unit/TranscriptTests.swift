@@ -3,6 +3,45 @@ import SwiftData
 @testable import ForeignLanguageLearner
 
 final class TranscriptTests: XCTestCase {
+    func testPhraseAudioUsesOnlySelectedCuesWithoutTrailingPadding() {
+        let document = TranscriptDocument(segments: [
+            .init(start: 1, end: 2, text: "Dzień dobry."),
+            .init(start: 2.1, end: 3, text: "Co słychać?"),
+            .init(start: 4, end: 5, text: "Do widzenia.")
+        ], sourceIndices: [8, 9, 10])
+        let first = (document.text as NSString).range(of: "dobry")
+        XCTAssertEqual(PhraseAudioTiming.range(for: first, in: document, duration: 5), 1...2)
+        let spanning = NSUnionRange(first, (document.text as NSString).range(of: "Co"))
+        XCTAssertEqual(PhraseAudioTiming.range(for: spanning, in: document, duration: 5), 1...3)
+        XCTAssertNil(PhraseAudioTiming.range(for: NSRange(location: NSNotFound, length: 2),
+                                             in: document, duration: 5))
+        XCTAssertNil(PhraseAudioTiming.range(for: first, in: document, duration: 1.5))
+        let untimed = TranscriptDocument(segments: [.init(start: nil, end: nil, text: "Hello")])
+        XCTAssertNil(PhraseAudioTiming.range(for: NSRange(location: 0, length: 5),
+                                             in: untimed, duration: 5))
+    }
+
+    func testSavedPhraseAudioRemovesOnlyRecognizableLegacyPadding() {
+        let document = TranscriptDocument(segments: [
+            .init(start: 1, end: 2, text: "Dzień dobry."),
+            .init(start: 2.1, end: 3, text: "Co słychać?")
+        ])
+        XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(
+            from: 1...2.75, selectedText: "dobry", firstSegment: 0, document: document), 1...2)
+        XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(
+            from: 1...3.75, selectedText: "dobry. Co", firstSegment: 0, document: document), 1...3)
+        for text in ["missing", "dobry"] {
+            // A custom range whose start differs from the cue must remain intact.
+            XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(
+                from: 1.2...2.75, selectedText: text, firstSegment: 0, document: document), 1.2...2.75)
+        }
+        XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(
+            from: 1...2.75, selectedText: "missing", firstSegment: 0, document: document), 1...2.75)
+        let repeated = TranscriptDocument(segments: [.init(start: 1, end: 2, text: "tak tak")])
+        XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(
+            from: 1...2.75, selectedText: "tak", firstSegment: 0, document: repeated), 1...2.75)
+    }
+
     func testSRTParsingSortsSegmentsAndHandlesCRLFAndUnicode() throws {
         let document = try TranscriptParser.parse("\u{FEFF}2\r\n00:00:03,000 --> 00:00:04,500\r\n世界 🌍\r\n\r\n1\r\n00:00:00,500 --> 00:00:02,000\r\nHello\r\nthere", extension: "srt")
         XCTAssertEqual(document.segments.map(\.text), ["Hello\nthere", "世界 🌍"])

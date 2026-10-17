@@ -182,16 +182,7 @@ struct BookReaderView: View {
 
     private func audioRange(for selectionRange: NSRange, document: TranscriptDocument) -> ClosedRange<Double>? {
         guard let track = activeTrack else { return nil }
-        let indices = document.ranges.indices.filter { NSIntersectionRange(document.ranges[$0], selectionRange).length > 0 }
-        let timed = indices.compactMap { index -> TranscriptSegment? in
-            guard document.segments.indices.contains(index), document.segments[index].start != nil,
-                  document.segments[index].end != nil else { return nil }
-            return document.segments[index]
-        }
-        guard let first = timed.compactMap(\.start).min(), let last = timed.compactMap(\.end).max(), last > first else { return nil }
-        let nextStart = document.segments.compactMap(\.start).first { $0 >= last }
-        let paddedEnd = min(last + 0.75, nextStart ?? track.duration, track.duration)
-        return first...max(last, paddedEnd)
+        return PhraseAudioTiming.range(for: selectionRange, in: document, duration: track.duration)
     }
 
     private func loadTrackTranscript() {

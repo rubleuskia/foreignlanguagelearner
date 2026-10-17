@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-17 — Phrase audio boundaries
+
+- Removed the extra 0.75-second tail from phrase capture in both readers. Play phrase now uses only the selected subtitle cues.
+- Existing saved phrases also drop recognizable legacy padding when the local transcript and selection match; ambiguous or custom ranges remain unchanged. Timing remains limited to subtitle cue precision, without estimating word timings.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
 ## 2026-10-17 — Training start button layout
 
 - Made Start round a full-width, large button without the surrounding Form row background or inset, and moved the empty-state hint to the section footer.
