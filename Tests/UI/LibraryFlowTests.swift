@@ -55,9 +55,12 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["learn.translation"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["learn.original"].exists,
                        "The original must stay hidden before Check")
+        XCTAssertFalse(app.buttons["learn.generate-context"].exists)
+        XCTAssertFalse(app.staticTexts["learn.context-words"].exists)
         app.buttons["learn.check"].tap()
         XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Audio unavailable on this device"].exists)
+        XCTAssertTrue(app.buttons["learn.generate-context"].exists)
         app.buttons["learn.right"].tap()
 
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
@@ -68,4 +71,30 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertEqual(learntOriginals.firstMatch.label, "do widzenia",
                        "The global list includes entries learned before this round")
     }
+    @MainActor
+    func testLearningContextTranslationReplacesSavedTranslation() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture", "--learning-context-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.learn"].tap()
+        app.buttons["learn.start"].tap()
+        XCTAssertFalse(app.staticTexts["learn.context-translation"].exists)
+        XCTAssertFalse(app.buttons["learn.use-context-translation"].exists)
+        app.buttons["learn.check"].tap()
+        XCTAssertTrue(app.staticTexts["learn.context-words"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["learn.context-translation"].label, "здравствуйте")
+        let useTranslation = app.buttons["learn.use-context-translation"]
+        app.swipeUp()
+        useTranslation.tap()
+        app.swipeDown()
+        XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
+        XCTAssertFalse(useTranslation.exists)
+        app.buttons["Close"].tap()
+        app.buttons["dictionary.learn"].tap()
+        app.buttons["learn.start"].tap()
+        XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
+    }
+
 }

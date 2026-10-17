@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-17 — Contextual translations in training
+
+- After Check, training cards show saved contextual word explanations and a separate overall phrase translation. Use this as translation replaces the saved phrase translation only on explicit selection.
+- Missing analysis can be generated using the existing contextual translation service, with progress, errors and cancellation when leaving a card. Entries without source context use the phrase itself without inventing surrounding text.
+- This extends the existing training workflow; no architectural decision, project purpose or major boundary changed. DECISIONS.md and PROJECT.md require no further changes.
+
+
 ## 2026-10-15 — Background audio, contextual dictionary capture and track controls
 
 - Enabled the iOS background audio mode alongside the existing spoken-audio playback session so audio can continue when the screen locks. Physical-device lock-screen playback and automatic track transitions still require a device smoke test.

@@ -147,17 +147,17 @@ final class ContextualTranslationCoordinator {
     private var contextTask: Task<Void, Never>?
 
     func translateContext(for entry: DictionaryEntry, context: ModelContext,
-                          service: any ContextAnalysisServing) {
-        guard let sentence = ContextSentenceExtractor.sentence(for: entry) else {
+                          service: any ContextAnalysisServing, allowPhraseFallback: Bool = false) {
+        let savedSentence = ContextSentenceExtractor.sentence(for: entry)
+        guard let sentence = savedSentence ?? (allowPhraseFallback
+            ? ContextSentence(text: entry.text, selection: NSRange(location: 0, length: (entry.text as NSString).length))
+            : nil) else {
             status = .failed("No surrounding sentence is available for this entry.")
             return
         }
-        guard let contextText = entry.contextText,
-              let location = entry.contextSelectionLocation,
-              let length = entry.contextSelectionLength else {
-            status = .failed(ContextAnalysisError.invalidContext.userMessage)
-            return
-        }
+        let contextText = savedSentence == nil ? entry.text : (entry.contextText ?? sentence.text)
+        let location = savedSentence == nil ? 0 : (entry.contextSelectionLocation ?? 0)
+        let length = savedSentence == nil ? (entry.text as NSString).length : (entry.contextSelectionLength ?? 0)
         contextTask?.cancel()
         modelContext = context
         entry.contextAnalysisRevision += 1

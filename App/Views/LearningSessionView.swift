@@ -4,9 +4,11 @@ import SwiftUI
 struct LearningSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query private var allEntries: [DictionaryEntry]
     @Query private var sourceItems: [LearningItem]
+    @State private var contextual = ContextualTranslationCoordinator()
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var revealed = false
@@ -54,7 +56,11 @@ struct LearningSessionView: View {
         }
         .sheet(item: $editingEntry) { entry in editingView(entry) }
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
-        .onDisappear { closeAudio() }
+        .onChange(of: round?.currentPresentationID) { _, _ in contextual.cancelCurrentRequest() }
+        .onDisappear {
+            closeAudio()
+            contextual.cancelCurrentRequest()
+        }
     }
 
     private var setupView: some View {
@@ -134,6 +140,7 @@ struct LearningSessionView: View {
                         CopyButton(value: contextText, label: "Copy source context",
                                    identifier: "learn.copy-source-context")
                     }
+                    contextTranslation(for: entry)
                     HStack(spacing: 20) {
                         Button("Wrong", systemImage: "xmark.circle") {
                             answer(entry, presentationID: round.currentPresentationID, right: false)
@@ -156,6 +163,60 @@ struct LearningSessionView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private func contextTranslation(for entry: DictionaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Meaning in context").font(.headline)
+            if let explanation = entry.contextTranslationText, !explanation.isEmpty {
+                Text("Word explanations").font(.caption).foregroundStyle(.secondary)
+                Text(explanation)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("learn.context-words")
+            }
+            if let candidate = entry.contextSelectedTranslationText, !candidate.isEmpty {
+                Divider()
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Overall translation").font(.caption).foregroundStyle(.secondary)
+                        Text(candidate)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("learn.context-translation")
+                    }
+                    Spacer()
+                    if candidate != entry.translationText {
+                        Button("Use this as translation") {
+                            saveTranslation(entry, value: candidate)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("learn.use-context-translation")
+                    }
+                }
+            }
+            if contextual.status == .translatingContext {
+                HStack { ProgressView(); Text("Generating context translation…") }
+            } else {
+                if case .failed(let message) = contextual.status {
+                    Text(message).foregroundStyle(.red)
+                }
+                if entry.contextTranslationText == nil || entry.contextSelectedTranslationText == nil
+                    || contextual.status != .idle {
+                    Button("Generate context translation", systemImage: "character.book.closed") {
+                        contextual.translateContext(for: entry, context: context,
+                                                    service: contextAnalysisService,
+                                                    allowPhraseFallback: true)
+                    }
+                    .accessibilityIdentifier("learn.generate-context")
+                    if ContextSentenceExtractor.sentence(for: entry) == nil {
+                        Text("No source context is saved. The analysis will use the phrase itself.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func completionView(_ round: LearningRoundState) -> some View {
@@ -344,7 +405,11 @@ struct LearningSessionView: View {
     }
 
     private func saveTranslation(_ entry: DictionaryEntry) {
-        let value = translationDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        saveTranslation(entry, value: translationDraft)
+    }
+
+    private func saveTranslation(_ entry: DictionaryEntry, value: String) {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         let previousText = entry.translationText
         let previousOrigin = entry.translationOrigin
