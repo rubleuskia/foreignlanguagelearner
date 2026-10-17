@@ -9,14 +9,30 @@ enum TranscriptSelectionAction {
 enum TranscriptFollowLayout {
     static func targetOffsetY(lineRect: CGRect, boundsHeight: CGFloat,
                               contentHeight: CGFloat, adjustedTop: CGFloat,
-                              adjustedBottom: CGFloat) -> CGFloat? {
+                              adjustedBottom: CGFloat, anchor: CGFloat = 0.5) -> CGFloat? {
         let visibleHeight = boundsHeight - adjustedTop - adjustedBottom
         guard visibleHeight > 0, lineRect.midY.isFinite, contentHeight.isFinite else { return nil }
         let minimum = -adjustedTop
         let maximum = max(minimum, contentHeight - boundsHeight + adjustedBottom)
-        let target = lineRect.midY - adjustedTop - visibleHeight / 2
+        let target = lineRect.midY - adjustedTop - visibleHeight * anchor
         return min(max(target, minimum), maximum)
     }
+
+    static func followOffsetY(lineRect: CGRect, currentOffset: CGFloat,
+                              boundsHeight: CGFloat, contentHeight: CGFloat,
+                              adjustedTop: CGFloat, adjustedBottom: CGFloat,
+                              force: Bool) -> CGFloat? {
+        let visibleHeight = boundsHeight - adjustedTop - adjustedBottom
+        guard visibleHeight > 0 else { return nil }
+        let relativeY = lineRect.midY - currentOffset - adjustedTop
+        if !force, relativeY >= visibleHeight * 0.35, relativeY <= visibleHeight * 0.60 {
+            return nil
+        }
+        return targetOffsetY(lineRect: lineRect, boundsHeight: boundsHeight,
+                             contentHeight: contentHeight, adjustedTop: adjustedTop,
+                             adjustedBottom: adjustedBottom, anchor: 0.40)
+    }
+
 }
 
 struct TranscriptTextView: UIViewRepresentable {
@@ -54,6 +70,12 @@ struct TranscriptTextView: UIViewRepresentable {
         context.coordinator.apply(to: view)
     }
 
+    static func dismantleUIView(_ view: LayoutAwareTextView, coordinator: Coordinator) {
+        view.didLayout = nil
+        view.setContentOffset(view.contentOffset, animated: false)
+        view.delegate = nil
+    }
+
     final class LayoutAwareTextView: UITextView {
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
@@ -76,6 +98,8 @@ struct TranscriptTextView: UIViewRepresentable {
             let boundsSize: CGSize
             let adjustedInsets: UIEdgeInsets
             let contentSizeCategory: UIContentSizeCategory
+            let contentSize: CGSize
+            let lineRect: CGRect
         }
 
         var parent: TranscriptTextView
@@ -86,17 +110,32 @@ struct TranscriptTextView: UIViewRepresentable {
         private var documentRevision = 0
         private var lastFollowGeneration: Int
         private var followKey: FollowKey?
+        private var applyingFollow = false
+        private var wasFollowing: Bool
+
+        func resetFollow(in view: UITextView) {
+            if !view.isDragging && !view.isDecelerating {
+                view.setContentOffset(view.contentOffset, animated: false)
+            }
+            followKey = nil
+        }
 
         init(_ parent: TranscriptTextView) {
             self.parent = parent
             self.lastFollowGeneration = parent.followGeneration
+            self.wasFollowing = parent.following
         }
 
         func apply(to view: UITextView) {
+            if wasFollowing != parent.following {
+                resetFollow(in: view)
+                wasFollowing = parent.following
+            }
             let identity = DocumentIdentity(text: parent.document.text,
                                             ranges: parent.document.ranges,
                                             sourceIndices: parent.document.sourceIndices)
             if identity != documentIdentity {
+                resetFollow(in: view)
                 isApplyingProgrammaticUpdate = true
                 view.text = parent.document.text
                 view.selectedRange = NSRange(location: 0, length: 0)
@@ -120,7 +159,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
             guard view.selectedRange.length == 0 else { return }
             updateHighlight(in: view)
-            applyFollow(to: view)
+            view.setNeedsLayout()
         }
 
         func applyFollow(to view: UITextView) {
@@ -128,27 +167,53 @@ struct TranscriptTextView: UIViewRepresentable {
                   !view.isDragging, !view.isDecelerating,
                   let active = parent.activeSegment,
                   parent.document.ranges.indices.contains(active) else { return }
+            guard !applyingFollow,
+                  view.bounds.height > view.adjustedContentInset.top + view.adjustedContentInset.bottom
+            else { return }
+            applyingFollow = true
+            defer { applyingFollow = false }
+            guard let lineRect = Self.firstVisualLineRect(
+                for: parent.document.ranges[active], in: view
+            ) else { return }
             let key = FollowKey(documentRevision: documentRevision,
                                 activeSegment: active,
                                 followGeneration: parent.followGeneration,
                                 boundsSize: view.bounds.size,
                                 adjustedInsets: view.adjustedContentInset,
-                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory)
-            guard key != followKey,
-                  let lineRect = Self.firstVisualLineRect(
-                    for: parent.document.ranges[active], in: view
-                  ),
-                  let y = TranscriptFollowLayout.targetOffsetY(
-                    lineRect: lineRect, boundsHeight: view.bounds.height,
-                    contentHeight: view.contentSize.height,
-                    adjustedTop: view.adjustedContentInset.top,
-                    adjustedBottom: view.adjustedContentInset.bottom
-                  ) else { return }
-            view.setContentOffset(CGPoint(x: view.contentOffset.x, y: y), animated: false)
+                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory,
+                                contentSize: view.contentSize, lineRect: lineRect)
+            guard key != followKey else { return }
+            let previous = followKey
+            let geometryChanged = previous.map {
+                $0.boundsSize != key.boundsSize || $0.adjustedInsets != key.adjustedInsets
+                    || $0.contentSizeCategory != key.contentSizeCategory
+                    || $0.contentSize != key.contentSize
+                    || ($0.activeSegment == active && $0.lineRect != lineRect)
+            } ?? false
+            guard let y = TranscriptFollowLayout.followOffsetY(
+                lineRect: lineRect, currentOffset: view.contentOffset.y,
+                boundsHeight: view.bounds.height, contentHeight: view.contentSize.height,
+                adjustedTop: view.adjustedContentInset.top,
+                adjustedBottom: view.adjustedContentInset.bottom,
+                force: previous == nil || geometryChanged
+            ) else {
+                followKey = key
+                // A newer cue already in the reading zone must not be carried away
+                // by an animation still travelling toward the previous cue.
+                view.setContentOffset(view.contentOffset, animated: false)
+                return
+            }
+            // Store before scrolling: changing the offset can trigger another layout pass.
             followKey = key
+            guard abs(view.contentOffset.y - y) > 1 else { return }
+            // UIKit replaces the current scrolling destination rather than queueing moves.
+            view.setContentOffset(CGPoint(x: view.contentOffset.x, y: y),
+                                  animated: !UIAccessibility.isReduceMotionEnabled && !geometryChanged)
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            // A drag interrupts UIKit's scroll animation; preserve the user's inertia.
+            followKey = nil
             parent.following = false
         }
 
@@ -158,6 +223,7 @@ struct TranscriptTextView: UIViewRepresentable {
             let isNonempty = range.location != NSNotFound && range.length > 0
                 && NSMaxRange(range) <= (textView.text as NSString).length
             if isNonempty && !hadNonemptySelection {
+                resetFollow(in: textView)
                 hadNonemptySelection = true
                 parent.following = false
                 parent.onSelectionBegan()
