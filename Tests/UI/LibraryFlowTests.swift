@@ -51,6 +51,9 @@ final class LibraryFlowTests: XCTestCase {
         let start = app.buttons["learn.start"]
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         start.tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["learn.check"].exists)
+        app.buttons["learn.preview-learn"].tap()
 
         XCTAssertTrue(app.staticTexts["learn.translation"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["learn.original"].exists,
@@ -80,6 +83,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
         app.buttons["learn.start"].tap()
+        app.buttons["learn.preview-learn"].tap()
         XCTAssertFalse(app.staticTexts["learn.context-translation"].exists)
         XCTAssertFalse(app.buttons["learn.use-context-translation"].exists)
         app.buttons["learn.check"].tap()
@@ -94,6 +98,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["Close"].tap()
         app.buttons["dictionary.learn"].tap()
         app.buttons["learn.start"].tap()
+        app.buttons["learn.preview-learn"].tap()
         XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
     }
 
@@ -120,6 +125,28 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No learnt phrases yet"].exists)
         app.swipeDown()
         XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label, "0")
+    }
+
+    @MainActor
+    func testPreviewLevelActionsSaveAndSkipLearning() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        for (action, level, count) in [("learn.preview-next-level", 2, "1"), ("learn.preview-known", 4, "2")] {
+            app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+            app.launch()
+            app.buttons["Dictionary"].tap()
+            app.buttons["dictionary.learn"].tap()
+            app.buttons["learn.start"].tap()
+            XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["learn.right"].exists)
+            XCTAssertFalse(app.buttons["learn.check"].exists)
+            app.buttons[action].tap()
+            XCTAssertTrue(app.staticTexts["Preview complete"].waitForExistence(timeout: 5))
+            app.buttons["Close"].tap()
+            XCTAssertEqual(app.staticTexts["dictionary.stats.level.\(level)"].label, count)
+            XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "0")
+            app.terminate()
+        }
     }
 
 }

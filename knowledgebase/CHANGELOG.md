@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-17 — Pre-learning card preview
+
+- Start round now begins with a revealed preview of every selected phrase, including its translation, audio, source context and contextual meaning. The three bottom actions remain visible while scrolling.
+- Start learning keeps a phrase at its current level and queues it for the usual Check/Right/Wrong practice after the preview. Move to next level raises its level once and skips practice this round; Mark as known sets level 4 and skips practice. Each action advances to the next preview card.
+- Level changes save before advancing, reject stale/double taps and retain the current card on failure. Missing or ineligible records are skipped. If no phrases are queued, the preview finishes directly; Repeat starts a new preview.
+- Updated the learning-round product decision and project workflow overview. Project purpose and major boundaries are unchanged.
+
+
 ## 2026-10-17 — Compact copy controls and dictionary spacing
 
 - All copy buttons now show only an icon, with a temporary checkmark after copying, while retaining descriptive accessibility labels and the copy announcement.
