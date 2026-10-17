@@ -278,7 +278,18 @@ struct DictionaryEntryDetailView: View {
                                    identifier: "dictionary.copy-source-context")
                     }
                 }
-                Section("Progress") { LabeledContent("Level") { LearningLevelBadge(level: entry.learningLevel) } }
+                Section("Progress") {
+                    Picker("Level", selection: Binding(
+                        get: { entry.learningLevel },
+                        set: { saveLevel($0) }
+                    )) {
+                        ForEach(1...4, id: \.self) { level in
+                            Text("\(level) · \(LearningLevel.title(level))").tag(level)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("dictionary.level-picker")
+                }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Your interpretation") {
                         TextField("Preferred meaning", text: $senseDraft)
@@ -435,6 +446,17 @@ struct DictionaryEntryDetailView: View {
         entry.translationUpdatedAt = .now
         entry.translationStatus = .ready
         do { try context.save() } catch { context.rollback(); errorMessage = error.localizedDescription }
+    }
+
+    private func saveLevel(_ level: Int) {
+        guard (1...4).contains(level), level != entry.learningLevel else { return }
+        let previousLevel = entry.learningLevel
+        entry.learningLevel = level
+        do { try context.save() }
+        catch {
+            entry.learningLevel = previousLevel
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func saveInterpretation() {

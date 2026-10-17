@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-17 — Manual dictionary level selection
+
+- Dictionary detail now lets learners select any level from 1 to 4 in Progress. Changes save immediately and update dictionary counts, learnt grouping and practice eligibility. Failed saves restore the previous level and show an error.
+- Recorded the manual level override in DECISIONS.md. Project purpose, supported workflow and major boundaries are unchanged; PROJECT.md requires no further update.
+
+
 ## 2026-10-17 — Pre-learning card preview
 
 - Start round now begins with a revealed preview of every selected phrase, including its translation, audio, source context and contextual meaning. The three bottom actions remain visible while scrolling.
