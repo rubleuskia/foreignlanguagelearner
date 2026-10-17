@@ -80,13 +80,20 @@ struct LearningSessionView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Button("Start round", systemImage: "play.fill") { startRound() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(eligibleEntries.isEmpty)
-                    .accessibilityIdentifier("learn.start")
+                Button(action: startRound) {
+                    Label("Start round", systemImage: "play.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .disabled(eligibleEntries.isEmpty)
+                .accessibilityIdentifier("learn.start")
+            } footer: {
                 if eligibleEntries.isEmpty {
                     Text("Add or translate more dictionary entries to start practising.")
-                        .foregroundStyle(.secondary)
                 }
             }
         }

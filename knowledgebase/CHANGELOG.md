@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-17 — Training start button layout
+
+- Made Start round a full-width, large button without the surrounding Form row background or inset, and moved the empty-state hint to the section footer.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
 ## 2026-10-17 — Contextual translations in training
 
 - After Check, training cards show saved contextual word explanations and a separate overall phrase translation. Use this as translation replaces the saved phrase translation only on explicit selection.
