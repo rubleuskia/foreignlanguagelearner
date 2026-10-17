@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-17 — Compact copy controls and dictionary spacing
+
+- All copy buttons now show only an icon, with a temporary checkmark after copying, while retaining descriptive accessibility labels and the copy announcement.
+- Moved Copy original beside Play phrase on the source row and removed the speed control from dictionary detail.
+- Grouped contextual word explanations and overall translation into one compact Form row so the divider no longer creates an empty full-height row; trimmed display-only surrounding whitespace.
+- Updated the dictionary-detail product decision; project purpose, workflows and major boundaries are unchanged, so PROJECT.md requires no further update.
+
+
 ## 2026-10-17 — Complete dictionary metadata backups
 
 - Dictionary JSON v2 now includes contextual breakdown and phrase translation, notes and preferred meaning, legacy word-help/cached definitions, timestamps, translation origin/status, and exact source/track/cue/audio links. Export always includes source context in the UI and checks its own output against importer validation.

@@ -9,24 +9,22 @@ struct CopyButton: View {
     @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                copy()
-            } label: {
-                Label(label, systemImage: "doc.on.doc")
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .accessibilityLabel(label)
-            .accessibilityIdentifier(identifier)
-            if confirmationToken != nil {
-                Text("Copied")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Copied")
-                    .transition(.opacity)
-            }
+        Button {
+            copy()
+        } label: {
+            Label(label, systemImage: confirmationToken == nil ? "doc.on.doc" : "checkmark")
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
         }
-        .onDisappear { resetTask?.cancel() }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(label)
+        .accessibilityValue(confirmationToken == nil ? "" : "Copied")
+        .accessibilityIdentifier(identifier)
+        .help(label)
+        .onDisappear {
+            resetTask?.cancel()
+            confirmationToken = nil
+        }
     }
 
     private func copy() {

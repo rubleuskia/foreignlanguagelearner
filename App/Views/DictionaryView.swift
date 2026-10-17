@@ -190,6 +190,7 @@ struct DictionaryEntryDetailView: View {
                     HStack(alignment: .top, spacing: 12) {
                         Text(entry.text)
                             .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityIdentifier("dictionary.original")
                         if let source = audioSource {
@@ -202,11 +203,10 @@ struct DictionaryEntryDetailView: View {
                             }
                             .buttonStyle(.borderless)
                             .accessibilityIdentifier("dictionary.play-audio")
-                            PlaybackRateMenu(playback: playback)
                         }
+                        CopyButton(value: entry.text, label: "Copy original",
+                                   identifier: "dictionary.copy-original")
                     }
-                    CopyButton(value: entry.text, label: "Copy original",
-                               identifier: "dictionary.copy-original")
                     if let source = audioSource {
                         Text("\(formatTime(source.identity.range.lowerBound))–\(formatTime(source.identity.range.upperBound)) · \(source.itemTitle)")
                             .font(.caption).foregroundStyle(.secondary)
@@ -229,21 +229,32 @@ struct DictionaryEntryDetailView: View {
                 }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
-                        if let explanation = entry.contextTranslationText, !explanation.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Word explanations").font(.caption).foregroundStyle(.secondary)
-                                Text(explanation).textSelection(.enabled)
-                                    .accessibilityIdentifier("dictionary.context-words")
-                            }
-                            if entry.contextSelectedTranslationText != nil { Divider() }
-                        }
-                        if let candidate = entry.contextSelectedTranslationText {
-                            LabeledContent("Overall translation", value: candidate)
-                                .accessibilityIdentifier("dictionary.context-overall")
-                            if candidate != entry.translationText {
-                                Button("Use as Saved Translation", systemImage: "checkmark.circle") {
-                                    useContextTranslation(candidate)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let explanation = entry.contextTranslationText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                               !explanation.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Word explanations").font(.caption).foregroundStyle(.secondary)
+                                    Text(explanation)
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .accessibilityIdentifier("dictionary.context-words")
                                 }
+                                if entry.contextSelectedTranslationText != nil { Divider() }
+                            }
+                            if let candidate = entry.contextSelectedTranslationText {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Overall translation").font(.caption).foregroundStyle(.secondary)
+                                    Text(candidate.trimmingCharacters(in: .whitespacesAndNewlines))
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .accessibilityIdentifier("dictionary.context-overall")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let candidate = entry.contextSelectedTranslationText, candidate != entry.translationText {
+                            Button("Use as Saved Translation", systemImage: "checkmark.circle") {
+                                useContextTranslation(candidate)
                             }
                         }
                         contextProgress
