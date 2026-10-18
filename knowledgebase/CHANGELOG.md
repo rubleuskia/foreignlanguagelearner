@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-18 — Compact translation copy and animated swipe answers
+
+- Russian translation and Copy now share one dictionary-detail row; long translations wrap without adding a separate copy row.
+- After Check, swipe left for Right (green) and right for Wrong (red). The card follows horizontal dragging and exits in that direction before saving the answer; short or vertical gestures return without answering. Reduce Motion uses color and reduced movement. Undo remains available after the answer saves.
+- Updated DECISIONS.md for the reversed swipe mapping. Project purpose, supported workflows and boundaries are unchanged; PROJECT.md requires no update.
+
 ## 2026-10-18 — Repository contribution workflow and archived review
 
 - Require new chats to begin from fetched main on a dedicated branch, using a separate worktree when another agent owns the checkout and preserving existing changes.

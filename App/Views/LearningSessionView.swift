@@ -133,7 +133,7 @@ struct LearningSessionView: View {
                 if let level = roundPool.first?.learningLevel {
                     LabeledContent("Current level", value: "\(level)")
                 }
-                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level, mark it as known or skip it without changes. During learning, wrong answers return to the end until answered correctly. After Check, swipe right for Right or left for Wrong. Undo is available for 3 seconds.")
+                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level, mark it as known or skip it without changes. During learning, wrong answers return to the end until answered correctly. After Check, swipe left for Right or right for Wrong. Undo is available for 3 seconds.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -244,16 +244,10 @@ struct LearningSessionView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 30)
-                .onEnded { gesture in
-                    guard preview == nil, revealed, let round,
-                          abs(gesture.translation.width) >= 80,
-                          abs(gesture.translation.width) > abs(gesture.translation.height) * 1.5 else { return }
-                    answer(entry, presentationID: round.currentPresentationID,
-                           right: gesture.translation.width > 0)
-                }
-        )
+        .modifier(LearningSwipeModifier(enabled: preview == nil && revealed && round != nil) { right in
+            guard let round else { return }
+            answer(entry, presentationID: round.currentPresentationID, right: right)
+        })
         .id(preview?.currentPresentationID ?? round?.currentPresentationID)
         .safeAreaInset(edge: .bottom) {
             if let preview, revealed || entry.learningLevel == 1 {
