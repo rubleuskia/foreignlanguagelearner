@@ -260,10 +260,13 @@ struct DictionaryEntryDetailView: View {
                                !explanation.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Word explanations").font(.caption).foregroundStyle(.secondary)
-                                    Text(explanation)
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
                                         .accessibilityIdentifier("dictionary.context-words")
+                                    ContextWordExplanationView(explanation: explanation, selectedText: entry.text,
+                                        context: entry.contextText.flatMap { text in
+                                            guard let location = entry.contextSelectionLocation,
+                                                  let length = entry.contextSelectionLength else { return nil }
+                                            return SelectionContext(text: text, selection: NSRange(location: location, length: length))
+                                        }, sourceLanguage: entry.sourceLanguageCode, targetLanguage: entry.targetLanguageCode)
                                 }
                                 if entry.contextSelectedTranslationText != nil { Divider() }
                             }

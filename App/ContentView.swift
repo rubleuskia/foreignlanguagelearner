@@ -114,7 +114,7 @@ struct ContentView: View {
         let practice = DictionaryEntry(
             text: "dzień dobry", item: item, segmentIndex: 0,
             context: SelectionContext(text: "Powiedział dzień dobry.",
-                                      selection: NSRange(location: 10, length: 11)),
+                                      selection: NSRange(location: 11, length: 11)),
             audioStart: 1, audioEnd: 2
         )
         practice.translationText = "добрый день"

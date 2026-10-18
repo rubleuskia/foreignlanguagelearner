@@ -60,7 +60,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["learn.original"].exists,
                        "The original must stay hidden before Check")
         XCTAssertFalse(app.buttons["learn.generate-context"].exists)
-        XCTAssertFalse(app.staticTexts["learn.context-words"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["learn.context-words"].firstMatch.exists)
         app.buttons["learn.check"].tap()
         XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Audio unavailable on this device"].exists)
@@ -89,7 +89,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["learn.context-translation"].exists)
         XCTAssertFalse(app.buttons["learn.use-context-translation"].exists)
         app.buttons["learn.check"].tap()
-        XCTAssertTrue(app.staticTexts["learn.context-words"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["learn.context-words"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["learn.context-translation"].label, "здравствуйте")
         let useTranslation = app.buttons["learn.use-context-translation"]
         app.swipeUp()

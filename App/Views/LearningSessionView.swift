@@ -248,9 +248,13 @@ struct LearningSessionView: View {
             Text("Meaning in context").font(.headline)
             if let explanation = entry.contextTranslationText, !explanation.isEmpty {
                 Text("Word explanations").font(.caption).foregroundStyle(.secondary)
-                Text(explanation)
-                    .textSelection(.enabled)
                     .accessibilityIdentifier("learn.context-words")
+                ContextWordExplanationView(explanation: explanation, selectedText: entry.text,
+                    context: entry.contextText.flatMap { text in
+                        guard let location = entry.contextSelectionLocation,
+                              let length = entry.contextSelectionLength else { return nil }
+                        return SelectionContext(text: text, selection: NSRange(location: location, length: length))
+                    }, sourceLanguage: entry.sourceLanguageCode, targetLanguage: entry.targetLanguageCode)
             }
             if let candidate = entry.contextSelectedTranslationText, !candidate.isEmpty {
                 Divider()
