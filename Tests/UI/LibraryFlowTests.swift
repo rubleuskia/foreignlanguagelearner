@@ -75,6 +75,34 @@ final class LibraryFlowTests: XCTestCase {
                        "The global list includes entries learned before this round")
     }
     @MainActor
+    func testLearningSwipesAndUndo() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.learn"].tap()
+        app.buttons["learn.start"].tap()
+        app.buttons["learn.preview-learn"].tap()
+        let translation = app.staticTexts["learn.translation"]
+        translation.swipeRight()
+        XCTAssertTrue(app.buttons["learn.check"].exists)
+        XCTAssertFalse(app.buttons["learn.undo"].exists)
+        app.buttons["learn.check"].tap()
+        translation.swipeLeft()
+        app.buttons["learn.undo"].tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].exists)
+        XCTAssertTrue(app.staticTexts["Wrong attempts: 0"].exists)
+        translation.swipeRight()
+        app.buttons["learn.undo"].tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].exists)
+        XCTAssertFalse(app.staticTexts["Round complete"].exists)
+        translation.swipeRight()
+        XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["learn.undo"].waitForNonExistence(timeout: 4))
+    }
+
+    @MainActor
     func testLearningContextTranslationReplacesSavedTranslation() {
         continueAfterFailure = false
         let app = XCUIApplication()

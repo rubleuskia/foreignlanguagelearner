@@ -13,6 +13,7 @@ struct LearningSessionView: View {
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
     @State private var revealed = false
+    @State private var pendingUndo: LearningAnswerUndo?
     @State private var errorMessage: String?
     @State private var editingEntry: DictionaryEntry?
     @State private var detailEntry: DictionaryEntry?
@@ -21,6 +22,7 @@ struct LearningSessionView: View {
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
 
     private var eligibleEntries: [DictionaryEntry] { allEntries.filter(\.isLearningEligible) }
+    private var roundPool: [DictionaryEntry] { LearningRoundPool.entries(from: allEntries) }
     private var current: DictionaryEntry? {
         guard let id = previewRound?.currentID ?? round?.currentID else { return nil }
         return allEntries.first { $0.id == id }
@@ -51,6 +53,22 @@ struct LearningSessionView: View {
                     setupView
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if let pendingUndo {
+                    Button("Undo", systemImage: "arrow.uturn.backward", action: undoAnswer)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("learn.undo")
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(.bar)
+                        .task(id: pendingUndo.id) {
+                            do {
+                                try await Task.sleep(for: .seconds(max(0, pendingUndo.expiresAt.timeIntervalSinceNow)))
+                                if self.pendingUndo?.id == pendingUndo.id { self.pendingUndo = nil }
+                            } catch { }
+                        }
+                }
+            }
             .navigationTitle(previewRound == nil ? "Learn" : "Preview")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -67,6 +85,7 @@ struct LearningSessionView: View {
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
         .onChange(of: previewRound?.currentPresentationID ?? round?.currentPresentationID) { _, _ in contextual.cancelCurrentRequest() }
         .onDisappear {
+            pendingUndo = nil
             closeAudio()
             contextual.cancelCurrentRequest()
         }
@@ -84,8 +103,11 @@ struct LearningSessionView: View {
             }
             Section("Available") {
                 LabeledContent("Eligible phrases", value: "\(eligibleEntries.count)")
-                LabeledContent("This round", value: "\(selection.count(available: eligibleEntries.count))")
-                Text("Preview each phrase first and choose whether to learn it, advance its level or mark it as known. During learning, wrong answers return to the end until answered correctly.")
+                LabeledContent("This round", value: "\(selection.count(available: roundPool.count))")
+                if let level = roundPool.first?.learningLevel {
+                    LabeledContent("Current level", value: "\(level)")
+                }
+                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level or mark it as known. During learning, wrong answers return to the end until answered correctly. After Check, swipe right for Right or left for Wrong. Undo is available for 3 seconds.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -192,6 +214,16 @@ struct LearningSessionView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { gesture in
+                    guard preview == nil, revealed, let round,
+                          abs(gesture.translation.width) >= 80,
+                          abs(gesture.translation.width) > abs(gesture.translation.height) * 1.5 else { return }
+                    answer(entry, presentationID: round.currentPresentationID,
+                           right: gesture.translation.width > 0)
+                }
+        )
         .id(preview?.currentPresentationID ?? round?.currentPresentationID)
         .safeAreaInset(edge: .bottom) {
             if let preview {
@@ -294,6 +326,7 @@ struct LearningSessionView: View {
                         .disabled(eligibleEntries.isEmpty)
                     Button("Change round size") {
                         closeAudio()
+                        pendingUndo = nil
                         self.round = nil
                         revealed = false
                     }
@@ -385,8 +418,8 @@ struct LearningSessionView: View {
 
     private func startRound() {
         closeAudio()
-        var seen = Set<UUID>()
-        let snapshot = eligibleEntries.map(\.id).filter { seen.insert($0).inserted }.shuffled()
+        pendingUndo = nil
+        let snapshot = roundPool.map(\.id).shuffled()
         let count = selection.count(available: snapshot.count)
         round = nil
         updatePreview(LearningPreviewState(selection: selection,
@@ -431,6 +464,8 @@ struct LearningSessionView: View {
             skipCurrent(id: entry.id, presentationID: presentationID)
             return
         }
+        let previousRound = updatedRound
+        let previousLevel = entry.learningLevel
         do {
             let accepted = try LearningAnswerTransaction.apply(
                 entry: entry, round: &updatedRound,
@@ -438,6 +473,9 @@ struct LearningSessionView: View {
                 right: right, save: { try context.save() }
             )
             guard accepted else { return }
+            pendingUndo = LearningAnswerUndo(entryID: entry.id, previousLevel: previousLevel,
+                savedLevel: entry.learningLevel, previousRound: previousRound,
+                answeredRound: updatedRound, expiresAt: .now.addingTimeInterval(3))
             round = updatedRound
             revealed = false
         } catch {
@@ -445,10 +483,31 @@ struct LearningSessionView: View {
         }
     }
 
+    private func undoAnswer() {
+        guard let undo = pendingUndo, var restored = round,
+              let entry = allEntries.first(where: { $0.id == undo.entryID }) else {
+            pendingUndo = nil
+            return
+        }
+        do {
+            guard try undo.restore(entry: entry, round: &restored,
+                                   save: { try context.save() }) else {
+                pendingUndo = nil
+                return
+            }
+            closeAudio()
+            contextual.cancelCurrentRequest()
+            round = restored
+            revealed = true
+            pendingUndo = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     private func skipCurrent(id: UUID, presentationID: UUID) {
         guard var updated = round else { return }
         closeAudio()
         guard updated.skip(entryID: id, presentationID: presentationID) else { return }
+        pendingUndo = nil
         round = updated
         revealed = false
     }

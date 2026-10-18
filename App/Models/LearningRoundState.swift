@@ -79,6 +79,10 @@ struct LearningRoundState: Equatable, Sendable {
         return true
     }
 
+    mutating func renewPresentation() {
+        currentPresentationID = UUID()
+    }
+
     var hasValidPartition: Bool {
         let selected = Set(selectedIDs)
         let pending = Set(pendingIDs)
@@ -187,6 +191,44 @@ enum LearningPreviewTransaction {
                                    learn: action == .startLearning)
         } catch {
             entry.learningLevel = oldLevel
+            throw error
+        }
+    }
+}
+
+/// Higher levels cannot enter a round while an eligible lower-level phrase remains.
+enum LearningRoundPool {
+    @MainActor
+    static func entries(from entries: [DictionaryEntry]) -> [DictionaryEntry] {
+        let eligible = entries.filter(\.isLearningEligible)
+        guard let level = eligible.map(\.learningLevel).min() else { return [] }
+        var seen = Set<UUID>()
+        return eligible.filter { $0.learningLevel == level && seen.insert($0.id).inserted }
+    }
+}
+
+struct LearningAnswerUndo {
+    let id = UUID()
+    let entryID: UUID
+    let previousLevel: Int
+    let savedLevel: Int
+    let previousRound: LearningRoundState
+    let answeredRound: LearningRoundState
+    let expiresAt: Date
+
+    @MainActor
+    func restore(entry: DictionaryEntry, round: inout LearningRoundState,
+                 now: Date = .now, save: () throws -> Void) throws -> Bool {
+        guard now < expiresAt, entry.id == entryID,
+              entry.learningLevel == savedLevel, round == answeredRound else { return false }
+        entry.learningLevel = previousLevel
+        do {
+            try save()
+            round = previousRound
+            round.renewPresentation()
+            return true
+        } catch {
+            entry.learningLevel = savedLevel
             throw error
         }
     }

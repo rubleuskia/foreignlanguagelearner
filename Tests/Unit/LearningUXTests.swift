@@ -12,6 +12,84 @@ private struct NeverCompletingContextAnalysisService: ContextAnalysisServing {
 }
 
 final class LearningUXTests: XCTestCase {
+    @MainActor
+    private func trainingEntry(level: Int) -> DictionaryEntry {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 0)
+        entry.translationText = "замок"
+        entry.translationStatus = .ready
+        entry.learningLevel = level
+        return entry
+    }
+
+    @MainActor
+    func testPoolExhaustsLowestLevelBeforeIncludingHigherLevels() {
+        let first = trainingEntry(level: 1), second = trainingEntry(level: 1)
+        let higher = trainingEntry(level: 2), highest = trainingEntry(level: 3)
+        let known = trainingEntry(level: 4), untranslated = trainingEntry(level: 1)
+        untranslated.translationText = nil
+        let entries = [highest, first, higher, second, known, untranslated, first]
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id])
+        first.learningLevel = 2
+        XCTAssertEqual(LearningRoundPool.entries(from: entries).map(\.id), [second.id])
+        second.learningLevel = 2
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id])
+        first.learningLevel = 3
+        second.learningLevel = 3
+        higher.learningLevel = 3
+        XCTAssertEqual(LearningRoundPool.entries(from: entries).count, 4)
+        XCTAssertTrue(LearningRoundPool.entries(from: [known, untranslated]).isEmpty)
+    }
+
+    @MainActor
+    func testUndoRestoresRightAndWrongIncludingRoundCompletion() throws {
+        for right in [true, false] {
+            let entry = trainingEntry(level: 3)
+            let before = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+            var round = before
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: before.currentPresentationID,
+                right: right, save: {}))
+            let now = Date()
+            let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 3,
+                savedLevel: entry.learningLevel, previousRound: before, answeredRound: round,
+                expiresAt: now.addingTimeInterval(3))
+            XCTAssertTrue(try undo.restore(entry: entry, round: &round, now: now, save: {}))
+            XCTAssertEqual(entry.learningLevel, 3)
+            XCTAssertEqual(round.pendingIDs, before.pendingIDs)
+            XCTAssertEqual(round.completedIDs, [])
+            XCTAssertEqual(round.wrongAttemptCount, 0)
+            XCTAssertFalse(round.isComplete)
+            XCTAssertTrue(round.hasValidPartition)
+            XCTAssertNotEqual(round.currentPresentationID, before.currentPresentationID)
+            XCTAssertFalse(try undo.restore(entry: entry, round: &round, now: now, save: {}))
+        }
+    }
+
+    @MainActor
+    func testUndoExpiryAndSaveFailurePreserveAnsweredState() throws {
+        enum Expected: Error { case failure }
+        let entry = trainingEntry(level: 1)
+        let before = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        var round = before
+        _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: before.currentPresentationID,
+            right: true, save: {})
+        let answered = round, now = Date()
+        let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 1, savedLevel: 2,
+            previousRound: before, answeredRound: round, expiresAt: now.addingTimeInterval(3))
+        XCTAssertThrowsError(try undo.restore(entry: entry, round: &round, now: now,
+                                             save: { throw Expected.failure }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(round, answered)
+        XCTAssertFalse(try undo.restore(entry: entry, round: &round, now: now.addingTimeInterval(3),
+                                       save: { XCTFail("Expired undo must not save") }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(round, answered)
+    }
+
     func testRoundSelectionCountsForZeroThreeAndTwentyFiveAvailable() {
         XCTAssertEqual(LearningRoundSelection.five.count(available: 0), 0)
         XCTAssertEqual(LearningRoundSelection.five.count(available: 3), 3)

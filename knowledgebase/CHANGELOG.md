@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-18 — Level-ordered practice and swipe answers
+
+- Rounds now select only the lowest eligible level, capped by the chosen size; higher levels wait until no eligible lower-level phrases remain. Setup shows the current level and actual round size.
+- Revealed practice cards accept right/left swipes for Right/Wrong while preserving vertical scrolling and the answer buttons.
+- A three-second Undo restores the last answered card, its level and round counters, including from completion. Save failures retain the answered state; a new answer replaces the previous undo.
+- Updated DECISIONS.md and PROJECT.md for the training workflow; project purpose and major boundaries are unchanged.
+
 ## 2026-10-18 — PR integration with main
 
 - Integrated the smoother transcript-following changes from main with dictionary training and phrase-audio improvements, retaining both sets of changelog entries.
