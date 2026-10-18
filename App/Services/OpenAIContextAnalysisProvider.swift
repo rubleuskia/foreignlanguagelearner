@@ -196,7 +196,7 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
         )
     }
 
-    private static func mapHTTPError(statusCode: Int, data: Data) -> ContextAnalysisError {
+    static func mapHTTPError(statusCode: Int, data: Data) -> ContextAnalysisError {
         let payload = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data)
         if let code = payload?.error.code {
             if code == "context_length_exceeded" { return .inputTooLarge }
@@ -327,7 +327,7 @@ private struct OpenAIRequest: Encodable {
     struct StringProperty: Encodable { let type = "string" }
 }
 
-private struct OpenAIResponse: Decodable {
+struct OpenAIResponse: Decodable {
     struct OutputItem: Decodable { let content: [Content]? }
     struct Content: Decodable {
         let type: String
@@ -340,7 +340,7 @@ private struct OpenAIResponse: Decodable {
     let error: OpenAIError?
 }
 
-private struct OpenAIError: Decodable { let code: String? }
+struct OpenAIError: Decodable { let code: String? }
 private struct OpenAIErrorEnvelope: Decodable { let error: OpenAIError }
 
 private struct StructuredOutput: Decodable {

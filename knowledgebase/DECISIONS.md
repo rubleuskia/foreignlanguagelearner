@@ -135,11 +135,11 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 
 Start round first restricts eligibility to the lowest available learning level (1 before 2 before 3). It shuffles only within that level and caps the selection at the requested round size, never filling spare slots with higher levels. Each new round reevaluates the pool; higher levels unlock only when no eligible lower-level entries remain.
 
-Start round snapshots a unique eligible ID set for a revealed preliminary review. Each card offers Start learning (queue at its current level), Move to next level (save one level increase and exclude from this practice round), or Mark as known (save level 4 and exclude). Each choice advances the preview, with persistent changes committed before advancement. Stale presentation IDs are rejected and failed saves keep the card and its previous level. Missing/ineligible cards are skipped. The normal practice round starts only after the complete preview, using the IDs explicitly queued for learning; an empty queue finishes the preview directly. Repeat starts a fresh preview.
+Start round snapshots a unique eligible ID set for a level-aware preliminary review (level 1 reveals immediately; levels 2–3 require Check). Each card offers Start learning (queue at its current level), Move to next level (save one level increase and exclude from this practice round), Mark as known (save level 4 and exclude), or Skip (exclude from this round without changing or saving the entry). Each choice advances the preview, with persistent changes committed before advancement. Stale presentation IDs are rejected and failed saves keep the card and its previous level. Missing/ineligible cards are skipped. The normal practice round starts only after the complete preview, using the IDs explicitly queued for learning; an empty queue finishes the preview directly. Repeat starts a fresh preview.
 
 A practice round keeps its queued ID set and original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
 
-After revealing the answer, horizontal swipes right/left invoke the same saved Right/Wrong action as the buttons. The most recent answer can be undone for three seconds, including on completion: its saved level, queue and counters are restored and the previous card is revealed with a fresh presentation identity. Undo is invalidated by another answer, skipping, starting a new round or leaving training. Failed undo saves preserve the answered state.
+After revealing the answer, horizontal swipes right/left invoke the same saved Right/Wrong action as the buttons. The most recent answer can be undone for three seconds, including on completion: its saved level, queue and counters are restored and the previous card is revealed with a fresh presentation identity. Undo is invalidated by another answer, skipping, starting a new round or leaving training. Failed undo saves preserve the answered state. Successful undo also rewrites the unfinished-round checkpoint to prevent resuming an undone answer.
 
 Round statistics describe attempts and completion inside that round. The completion screen separately queries every stored level-4 Russian entry with a ready, nonempty translation, so it includes phrases learned before the current round.
 
@@ -167,3 +167,20 @@ Playback seeks use generation tokens and completion callbacks. Periodic time obs
 ## Exportable lookup diagnostics
 
 Polish Definition failures are recorded both through Apple's unified `Logger` and in an app-local, file-protected JSON log capped at 200 newest events. Dictionary export embeds a snapshot of these events plus app/OS versions in an optional `diagnostics` field, preserving version-1 import compatibility and requiring an explicit user export before diagnostic data leaves the device. Logs contain the looked-up word and technical error details, but not source sentence context or media content.
+
+
+## Resumable training rounds
+
+Only level 1 preview cards reveal their answer immediately; levels 2–3 require Check before the preview actions. The translation remains the recall prompt, matching practice mode.
+
+A versioned local UserDefaults checkpoint stores the fixed round IDs, retry order, completed/skipped IDs, counts and presentation token after a successfully saved Right/Wrong answer. Preview-only sessions are not resumed. Completion clears the checkpoint; starting a new round replaces it without reverting earned levels. Restored missing/ineligible entries follow the existing skip path. Word-level changes remain immediate SwiftData saves, independent of closing or completing the round. Training cannot be dismissed by swipe, and Close requires confirmation for an unfinished round with answers. Dictionary and training setup offer continuation across reopening the app.
+
+Progress rows select a level filter, including level 4, in the word list below. Reset restores the separate in-progress and learnt sections.
+
+## Inline word explanations
+
+Detailed word explanations are a second, explicitly requested level of Meaning in context, shared by the selection preview, dictionary card and revealed learning card. Expanding a word opens content in place, not a new screen. Only one row expands at a time; cancellation and failures never replace the concise translation. The dedicated structured response contains a simple definition, contextual meaning, and one or two illustrative phrases with translations. It uses the existing cloud opt-in, Keychain credential and model selection, with a separate fixed prompt rather than the configurable concise-translation prompt.
+
+The existing persisted `source — lemma — meaning` breakdown is decoded only when every line can be matched in order to the exact selected source tokens. Occurrence-specific UTF-16 ranges disambiguate repeated words. Unsupported legacy output is displayed unchanged; no guessed word lookup is issued. A missing surrounding context can use the selected phrase, matching the existing learning fallback.
+
+Successful details are derived data in a bounded 200-record Caches file, keyed by a hash of the word, lemma, exact context/range, languages, model and detailed-prompt version. The cache survives normal relaunches and works offline when present, but may be purged and is excluded from portable dictionary backups. No SwiftData migration or stored-translation overwrite is needed. Cancelled and invalid responses are not cached.

@@ -5,7 +5,24 @@
 - Rounds now select only the lowest eligible level, capped by the chosen size; higher levels wait until no eligible lower-level phrases remain. Setup shows the current level and actual round size.
 - Revealed practice cards accept right/left swipes for Right/Wrong while preserving vertical scrolling and the answer buttons.
 - A three-second Undo restores the last answered card, its level and round counters, including from completion. Save failures retain the answered state; a new answer replaces the previous undo.
+- Preview now offers Skip to exclude a word from the current round without changing its level or dictionary record. Integrated current main, including resumable training and inline word explanations; Undo updates the resume checkpoint.
 - Updated DECISIONS.md and PROJECT.md for the training workflow; project purpose and major boundaries are unchanged.
+
+## 2026-10-18 — Inline detailed word explanations
+
+- Tap a word in the contextual breakdown to expand a plain-language definition, its meaning in the source sentence, and 1–2 typical source-language phrases with translations. One word is expanded at a time in selection previews, dictionary details and learning cards.
+- Details load only on explicit expansion, with local loading/retry states; the short translation stays available. Successful explanations are cached across launches for the exact word occurrence, context, languages, model and prompt version. Cache data is purgeable and is not included in dictionary backups.
+- Existing serialized breakdowns are mapped conservatively to source occurrences, including repeated words and UTF-16 offsets. Unsupported legacy text stays readable and can be refreshed through the existing contextual translation action.
+- DECISIONS.md records the on-demand request and derived-cache design; PROJECT.md includes the new workflow. Project purpose and cloud-consent boundaries are unchanged.
+
+
+## 2026-10-18 — Resumable word training and level filters
+
+- Preview reveals the answer immediately only for level 1; levels 2–3 require Check before the three preview actions appear.
+- Unfinished rounds are checkpointed after the first Right/Wrong and offered again in the dictionary and learning setup. Closing requires confirmation after answers; swipe dismissal is disabled. Each answer still saves its word level immediately.
+- Learning progress rows filter the word list by level, with a reset action and empty state; level 4 shows learnt words in the filtered list.
+- Training card copy/edit and copy/audio controls share horizontal rows.
+- Updated DECISIONS.md and PROJECT.md for the resumable learning workflow.
 
 ## 2026-10-18 — PR integration with main
 

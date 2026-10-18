@@ -12,6 +12,8 @@ struct LearningSessionView: View {
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
+    @State private var savedRound = LearningRoundCheckpoint.load()
+    @State private var confirmingClose = false
     @State private var revealed = false
     @State private var pendingUndo: LearningAnswerUndo?
     @State private var errorMessage: String?
@@ -73,13 +75,23 @@ struct LearningSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { closeAndDismiss() }
+                    Button("Close") {
+                        if round?.canResume == true { confirmingClose = true }
+                        else { closeAndDismiss() }
+                    }
                 }
             }
             .alert("Could not save progress", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+        }
+        .interactiveDismissDisabled()
+        .alert("Close training?", isPresented: $confirmingClose) {
+            Button("Save and close") { closeAndDismiss() }
+            Button("Keep learning", role: .cancel) {}
+        } message: {
+            Text("Your answers and word levels are saved. You can continue this round later.")
         }
         .sheet(item: $editingEntry) { entry in editingView(entry) }
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
@@ -93,6 +105,20 @@ struct LearningSessionView: View {
 
     private var setupView: some View {
         Form {
+            if let savedRound {
+                Section("Unfinished round") {
+                    Text("Completed \(savedRound.rightAttemptCount) of \(savedRound.totalSelectedCount)")
+                    Button("Continue learning") {
+                        selection = savedRound.selection
+                        round = savedRound
+                        self.savedRound = nil
+                        revealed = false
+                    }
+                    .accessibilityIdentifier("learn.resume")
+                    Text("Starting a new round replaces the saved round. Previously earned levels are kept.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Round size") {
                 Picker("Phrases", selection: $selection) {
                     ForEach(LearningRoundSelection.allCases) { option in
@@ -107,7 +133,7 @@ struct LearningSessionView: View {
                 if let level = roundPool.first?.learningLevel {
                     LabeledContent("Current level", value: "\(level)")
                 }
-                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level or mark it as known. During learning, wrong answers return to the end until answered correctly. After Check, swipe right for Right or left for Wrong. Undo is available for 3 seconds.")
+                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level, mark it as known or skip it without changes. During learning, wrong answers return to the end until answered correctly. After Check, swipe right for Right or left for Wrong. Undo is available for 3 seconds.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -161,25 +187,29 @@ struct LearningSessionView: View {
                     .font(.largeTitle)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("learn.translation")
-                CopyButton(value: entry.translationText ?? "", label: "Copy translation",
-                           identifier: "learn.copy-translation")
-                Button("Edit translation", systemImage: "pencil") {
-                    closeAudio()
-                    translationDraft = entry.translationText ?? ""
-                    editingEntry = entry
+                HStack {
+                    CopyButton(value: entry.translationText ?? "", label: "Copy translation",
+                               identifier: "learn.copy-translation")
+                    Button("Edit translation", systemImage: "pencil") {
+                        closeAudio()
+                        translationDraft = entry.translationText ?? ""
+                        editingEntry = entry
+                    }
+                    .font(.caption)
+                    .accessibilityIdentifier("learn.edit")
                 }
-                .font(.caption)
-                .accessibilityIdentifier("learn.edit")
 
-                if revealed || preview != nil {
+                if revealed || (preview != nil && entry.learningLevel == 1) {
                     Divider()
                     Text(entry.text)
                         .font(.title2)
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("learn.original")
-                    CopyButton(value: entry.text, label: "Copy original",
-                               identifier: "learn.copy-original")
-                    phraseAudio(for: entry)
+                    HStack {
+                        CopyButton(value: entry.text, label: "Copy original",
+                                   identifier: "learn.copy-original")
+                        phraseAudio(for: entry)
+                    }
                     if let contextText = entry.contextText {
                         Text(highlightedContext(contextText, entry: entry))
                             .font(.body)
@@ -226,7 +256,7 @@ struct LearningSessionView: View {
         )
         .id(preview?.currentPresentationID ?? round?.currentPresentationID)
         .safeAreaInset(edge: .bottom) {
-            if let preview {
+            if let preview, revealed || entry.learningLevel == 1 {
                 VStack(spacing: 8) {
                     Button("Start learning") { previewAction(entry, preview: preview, action: .startLearning) }
                         .buttonStyle(.borderedProminent)
@@ -237,6 +267,9 @@ struct LearningSessionView: View {
                     Button("Mark as known") { previewAction(entry, preview: preview, action: .markAsKnown) }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("learn.preview-known")
+                    Button("Skip") { previewAction(entry, preview: preview, action: .skip) }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("learn.preview-skip")
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -250,9 +283,13 @@ struct LearningSessionView: View {
             Text("Meaning in context").font(.headline)
             if let explanation = entry.contextTranslationText, !explanation.isEmpty {
                 Text("Word explanations").font(.caption).foregroundStyle(.secondary)
-                Text(explanation)
-                    .textSelection(.enabled)
                     .accessibilityIdentifier("learn.context-words")
+                ContextWordExplanationView(explanation: explanation, selectedText: entry.text,
+                    context: entry.contextText.flatMap { text in
+                        guard let location = entry.contextSelectionLocation,
+                              let length = entry.contextSelectionLength else { return nil }
+                        return SelectionContext(text: text, selection: NSRange(location: location, length: length))
+                    }, sourceLanguage: entry.sourceLanguageCode, targetLanguage: entry.targetLanguageCode)
             }
             if let candidate = entry.contextSelectedTranslationText, !candidate.isEmpty {
                 Divider()
@@ -417,6 +454,8 @@ struct LearningSessionView: View {
     }
 
     private func startRound() {
+        LearningRoundCheckpoint.save(nil)
+        savedRound = nil
         closeAudio()
         pendingUndo = nil
         let snapshot = roundPool.map(\.id).shuffled()
@@ -477,6 +516,7 @@ struct LearningSessionView: View {
                 savedLevel: entry.learningLevel, previousRound: previousRound,
                 answeredRound: updatedRound, expiresAt: .now.addingTimeInterval(3))
             round = updatedRound
+            LearningRoundCheckpoint.save(updatedRound)
             revealed = false
         } catch {
             errorMessage = error.localizedDescription
@@ -498,6 +538,7 @@ struct LearningSessionView: View {
             closeAudio()
             contextual.cancelCurrentRequest()
             round = restored
+            LearningRoundCheckpoint.save(restored)
             revealed = true
             pendingUndo = nil
         } catch { errorMessage = error.localizedDescription }
@@ -509,6 +550,7 @@ struct LearningSessionView: View {
         guard updated.skip(entryID: id, presentationID: presentationID) else { return }
         pendingUndo = nil
         round = updated
+        LearningRoundCheckpoint.save(updated)
         revealed = false
     }
 
