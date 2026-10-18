@@ -1,6 +1,6 @@
 import Foundation
 
-enum LearningRoundSelection: String, CaseIterable, Identifiable, Sendable {
+enum LearningRoundSelection: String, CaseIterable, Identifiable, Codable, Sendable {
     case five
     case ten
     case twenty
@@ -27,7 +27,7 @@ enum LearningRoundSelection: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct LearningRoundState: Equatable, Sendable {
+struct LearningRoundState: Codable, Equatable, Sendable {
     let selection: LearningRoundSelection
     let selectedIDs: [UUID]
     private(set) var pendingIDs: [UUID]
@@ -48,6 +48,9 @@ struct LearningRoundState: Equatable, Sendable {
         self.wrongAttemptCount = 0
         self.currentPresentationID = presentationID
     }
+
+    var hasAnswers: Bool { rightAttemptCount > 0 || wrongAttemptCount > 0 }
+    var canResume: Bool { hasAnswers && !isComplete && hasValidPartition }
 
     var totalSelectedCount: Int { selectedIDs.count }
     var rightAttemptCount: Int { completedIDs.count }
@@ -189,5 +192,26 @@ enum LearningPreviewTransaction {
             entry.learningLevel = oldLevel
             throw error
         }
+    }
+}
+
+/// Local checkpoint; word levels are saved separately on every accepted answer.
+enum LearningRoundCheckpoint {
+    static let key = "learning.unfinished-round.v1"
+
+    static func load(defaults: UserDefaults = .standard) -> LearningRoundState? {
+        guard let data = defaults.data(forKey: key),
+              let round = try? JSONDecoder().decode(LearningRoundState.self, from: data),
+              round.canResume else { return nil }
+        return round
+    }
+
+    static func save(_ round: LearningRoundState?, defaults: UserDefaults = .standard) {
+        guard let round, round.canResume,
+              let data = try? JSONEncoder().encode(round) else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        defaults.set(data, forKey: key)
     }
 }

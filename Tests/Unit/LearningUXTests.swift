@@ -12,6 +12,82 @@ private struct NeverCompletingContextAnalysisService: ContextAnalysisServing {
 }
 
 final class LearningUXTests: XCTestCase {
+    func testUnfinishedRoundCheckpointSurvivesReopeningAndClearsOnCompletion() throws {
+        let suite = "LearningCheckpointTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let a = UUID(), b = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [a, b])
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+        round.recordAnswer(entryID: a, presentationID: round.currentPresentationID, right: false)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        let reopenedDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        var resumed = try XCTUnwrap(LearningRoundCheckpoint.load(defaults: reopenedDefaults))
+        XCTAssertEqual(resumed, round)
+        XCTAssertEqual(resumed.pendingIDs, [b, a])
+        resumed.recordAnswer(entryID: b, presentationID: resumed.currentPresentationID, right: true)
+        LearningRoundCheckpoint.save(resumed, defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(defaults: defaults)?.completedIDs, [b])
+        resumed.recordAnswer(entryID: a, presentationID: resumed.currentPresentationID, right: true)
+        LearningRoundCheckpoint.save(resumed, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+    }
+
+    func testCheckpointIgnoresCorruptDataAndClearsWhenRemainingEntryIsSkipped() throws {
+        let suite = "LearningCheckpointTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("invalid".utf8), forKey: LearningRoundCheckpoint.key)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+        let id = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [id])
+        round.recordAnswer(entryID: id, presentationID: round.currentPresentationID, right: false)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        round.skip(entryID: id, presentationID: round.currentPresentationID)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+    }
+
+    @MainActor
+    func testRightAnswerPersistsLevelBeforeRoundCompletion() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = ModelConfiguration(url: directory.appendingPathComponent("learning.store"))
+        let id: UUID
+        var checkpoint: Data
+        do {
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                               configurations: configuration)
+            let context = ModelContext(container)
+            let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                    mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                    duration: 10, segments: [])
+            let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 0)
+            entry.translationText = "замок"
+            entry.translationStatus = .ready
+            entry.learningLevel = 2
+            id = entry.id
+            context.insert(item)
+            context.insert(entry)
+            try context.save()
+            var round = LearningRoundState(selection: .five, selectedIDs: [id, UUID()])
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: id, presentationID: round.currentPresentationID, right: true,
+                save: { try context.save() }))
+            XCTAssertFalse(round.isComplete)
+            checkpoint = try JSONEncoder().encode(round)
+        }
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: configuration)
+        let entries = try ModelContext(reopened).fetch(FetchDescriptor<DictionaryEntry>())
+        XCTAssertEqual(entries.first(where: { $0.id == id })?.learningLevel, 3)
+        let resumed = try JSONDecoder().decode(LearningRoundState.self, from: checkpoint)
+        XCTAssertEqual(resumed.completedIDs, [id])
+        XCTAssertFalse(resumed.pendingIDs.contains(id))
+    }
+
     func testRoundSelectionCountsForZeroThreeAndTwentyFiveAvailable() {
         XCTAssertEqual(LearningRoundSelection.five.count(available: 0), 0)
         XCTAssertEqual(LearningRoundSelection.five.count(available: 3), 3)

@@ -12,6 +12,8 @@ struct LearningSessionView: View {
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
+    @State private var savedRound = LearningRoundCheckpoint.load()
+    @State private var confirmingClose = false
     @State private var revealed = false
     @State private var errorMessage: String?
     @State private var editingEntry: DictionaryEntry?
@@ -55,13 +57,23 @@ struct LearningSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { closeAndDismiss() }
+                    Button("Close") {
+                        if round?.canResume == true { confirmingClose = true }
+                        else { closeAndDismiss() }
+                    }
                 }
             }
             .alert("Could not save progress", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+        }
+        .interactiveDismissDisabled()
+        .alert("Close training?", isPresented: $confirmingClose) {
+            Button("Save and close") { closeAndDismiss() }
+            Button("Keep learning", role: .cancel) {}
+        } message: {
+            Text("Your answers and word levels are saved. You can continue this round later.")
         }
         .sheet(item: $editingEntry) { entry in editingView(entry) }
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
@@ -74,6 +86,20 @@ struct LearningSessionView: View {
 
     private var setupView: some View {
         Form {
+            if let savedRound {
+                Section("Unfinished round") {
+                    Text("Completed \(savedRound.rightAttemptCount) of \(savedRound.totalSelectedCount)")
+                    Button("Continue learning") {
+                        selection = savedRound.selection
+                        round = savedRound
+                        self.savedRound = nil
+                        revealed = false
+                    }
+                    .accessibilityIdentifier("learn.resume")
+                    Text("Starting a new round replaces the saved round. Previously earned levels are kept.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Round size") {
                 Picker("Phrases", selection: $selection) {
                     ForEach(LearningRoundSelection.allCases) { option in
@@ -139,25 +165,29 @@ struct LearningSessionView: View {
                     .font(.largeTitle)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("learn.translation")
-                CopyButton(value: entry.translationText ?? "", label: "Copy translation",
-                           identifier: "learn.copy-translation")
-                Button("Edit translation", systemImage: "pencil") {
-                    closeAudio()
-                    translationDraft = entry.translationText ?? ""
-                    editingEntry = entry
+                HStack {
+                    CopyButton(value: entry.translationText ?? "", label: "Copy translation",
+                               identifier: "learn.copy-translation")
+                    Button("Edit translation", systemImage: "pencil") {
+                        closeAudio()
+                        translationDraft = entry.translationText ?? ""
+                        editingEntry = entry
+                    }
+                    .font(.caption)
+                    .accessibilityIdentifier("learn.edit")
                 }
-                .font(.caption)
-                .accessibilityIdentifier("learn.edit")
 
-                if revealed || preview != nil {
+                if revealed || (preview != nil && entry.learningLevel == 1) {
                     Divider()
                     Text(entry.text)
                         .font(.title2)
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("learn.original")
-                    CopyButton(value: entry.text, label: "Copy original",
-                               identifier: "learn.copy-original")
-                    phraseAudio(for: entry)
+                    HStack {
+                        CopyButton(value: entry.text, label: "Copy original",
+                                   identifier: "learn.copy-original")
+                        phraseAudio(for: entry)
+                    }
                     if let contextText = entry.contextText {
                         Text(highlightedContext(contextText, entry: entry))
                             .font(.body)
@@ -194,7 +224,7 @@ struct LearningSessionView: View {
         }
         .id(preview?.currentPresentationID ?? round?.currentPresentationID)
         .safeAreaInset(edge: .bottom) {
-            if let preview {
+            if let preview, revealed || entry.learningLevel == 1 {
                 VStack(spacing: 8) {
                     Button("Start learning") { previewAction(entry, preview: preview, action: .startLearning) }
                         .buttonStyle(.borderedProminent)
@@ -384,6 +414,8 @@ struct LearningSessionView: View {
     }
 
     private func startRound() {
+        LearningRoundCheckpoint.save(nil)
+        savedRound = nil
         closeAudio()
         var seen = Set<UUID>()
         let snapshot = eligibleEntries.map(\.id).filter { seen.insert($0).inserted }.shuffled()
@@ -439,6 +471,7 @@ struct LearningSessionView: View {
             )
             guard accepted else { return }
             round = updatedRound
+            LearningRoundCheckpoint.save(updatedRound)
             revealed = false
         } catch {
             errorMessage = error.localizedDescription
@@ -450,6 +483,7 @@ struct LearningSessionView: View {
         closeAudio()
         guard updated.skip(entryID: id, presentationID: presentationID) else { return }
         round = updated
+        LearningRoundCheckpoint.save(updated)
         revealed = false
     }
 

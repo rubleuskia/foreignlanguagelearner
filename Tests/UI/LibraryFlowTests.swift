@@ -49,6 +49,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(learn.waitForExistence(timeout: 5))
         learn.tap()
         let start = app.buttons["learn.start"]
+        if !start.isHittable { app.swipeUp() }
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         start.tap()
         XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
@@ -82,6 +83,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
         XCTAssertFalse(app.staticTexts["learn.context-translation"].exists)
@@ -97,6 +99,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertFalse(useTranslation.exists)
         app.buttons["Close"].tap()
         app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
         XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
@@ -136,6 +139,7 @@ final class LibraryFlowTests: XCTestCase {
             app.launch()
             app.buttons["Dictionary"].tap()
             app.buttons["dictionary.learn"].tap()
+            if !app.buttons["learn.start"].isHittable { app.swipeUp() }
             app.buttons["learn.start"].tap()
             XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["learn.right"].exists)
@@ -147,6 +151,68 @@ final class LibraryFlowTests: XCTestCase {
             XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "0")
             app.terminate()
         }
+    }
+
+    @MainActor
+    func testLevelTwoPreviewRequiresCheckAndProgressRowsFilter() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.filter.level.2"].tap()
+        XCTAssertTrue(app.staticTexts["No phrases at this level"].exists)
+        XCTAssertFalse(app.buttons["dictionary.entry.dzień dobry"].exists)
+        app.buttons["dictionary.filter.reset"].tap()
+        XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
+        app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
+        app.buttons["learn.start"].tap()
+        app.buttons["learn.preview-next-level"].tap()
+        XCTAssertTrue(app.staticTexts["Preview complete"].waitForExistence(timeout: 5))
+        app.buttons["Repeat"].tap()
+        XCTAssertTrue(app.buttons["learn.check"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["learn.original"].exists)
+        XCTAssertFalse(app.buttons["learn.preview-learn"].exists)
+        app.buttons["learn.check"].tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].exists)
+        XCTAssertTrue(app.buttons["learn.preview-learn"].exists)
+        XCTAssertTrue(app.buttons["learn.preview-next-level"].exists)
+        XCTAssertTrue(app.buttons["learn.preview-known"].exists)
+    }
+
+    @MainActor
+    func testWrongAnswerRoundCannotSwipeDismissAndCanResumeAfterClose() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
+        app.buttons["learn.start"].tap()
+        app.buttons["learn.preview-learn"].tap()
+        app.buttons["learn.check"].tap()
+        app.buttons["learn.wrong"].tap()
+        app.navigationBars["Learn"].swipeDown()
+        XCTAssertTrue(app.buttons["learn.check"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Save and close"].waitForExistence(timeout: 5))
+        app.buttons["Keep learning"].tap()
+        XCTAssertTrue(app.buttons["learn.check"].exists)
+        app.buttons["Close"].tap()
+        app.buttons["Save and close"].tap()
+        XCTAssertTrue(app.buttons["dictionary.resume"].waitForExistence(timeout: 5))
+        app.buttons["dictionary.resume"].tap()
+        app.buttons["learn.resume"].tap()
+        XCTAssertTrue(app.staticTexts["Wrong attempts: 1"].exists)
+        XCTAssertFalse(app.staticTexts["learn.original"].exists)
+        app.buttons["learn.check"].tap()
+        app.buttons["learn.right"].tap()
+        XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertFalse(app.buttons["dictionary.resume"].exists)
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.2"].label, "1")
     }
 
 }
