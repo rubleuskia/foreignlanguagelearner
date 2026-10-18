@@ -245,10 +245,14 @@ struct DictionaryEntryDetailView: View {
                     if editing {
                         TextEditor(text: $draft).frame(minHeight: 100)
                     } else if let translation = entry.translationText {
-                        Text(translation).textSelection(.enabled)
-                            .accessibilityIdentifier("dictionary.detail-translation")
-                        CopyButton(value: translation, label: "Copy translation",
-                                   identifier: "dictionary.copy-translation")
+                        HStack(alignment: .top, spacing: 12) {
+                            Text(translation).textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("dictionary.detail-translation")
+                            CopyButton(value: translation, label: "Copy translation",
+                                       identifier: "dictionary.copy-translation")
+                        }
                     } else {
                         Text("Translation is not available yet.").foregroundStyle(.secondary)
                     }

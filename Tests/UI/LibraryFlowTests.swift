@@ -103,19 +103,19 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
         let translation = app.staticTexts["learn.translation"]
-        translation.swipeRight()
+        translation.swipeLeft()
         XCTAssertTrue(app.buttons["learn.check"].exists)
         XCTAssertFalse(app.buttons["learn.undo"].exists)
         app.buttons["learn.check"].tap()
-        translation.swipeLeft()
+        translation.swipeRight()
         app.buttons["learn.undo"].tap()
         XCTAssertTrue(app.staticTexts["learn.original"].exists)
         XCTAssertTrue(app.staticTexts["Wrong attempts: 0"].exists)
-        translation.swipeRight()
+        translation.swipeLeft()
         app.buttons["learn.undo"].tap()
         XCTAssertTrue(app.staticTexts["learn.original"].exists)
         XCTAssertFalse(app.staticTexts["Round complete"].exists)
-        translation.swipeRight()
+        translation.swipeLeft()
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.buttons["learn.undo"].waitForNonExistence(timeout: 4))
     }
@@ -258,6 +258,24 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["Close"].tap()
         XCTAssertFalse(app.buttons["dictionary.resume"].exists)
         XCTAssertEqual(app.staticTexts["dictionary.stats.level.2"].label, "1")
+    }
+
+    @MainActor
+    func testRussianTranslationCopySharesTextRow() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.entry.dzień dobry"].tap()
+        let text = app.staticTexts["dictionary.detail-translation"]
+        let copy = app.buttons["dictionary.copy-translation"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        XCTAssertTrue(copy.exists)
+        XCTAssertLessThan(copy.frame.minY, text.frame.maxY)
+        XCTAssertGreaterThanOrEqual(copy.frame.minX, text.frame.maxX)
+        copy.tap()
+        XCTAssertEqual(copy.value as? String, "Copied")
     }
 
 }
