@@ -128,16 +128,16 @@ struct ReaderView: View {
             }
             Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
                 scrubbing = editing
-                if !editing { playback.seek(to: scrubPosition); following = true }
+                if !editing { playback.seek(to: scrubPosition); followGeneration += 1; following = true }
             }.accessibilityLabel("Playback position")
             HStack {
                 Text(time(playback.position - lowerBound)).monospacedDigit()
                 Spacer()
-                Button { playback.seek(to: max(lowerBound, playback.position - 10)); following = true } label: { Image(systemName: "gobackward.10") }
+                Button { playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true } label: { Image(systemName: "gobackward.10") }
                     .accessibilityLabel("Back 10 seconds")
-                Button { playback.toggle(); if playback.isPlaying { following = true } } label: { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
+                Button { playback.toggle(); if playback.isPlaying { followGeneration += 1; following = true } } label: { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
                     .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
-                Button { playback.seek(to: min(upperBound, playback.position + 10)); following = true } label: { Image(systemName: "goforward.10") }
+                Button { playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true } label: { Image(systemName: "goforward.10") }
                     .accessibilityLabel("Forward 10 seconds")
                 Spacer()
                 PlaybackRateMenu(playback: playback)

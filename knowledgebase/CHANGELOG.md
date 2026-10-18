@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-18 — PR integration with main
+
+- Integrated the smoother transcript-following changes from main with dictionary training and phrase-audio improvements, retaining both sets of changelog entries.
+- No new architectural/product decision or project overview change; DECISIONS.md and PROJECT.md require no further updates.
+
 ## 2026-10-17 — Manual dictionary level selection
 
 - Dictionary detail now lets learners select any level from 1 to 4 in Progress. Changes save immediately and update dictionary counts, learnt grouping and practice eligibility. Failed saves restore the previous level and show an error.
@@ -63,6 +68,12 @@
 - Missing analysis can be generated using the existing contextual translation service, with progress, errors and cancellation when leaving a card. Entries without source context use the phrase itself without inventing surrounding text.
 - This extends the existing training workflow; no architectural decision, project purpose or major boundary changed. DECISIONS.md and PROJECT.md require no further changes.
 
+## 2026-10-16 — Smoother transcript following
+
+- Keep the active cue stationary inside a 35–60% reading zone; smoothly move its first visual line to 40% when it leaves that zone. Respect Reduce Motion and stop following on manual scrolling or selection.
+- Recalculate after text layout and content geometry changes, and explicitly resume after playback and seek actions in both readers.
+- Added reading-zone, layout-change, repeated-layout, selection and explicit-resume regression coverage.
+- Updated the follow behavior decision. Project purpose, supported workflows and major boundaries are unchanged.
 
 ## 2026-10-15 — Background audio, contextual dictionary capture and track controls
 
