@@ -85,8 +85,9 @@ struct SelectionTranslationView: View {
             if let explanation = coordinator.contextExplanation,
                let translation = coordinator.selectedTranslation {
                 if !explanation.isEmpty {
-                    Text(explanation)
-                        .textSelection(.enabled)
+                    ContextWordExplanationView(explanation: explanation, selectedText: preview.selectedText,
+                        context: preview.context, sourceLanguage: preview.sourceLanguageCode,
+                        targetLanguage: preview.targetLanguageCode)
                     CopyButton(value: explanation, label: "Copy word explanations",
                                identifier: "preview.copy-word-explanations")
                     Divider()

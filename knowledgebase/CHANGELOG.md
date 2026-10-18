@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-18 — Inline detailed word explanations
+
+- Tap a word in the contextual breakdown to expand a plain-language definition, its meaning in the source sentence, and 1–2 typical source-language phrases with translations. One word is expanded at a time in selection previews, dictionary details and learning cards.
+- Details load only on explicit expansion, with local loading/retry states; the short translation stays available. Successful explanations are cached across launches for the exact word occurrence, context, languages, model and prompt version. Cache data is purgeable and is not included in dictionary backups.
+- Existing serialized breakdowns are mapped conservatively to source occurrences, including repeated words and UTF-16 offsets. Unsupported legacy text stays readable and can be refreshed through the existing contextual translation action.
+- DECISIONS.md records the on-demand request and derived-cache design; PROJECT.md includes the new workflow. Project purpose and cloud-consent boundaries are unchanged.
+
+
 ## 2026-10-18 — Resumable word training and level filters
 
 - Preview reveals the answer immediately only for level 1; levels 2–3 require Check before the three preview actions appear.
