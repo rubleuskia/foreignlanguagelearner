@@ -4,6 +4,7 @@ import Translation
 import UniformTypeIdentifiers
 
 struct DictionaryView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var entries: [DictionaryEntry]
@@ -28,6 +29,7 @@ struct DictionaryView: View {
 
     var body: some View {
         List {
+            ReadingVocabularyStatus()
             if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
                 Section {
                     Button("Continue unfinished training", systemImage: "play.circle") { showingLearn = true }
@@ -130,7 +132,9 @@ struct DictionaryView: View {
     }
 
     private func prepareExport() {
-        do { exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true); exporting = true }
+        do {
+            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
+            exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true, readingWords: try context.fetch(FetchDescriptor<ReadVocabularyWord>())); exporting = true }
         catch { errorMessage = error.localizedDescription }
     }
 
@@ -138,8 +142,9 @@ struct DictionaryView: View {
         do {
             let url = try result.get()
             let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
             let document = try DictionaryTransferService.decode(Data(contentsOf: url, options: .mappedIfSafe))
-            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries)
+            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries, existingVocabulary: try context.fetch(FetchDescriptor<ReadVocabularyWord>()))
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -504,10 +509,11 @@ private extension String {
 }
 
 private struct DictionaryImportPreviewView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var coordinator
-    let preview: DictionaryImportPreview
+    @State var preview: DictionaryImportPreview
     @State private var errorMessage: String?
 
     var body: some View {
@@ -536,6 +542,16 @@ private struct DictionaryImportPreviewView: View {
                     LabeledContent("Unchanged", value: "\(preview.unchanged)")
                     LabeledContent("Skipped", value: "\(preview.skipped)")
                 }
+                if let words = preview.document.readingVocabulary?.words {
+                    Section("Words from read texts") {
+                        if preview.mode == .translations { Text("\(words.count) reading words will be skipped. This mode updates translations only.") }
+                        else {
+                            LabeledContent("New studied words", value: "\(preview.vocabularyAdditions)")
+                            LabeledContent("Already studied", value: "\(preview.vocabularyDuplicates)")
+                            Text("Reading vocabulary is merged. No local studied words are removed. Books and chapter marks are not restored.").font(.caption)
+                        }
+                    }
+                }
                 if preview.conflicts > 0 { Text("Conflicting local translations and entry identities will be kept unchanged.").foregroundStyle(.secondary) }
             }
             .navigationTitle("Import Preview")
@@ -548,10 +564,19 @@ private struct DictionaryImportPreviewView: View {
     }
     private func apply() {
         do {
+            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
+            let current = DictionaryTransferService.preview(document: preview.document, mode: preview.mode,
+                existing: try context.fetch(FetchDescriptor<DictionaryEntry>()),
+                existingVocabulary: try context.fetch(FetchDescriptor<ReadVocabularyWord>()))
+            if current.vocabularySnapshot != preview.vocabularySnapshot {
+                preview = current
+                throw ReadingVocabularyError.changed
+            }
+            let pending = try DictionaryTransferService.apply(preview, context: context)
             if preview.mode == .restore {
                 for entry in preview.document.entries { coordinator.cancel(entry.id) }
             }
-            let pending = try DictionaryTransferService.apply(preview, context: context)
+            try vocabulary.reload(context: context)
             pending.forEach { coordinator.enqueue($0, context: context) }
             dismiss()
         } catch { errorMessage = error.localizedDescription }

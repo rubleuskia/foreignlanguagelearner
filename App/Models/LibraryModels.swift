@@ -141,6 +141,10 @@ struct TranscriptDocument: Sendable {
 }
 
 @Model final class LearningItem {
+    var isBookCompleted: Bool = false
+    var readingVocabularyMigrationVersion: Int = 0
+
+    var hasReadingCompletion: Bool { isBookCompleted || tracks.contains(where: \.isCompleted) || parts.contains(where: \.isCompleted) }
     @Attribute(.unique) var id: UUID
     var title: String
     var createdAt: Date

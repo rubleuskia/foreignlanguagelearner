@@ -12,6 +12,14 @@
 - Preserve the historical alignment-backend review of de8eed6 with an explicit snapshot disclaimer; its findings are not assertions about current main.
 - DECISIONS.md records the contribution workflow. Project purpose, supported product workflows and boundaries are unchanged; PROJECT.md requires no update.
 
+## 2026-10-18 — Studied vocabulary from reading
+
+- Chapters and whole books can be marked read once, with confirmation showing the number of new unique word forms. Whole-book completion includes full TXT and available track subtitles; tracks without subtitles contribute only when the whole book is confirmed.
+- Read word forms accumulate locally by language, independently of dictionary cards and learning levels, and survive library deletion. Existing completed chapters migrate without assuming full-book coverage.
+- Both import workflows preview unique/new/studied word counts. Both readers show live counts and optional new-word coloring while preserving cue backgrounds and native selection. Source language locks after the first reading completion.
+- Dictionary backup v3 includes reading vocabulary, restores it without books and merges it atomically with dictionary records. V1/v2 remain supported; translations-only leaves reading knowledge unchanged. Updated JSON schema and backup instructions.
+- Added persistence migration, rollback, Unicode, backup and reader UI checks. DECISIONS.md and PROJECT.md now describe the shipped reading workflow; project purpose and network boundaries are unchanged.
+
 ## 2026-10-18 — Level-ordered practice and swipe answers
 
 - Rounds now select only the lowest eligible level, capped by the chosen size; higher levels wait until no eligible lower-level phrases remain. Setup shows the current level and actual round size.

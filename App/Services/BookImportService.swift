@@ -91,6 +91,22 @@ actor BookImportService {
         }
     }
 
+    /// Read-only analysis serialized with staging cleanup by this actor.
+    func vocabularyPreview(_ preview: Preview, transcriptPath: String?, externalTranscript: URL?) throws -> VocabularyImportPreview {
+        let url: URL
+        if let externalTranscript { url = externalTranscript }
+        else if let path = transcriptPath ?? preview.selectedTranscript {
+            url = Self.stagingRoot.appending(path: preview.id.uuidString)
+                .appending(path: "transcript-candidates").appending(path: candidateName(for: path))
+        } else { throw invalid("Choose the book transcript before importing.") }
+        return try VocabularyImportPreview.file(url, fileExtension: "txt", limit: limits.maximumTranscriptBytes)
+    }
+
+    func vocabularyPreview(_ prepared: Prepared) throws -> VocabularyImportPreview {
+        try VocabularyImportPreview.file(prepared.stagedBookDirectory.appending(path: prepared.transcriptFilename),
+                                         fileExtension: "txt", limit: limits.maximumTranscriptBytes)
+    }
+
     func prepare(_ preview: Preview, title: String, sourceLanguage: String? = nil,
                  orderedTracks: [PreviewTrack], transcriptPath: String?,
                  externalTranscript: URL?) throws -> Prepared {

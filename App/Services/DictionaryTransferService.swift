@@ -9,6 +9,17 @@ struct DictionaryTransferDocument: Codable {
     let exportedAt: Date
     let entries: [Entry]
     let diagnostics: Diagnostics?
+    var readingVocabulary: ReadingVocabulary? = nil
+
+    struct ReadingVocabulary: Codable {
+        let tokenizerVersion: Int
+        let words: [Word]
+        struct Word: Codable {
+            let languageCode: String
+            let normalizedForm: String
+            let firstLearnedAt: Date
+        }
+    }
 
     init(format: String, schemaVersion: Int, exportedAt: Date, entries: [Entry], diagnostics: Diagnostics? = nil) {
         self.format = format
@@ -122,13 +133,16 @@ struct DictionaryImportPreview: Identifiable {
     let conflicts: Int
     let skipped: Int
     var restorations: Int = 0
+    var vocabularyAdditions: Int = 0
+    var vocabularyDuplicates: Int = 0
+    var vocabularySnapshot: [String: Date]? = nil
 }
 
 enum DictionaryTransferError: LocalizedError {
     case tooLarge, invalidFormat, unsupportedVersion, tooManyEntries, duplicateID, invalidEntry(String)
     var errorDescription: String? {
         switch self {
-        case .tooLarge: "Dictionary file exceeds the 20 MB limit."
+        case .tooLarge: "Backup exceeds the size limit (20 MiB for v1/v2; 64 MiB for v3)."
         case .invalidFormat: "This is not a Foreign Language Learner dictionary file."
         case .unsupportedVersion: "This dictionary file version is not supported."
         case .tooManyEntries: "Dictionary file contains more than 50,000 entries."
@@ -139,7 +153,7 @@ enum DictionaryTransferError: LocalizedError {
 }
 
 enum DictionaryTransferService {
-    static func export(entries: [DictionaryEntry], includeContext: Bool,
+    static func export(entries: [DictionaryEntry], includeContext: Bool, readingWords: [ReadVocabularyWord] = [],
                        diagnosticEvents: [PolishLookupDiagnosticEvent] = PolishLookupDiagnosticLog.shared.events()) throws -> DictionaryJSONFile {
         let exported = entries.sorted { $0.id.uuidString < $1.id.uuidString }.map { entry in
             let translation = clean(entry.translationText)
@@ -175,15 +189,18 @@ enum DictionaryTransferService {
             operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
             polishDefinitionErrors: diagnosticEvents
         )
-        let document = DictionaryTransferDocument(format: "foreign-language-learner.dictionary", schemaVersion: 2,
+        var document = DictionaryTransferDocument(format: "foreign-language-learner.dictionary", schemaVersion: 3,
                                                    exportedAt: .now, entries: exported, diagnostics: diagnostics)
+        document.readingVocabulary = .init(tokenizerVersion: VocabularyTokenizer.version, words: readingWords
+            .sorted { ($0.languageCode, $0.normalizedForm) < ($1.languageCode, $1.normalizedForm) }
+            .map { .init(languageCode: $0.languageCode, normalizedForm: $0.normalizedForm, firstLearnedAt: $0.firstLearnedAt) })
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let exportDateFormatter = ISO8601DateFormatter()
+        exportDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            try container.encode(formatter.string(from: date))
+            try container.encode(exportDateFormatter.string(from: date))
         }
         let data = try encoder.encode(document)
         // Never produce a backup that our own importer would reject.
@@ -192,25 +209,48 @@ enum DictionaryTransferService {
     }
 
     static func decode(_ data: Data) throws -> DictionaryTransferDocument {
-        guard data.count <= 20 * 1_024 * 1_024 else { throw DictionaryTransferError.tooLarge }
+        guard data.count <= 64 * 1_024 * 1_024 else { throw DictionaryTransferError.tooLarge }
         let decoder = JSONDecoder()
+        let fractionalDateFormatter = ISO8601DateFormatter()
+        fractionalDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let wholeDateFormatter = ISO8601DateFormatter()
+        wholeDateFormatter.formatOptions = [.withInternetDateTime]
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: value) { return date }
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: value) { return date }
+            if let date = fractionalDateFormatter.date(from: value) ?? wholeDateFormatter.date(from: value) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO 8601 date")
         }
         let document = try decoder.decode(DictionaryTransferDocument.self, from: data)
         guard document.format == "foreign-language-learner.dictionary" else { throw DictionaryTransferError.invalidFormat }
-        guard (1...2).contains(document.schemaVersion) else { throw DictionaryTransferError.unsupportedVersion }
+        guard (1...3).contains(document.schemaVersion) else { throw DictionaryTransferError.unsupportedVersion }
+        if document.schemaVersion < 3, data.count > 20 * 1_024 * 1_024 { throw DictionaryTransferError.tooLarge }
+        if document.schemaVersion == 3 {
+            guard let vocabulary = document.readingVocabulary, vocabulary.tokenizerVersion == VocabularyTokenizer.version,
+                  vocabulary.words.count <= 500_000 else { throw DictionaryTransferError.invalidEntry("Invalid reading vocabulary version or count") }
+            var keys = Set<String>()
+            var bytes = 0
+            for word in vocabulary.words {
+                bytes += word.languageCode.utf8.count + word.normalizedForm.utf8.count
+                guard bytes <= 32 * 1_024 * 1_024 else { throw DictionaryTransferError.tooLarge }
+                guard (try? VocabularyTokenizer.language(word.languageCode)) == word.languageCode,
+                      VocabularyTokenizer.normalized(word.normalizedForm) == word.normalizedForm,
+                      word.firstLearnedAt.timeIntervalSince1970.isFinite else {
+                    throw DictionaryTransferError.invalidEntry("Invalid reading vocabulary language, form or date")
+                }
+                let tokens = try VocabularyTokenizer.occurrences(in: word.normalizedForm)
+                guard tokens.count == 1, tokens[0].rangeUTF16 == NSRange(location: 0, length: (word.normalizedForm as NSString).length),
+                      keys.insert(ReadVocabularyWord.key(word.languageCode, word.normalizedForm)).inserted else {
+                    throw DictionaryTransferError.invalidEntry("Invalid or duplicate reading vocabulary form")
+                }
+            }
+        } else if document.readingVocabulary != nil {
+            throw DictionaryTransferError.invalidEntry("Reading vocabulary requires backup v3")
+        }
         guard document.entries.count <= 50_000 else { throw DictionaryTransferError.tooManyEntries }
         guard Set(document.entries.map(\.id)).count == document.entries.count else { throw DictionaryTransferError.duplicateID }
         for entry in document.entries {
-            if document.schemaVersion == 2, entry.details == nil {
+            if document.schemaVersion >= 2, entry.details == nil {
                 throw DictionaryTransferError.invalidEntry("\(entry.id): missing backup details")
             }
             try validate(entry)
@@ -219,7 +259,7 @@ enum DictionaryTransferService {
     }
 
     @MainActor static func preview(document: DictionaryTransferDocument, mode: DictionaryImportMode,
-                                   existing: [DictionaryEntry]) -> DictionaryImportPreview {
+                                   existing: [DictionaryEntry], existingVocabulary: [ReadVocabularyWord]? = nil) -> DictionaryImportPreview {
         let local = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
         var additions = 0, changes = 0, unchanged = 0, conflicts = 0, skipped = 0, restorations = 0
         for incoming in document.entries {
@@ -234,13 +274,33 @@ enum DictionaryTransferService {
             if let base = clean(incoming.translation.baseText), base != current.translationText { conflicts += 1 }
             else { changes += 1 }
         }
-        return .init(document: document, mode: mode, additions: additions, translationChanges: changes,
+        var result = DictionaryImportPreview(document: document, mode: mode, additions: additions, translationChanges: changes,
                      unchanged: unchanged, conflicts: conflicts, skipped: skipped, restorations: restorations)
+        if let existingVocabulary {
+            let snapshot = Dictionary(uniqueKeysWithValues: existingVocabulary.map { ($0.key, $0.firstLearnedAt) })
+            result.vocabularySnapshot = snapshot
+            if mode != .translations, let words = document.readingVocabulary?.words {
+                result.vocabularyAdditions = words.filter { snapshot[ReadVocabularyWord.key($0.languageCode, $0.normalizedForm)] == nil }.count
+                result.vocabularyDuplicates = words.count - result.vocabularyAdditions
+            }
+        }
+        return result
     }
 
-    @MainActor static func apply(_ preview: DictionaryImportPreview, context: ModelContext) throws -> [DictionaryEntry] {
+    @MainActor static func apply(_ preview: DictionaryImportPreview, context: ModelContext, commitSave: (ModelContext) throws -> Void = { try $0.save() }) throws -> [DictionaryEntry] {
+        let readingWords = preview.document.schemaVersion == 3 && preview.mode != .translations ? preview.document.readingVocabulary?.words : nil
+        let vocabulary = readingWords == nil ? [] : try context.fetch(FetchDescriptor<ReadVocabularyWord>())
+        if readingWords != nil, let expected = preview.vocabularySnapshot,
+           expected != Dictionary(uniqueKeysWithValues: vocabulary.map { ($0.key, $0.firstLearnedAt) }) {
+            throw ReadingVocabularyError.changed
+        }
+        // Flush unrelated edits before starting this synchronous atomic transaction.
+        try context.save()
         let existing = try context.fetch(FetchDescriptor<DictionaryEntry>())
         let local = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        let incomingIDs = Set(preview.document.entries.map(\.id))
+        let rollbackEntries = existing.filter { incomingIDs.contains($0.id) }.map { ($0, DictionaryEntryRollbackSnapshot($0)) }
+        let rollbackWordDates = vocabulary.map { ($0, $0.firstLearnedAt) }
         var pending: [DictionaryEntry] = []
         for incoming in preview.document.entries {
             if let current = local[incoming.id] {
@@ -273,8 +333,22 @@ enum DictionaryTransferService {
                 if entry.translationStatus == .pending { pending.append(entry) }
             }
         }
-        do { try context.save() }
-        catch { context.rollback(); throw error }
+        if let readingWords {
+            let localWords = Dictionary(uniqueKeysWithValues: vocabulary.map { ($0.key, $0) })
+            for word in readingWords {
+                let key = ReadVocabularyWord.key(word.languageCode, word.normalizedForm)
+                if let current = localWords[key] { current.firstLearnedAt = min(current.firstLearnedAt, word.firstLearnedAt) }
+                else { context.insert(ReadVocabularyWord(languageCode: word.languageCode, normalizedForm: word.normalizedForm, firstLearnedAt: word.firstLearnedAt)) }
+            }
+        }
+        context.processPendingChanges()
+        do { try commitSave(context) }
+        catch {
+            context.rollback()
+            for (entry, snapshot) in rollbackEntries { snapshot.restore(entry) }
+            for (word, date) in rollbackWordDates { word.firstLearnedAt = date }
+            throw error
+        }
         return pending
     }
 

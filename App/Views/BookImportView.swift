@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct BookImportView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var archiveURL: URL?
@@ -18,7 +19,12 @@ struct BookImportView: View {
     @State private var errorMessage: String?
     @State private var work: Task<Void, Never>?
 
-    private let service = BookImportService()
+    @State private var wordPreview: VocabularyImportPreview?
+    @State private var wordPreviewKey: String?
+    @State private var wordError: String?
+    private var previewKey: String { "\(preview?.id.uuidString ?? ""):\(selectedTranscript ?? ""):\(externalTranscript?.absoluteString ?? ""):\(sourceLanguageCode)" }
+
+    @State private var service = BookImportService()
     private let zipType = UTType(filenameExtension: "zip") ?? .data
 
     var body: some View {
@@ -63,6 +69,12 @@ struct BookImportView: View {
                     } header: { Text("Transcript") } footer: {
                         Text("Plain TXT is read as full untimed text. Subtitle files in raw ZIPs are ignored; timed tracks require a book manifest.")
                     }
+                    Section("Reading vocabulary") {
+                        ReadingVocabularyStatus()
+                        VocabularyStatisticsView(words: wordPreviewKey == previewKey ? wordPreview?.words : nil,
+                                                 language: sourceLanguageCode, error: wordError)
+                        if wordError != nil { Button("Retry word count") { wordPreviewKey = nil; Task { await countWords() } } }
+                    }
                     Section {
                         ForEach(value.tracks) { track in
                             VStack(alignment: .leading) {
@@ -96,6 +108,7 @@ struct BookImportView: View {
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             }
+            .disabled(processing)
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Import audiobook")
             .toolbar {
@@ -106,10 +119,11 @@ struct BookImportView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Import") { importBook() }
-                        .disabled(preview == nil || processing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasTranscript)
+                        .disabled(preview == nil || processing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasTranscript || wordPreviewKey != previewKey || wordPreview == nil || !vocabulary.ready)
                 }
             }
             .interactiveDismissDisabled(processing)
+            .task(id: previewKey) { await countWords() }
         }
     }
 
@@ -144,14 +158,27 @@ struct BookImportView: View {
         processing = true; progressMessage = "Committing book…"; errorMessage = nil
         work = Task {
             do {
+                let language = try VocabularyTokenizer.language(sourceLanguageCode)
+                let latest = try await service.vocabularyPreview(preview, transcriptPath: selectedTranscript, externalTranscript: externalTranscript)
+                guard latest.fingerprint == wordPreview?.fingerprint else {
+                    wordPreview = latest; wordPreviewKey = previewKey
+                    throw ReadingVocabularyError.changed
+                }
                 let prepared = try await service.prepare(preview, title: title,
-                    sourceLanguage: sourceLanguageCode, orderedTracks: preview.tracks,
+                    sourceLanguage: language, orderedTracks: preview.tracks,
                     transcriptPath: selectedTranscript, externalTranscript: externalTranscript)
+                let staged = try await service.vocabularyPreview(prepared)
+                try Task.checkCancellation()
+                guard staged.fingerprint == latest.fingerprint else {
+                    wordPreview = staged; wordPreviewKey = previewKey
+                    throw ReadingVocabularyError.changed
+                }
                 try await service.movePreparedToLibrary(prepared)
                 let item = LearningItem(id: prepared.itemID, title: prepared.title, mediaKind: "audio",
                                         mediaFilename: "", transcriptFilename: prepared.transcriptFilename,
                                         duration: prepared.duration, segments: [], sourceLanguageCode: prepared.sourceLanguage,
                                         tracks: prepared.tracks, lastTrackID: prepared.tracks.first?.id)
+                item.readingVocabularyMigrationVersion = 1
                 context.insert(item)
                 do { try context.save() }
                 catch {
@@ -168,6 +195,20 @@ struct BookImportView: View {
             }
             processing = false
         }
+    }
+
+    @MainActor private func countWords() async {
+        let key = previewKey
+        wordError = nil
+        guard let preview, hasTranscript else { wordPreview = nil; wordPreviewKey = nil; return }
+        do {
+            _ = try VocabularyTokenizer.language(sourceLanguageCode)
+            let result = try await service.vocabularyPreview(preview, transcriptPath: selectedTranscript, externalTranscript: externalTranscript)
+            try Task.checkCancellation()
+            guard key == previewKey else { return }
+            wordPreview = result; wordPreviewKey = key
+        } catch is CancellationError { }
+        catch { if key == previewKey { wordError = error.localizedDescription; wordPreview = nil } }
     }
 
     private func updateTrack(_ id: String, title: String) {

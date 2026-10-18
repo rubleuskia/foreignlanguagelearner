@@ -41,6 +41,9 @@ struct TranscriptTextView: UIViewRepresentable {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
+    var unknownWordRanges: [NSRange] = []
+    var wordStyleRevision: Int = 0
+    var differentiateWithoutColor = false
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -110,6 +113,10 @@ struct TranscriptTextView: UIViewRepresentable {
         private var documentRevision = 0
         private var lastFollowGeneration: Int
         private var followKey: FollowKey?
+        private var appliedWordRevision: Int?
+        private var appliedWordRanges: [NSRange] = []
+        private var appliedWordUnderline = false
+        private var appliedContentSizeCategory: UIContentSizeCategory?
         private var applyingFollow = false
         private var wasFollowing: Bool
 
@@ -142,6 +149,8 @@ struct TranscriptTextView: UIViewRepresentable {
                 isApplyingProgrammaticUpdate = false
                 hadNonemptySelection = false
                 highlighted = nil
+                appliedWordRevision = nil
+                appliedWordRanges = []
                 followKey = nil
                 documentRevision += 1
                 documentIdentity = identity
@@ -158,6 +167,7 @@ struct TranscriptTextView: UIViewRepresentable {
             }
 
             guard view.selectedRange.length == 0 else { return }
+            updateWordStyles(in: view)
             updateHighlight(in: view)
             view.setNeedsLayout()
         }
@@ -229,6 +239,7 @@ struct TranscriptTextView: UIViewRepresentable {
                 parent.onSelectionBegan()
             } else if !isNonempty {
                 hadNonemptySelection = false
+                apply(to: textView)
             }
         }
 
@@ -325,6 +336,38 @@ struct TranscriptTextView: UIViewRepresentable {
             guard relative.location >= 0,
                   NSMaxRange(relative) <= (excerpt as NSString).length else { return nil }
             return SelectionContext(text: excerpt, selection: relative)
+        }
+
+        private func updateWordStyles(in view: UITextView) {
+            let category = view.traitCollection.preferredContentSizeCategory
+            guard appliedWordRevision != parent.wordStyleRevision
+                    || appliedWordUnderline != parent.differentiateWithoutColor
+                    || appliedContentSizeCategory != category else { return }
+            let length = view.textStorage.length
+            isApplyingProgrammaticUpdate = true
+            view.textStorage.beginEditing()
+            if appliedContentSizeCategory != category {
+                view.textStorage.addAttribute(.font, value: UIFont.preferredFont(forTextStyle: .body),
+                                              range: NSRange(location: 0, length: length))
+            }
+            for range in appliedWordRanges where NSMaxRange(range) <= length {
+                view.textStorage.addAttribute(.foregroundColor, value: UIColor.label, range: range)
+                view.textStorage.removeAttribute(.underlineStyle, range: range)
+            }
+            // Share one adaptive color across every occurrence, including large full-book texts.
+            let color = UIColor { $0.userInterfaceStyle == .dark ? UIColor.systemYellow : UIColor.systemBrown }
+            for range in parent.unknownWordRanges where range.location >= 0 && NSMaxRange(range) <= length {
+                view.textStorage.addAttribute(.foregroundColor, value: color, range: range)
+                if parent.differentiateWithoutColor {
+                    view.textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+                }
+            }
+            view.textStorage.endEditing()
+            isApplyingProgrammaticUpdate = false
+            appliedWordRanges = parent.unknownWordRanges
+            appliedWordRevision = parent.wordStyleRevision
+            appliedWordUnderline = parent.differentiateWithoutColor
+            appliedContentSizeCategory = category
         }
 
         private func updateHighlight(in view: UITextView) {
