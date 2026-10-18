@@ -133,3 +133,61 @@ enum LearningCompletion {
         }
     }
 }
+
+enum LearningPreviewAction: Equatable, Sendable {
+    case startLearning, moveToNextLevel, markAsKnown
+}
+
+struct LearningPreviewState: Equatable, Sendable {
+    let selection: LearningRoundSelection
+    let selectedIDs: [UUID]
+    private(set) var pendingIDs: [UUID]
+    private(set) var learningIDs: [UUID] = []
+    private(set) var currentPresentationID: UUID
+
+    init(selection: LearningRoundSelection, selectedIDs: [UUID], presentationID: UUID = UUID()) {
+        var seen = Set<UUID>()
+        let unique = selectedIDs.filter { seen.insert($0).inserted }
+        self.selection = selection
+        self.selectedIDs = unique
+        self.pendingIDs = unique
+        self.currentPresentationID = presentationID
+    }
+
+    var currentID: UUID? { pendingIDs.first }
+    var isComplete: Bool { pendingIDs.isEmpty }
+    var reviewedCount: Int { selectedIDs.count - pendingIDs.count }
+
+    @discardableResult
+    mutating func advance(entryID: UUID, presentationID: UUID, learn: Bool) -> Bool {
+        guard currentID == entryID, currentPresentationID == presentationID else { return false }
+        pendingIDs.removeFirst()
+        if learn { learningIDs.append(entryID) }
+        currentPresentationID = UUID()
+        return true
+    }
+}
+
+enum LearningPreviewTransaction {
+    @discardableResult
+    @MainActor static func apply(entry: DictionaryEntry, preview: inout LearningPreviewState,
+                                 presentationID: UUID, action: LearningPreviewAction,
+                                 save: () throws -> Void) throws -> Bool {
+        guard preview.currentID == entry.id, preview.currentPresentationID == presentationID,
+              entry.isLearningEligible else { return false }
+        let oldLevel = entry.learningLevel
+        switch action {
+        case .startLearning: break
+        case .moveToNextLevel: entry.learningLevel = LearningLevel.adjusted(oldLevel, correct: true)
+        case .markAsKnown: entry.learningLevel = 4
+        }
+        do {
+            if entry.learningLevel != oldLevel { try save() }
+            return preview.advance(entryID: entry.id, presentationID: presentationID,
+                                   learn: action == .startLearning)
+        } catch {
+            entry.learningLevel = oldLevel
+            throw error
+        }
+    }
+}

@@ -151,26 +151,7 @@ struct ReaderView: View {
     }
 
     private func audioRange(for selectionRange: NSRange) -> ClosedRange<Double>? {
-        let matching = document.ranges.indices.filter {
-            NSIntersectionRange(document.ranges[$0], selectionRange).length > 0
-        }
-        let absoluteIndices = matching.compactMap { index -> Int? in
-            guard document.sourceIndices.indices.contains(index) else { return nil }
-            return document.sourceIndices[index]
-        }
-        let timed = absoluteIndices.compactMap { index -> (index: Int, segment: TranscriptSegment)? in
-            guard item.segments.indices.contains(index), item.segments[index].start != nil,
-                  item.segments[index].end != nil else { return nil }
-            return (index, item.segments[index])
-        }
-        guard let first = timed.compactMap({ $0.segment.start }).min(),
-              let last = timed.compactMap({ $0.segment.end }).max(), last > first else { return nil }
-
-        let nextStart = item.segments.drop(while: { ($0.end ?? -.infinity) <= last })
-            .compactMap(\.start).first
-        let paddedEnd = min(last + 0.75, nextStart ?? item.duration, item.duration)
-        guard paddedEnd > first else { return first...last }
-        return first...paddedEnd
+        PhraseAudioTiming.range(for: selectionRange, in: document, duration: item.duration)
     }
 
     private func openCurrentPart() {

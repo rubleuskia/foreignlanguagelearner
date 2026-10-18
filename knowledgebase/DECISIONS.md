@@ -69,7 +69,9 @@ improvements backlog.
 
 ## Dictionary portability and translation
 
-Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
+Dictionary detail prioritizes the source phrase with inline playback and icon-only copy controls, without a playback-speed menu, followed by the saved translation and a compact Meaning in context block. Copy controls throughout the app use icons with descriptive accessibility labels and a checkmark confirmation. The Progress section permits direct selection of levels 1–4, saved immediately with the previous value restored on save failure; level 4 marks a phrase learnt and lowering it makes a translated, ready phrase eligible for practice again. Legacy Word-by-word help and its per-word definition UI are no longer exposed on this card; stored word-help data remains compatible. Contextual explanations and the overall translation remain selectable without dedicated copy buttons.
+
+Dictionary backups use readable JSON v2 with stable entry identity, source context, translation origin, progress, contextual analysis, personal notes, cached word help and exact audio-source links. V1 remains readable. Restore backup explicitly replaces fields on matching identities and adds missing records without removing unrelated entries; merge and translations-only preserve existing progress and notes. Interrupted requests are not resumed as in-flight state. Export validates its output against the importer and includes source context by default in the UI. Media files and library records remain outside dictionary JSON: audio links work only with the original local item/track identity and available files; reimporting a book under a new UUID does not automatically relink it. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
 
 Ordinary automatic translation and word-by-word help use Apple Translation. Contextual translation
 instead uses OpenAI Responses API structured output so one request resolves the selected expression
@@ -131,7 +133,9 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 
 ## Learning rounds and completion
 
-A learning round snapshots a unique eligible ID set at Start and keeps its original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
+Start round snapshots a unique eligible ID set for a revealed preliminary review. Each card offers Start learning (queue at its current level), Move to next level (save one level increase and exclude from this practice round), or Mark as known (save level 4 and exclude). Each choice advances the preview, with persistent changes committed before advancement. Stale presentation IDs are rejected and failed saves keep the card and its previous level. Missing/ineligible cards are skipped. The normal practice round starts only after the complete preview, using the IDs explicitly queued for learning; an empty queue finishes the preview directly. Repeat starts a fresh preview.
+
+A practice round keeps its queued ID set and original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
 
 Round statistics describe attempts and completion inside that round. The completion screen separately queries every stored level-4 Russian entry with a ready, nonempty translation, so it includes phrases learned before the current round.
 

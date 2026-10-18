@@ -1,5 +1,73 @@
 # Project changelog
 
+## 2026-10-18 — PR integration with main
+
+- Integrated the smoother transcript-following changes from main with dictionary training and phrase-audio improvements, retaining both sets of changelog entries.
+- No new architectural/product decision or project overview change; DECISIONS.md and PROJECT.md require no further updates.
+
+## 2026-10-17 — Manual dictionary level selection
+
+- Dictionary detail now lets learners select any level from 1 to 4 in Progress. Changes save immediately and update dictionary counts, learnt grouping and practice eligibility. Failed saves restore the previous level and show an error.
+- Recorded the manual level override in DECISIONS.md. Project purpose, supported workflow and major boundaries are unchanged; PROJECT.md requires no further update.
+
+
+## 2026-10-17 — Pre-learning card preview
+
+- Start round now begins with a revealed preview of every selected phrase, including its translation, audio, source context and contextual meaning. The three bottom actions remain visible while scrolling.
+- Start learning keeps a phrase at its current level and queues it for the usual Check/Right/Wrong practice after the preview. Move to next level raises its level once and skips practice this round; Mark as known sets level 4 and skips practice. Each action advances to the next preview card.
+- Level changes save before advancing, reject stale/double taps and retain the current card on failure. Missing or ineligible records are skipped. If no phrases are queued, the preview finishes directly; Repeat starts a new preview.
+- Updated the learning-round product decision and project workflow overview. Project purpose and major boundaries are unchanged.
+
+
+## 2026-10-17 — Compact copy controls and dictionary spacing
+
+- All copy buttons now show only an icon, with a temporary checkmark after copying, while retaining descriptive accessibility labels and the copy announcement.
+- Moved Copy original beside Play phrase on the source row and removed the speed control from dictionary detail.
+- Grouped contextual word explanations and overall translation into one compact Form row so the divider no longer creates an empty full-height row; trimmed display-only surrounding whitespace.
+- Updated the dictionary-detail product decision; project purpose, workflows and major boundaries are unchanged, so PROJECT.md requires no further update.
+
+
+## 2026-10-17 — Complete dictionary metadata backups
+
+- Dictionary JSON v2 now includes contextual breakdown and phrase translation, notes and preferred meaning, legacy word-help/cached definitions, timestamps, translation origin/status, and exact source/track/cue/audio links. Export always includes source context in the UI and checks its own output against importer validation.
+- Added Restore backup with a preview of matching records to restore. It restores saved progress and details even when the translation is unchanged, keeps unrelated records and conflicting identities, and rolls back a failed save. Merge and translations-only modes retain their conservative update behavior. Interrupted translations are requeued safely.
+- Preserved v1 import compatibility and added ISO 8601 fractional-second support. Added limits and validation for extended data and audio ranges, including overflow-safe UTF-16 context selection validation.
+- Audio/media files are not embedded; restored links require the original local book identity and files. Reimporting a book with a new ID does not automatically reconnect audio. Old backups cannot recover fields that were never exported. Added docs/DICTIONARY_BACKUP.md and updated DECISIONS.md and PROJECT.md; project purpose and media-storage boundaries are unchanged.
+
+
+## 2026-10-17 — Simplified dictionary detail
+
+- Reordered dictionary detail to source phrase with inline playback, Russian translation, then Meaning in context. Source context, progress and other details follow.
+- Removed the legacy Word-by-word help UI and contextual-result copy buttons. Existing saved word-help data remains intact.
+- Updated DECISIONS.md and PROJECT.md for the simplified detail workflow; project purpose and major boundaries are unchanged.
+
+
+## 2026-10-17 — Dictionary learning statistics
+
+- Added live dictionary counts for all four learning levels, including zero counts. Level-4 entries now appear only in a separate Learnt phrases section at the end of the list.
+- Both sections retain entry details and swipe-to-delete; deletion uses the corresponding section to avoid removing a different entry. Counts include every saved entry, regardless of translation status.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
+## 2026-10-17 — Phrase audio boundaries
+
+- Removed the extra 0.75-second tail from phrase capture in both readers. Play phrase now uses only the selected subtitle cues.
+- Existing saved phrases also drop recognizable legacy padding when the local transcript and selection match; ambiguous or custom ranges remain unchanged. Timing remains limited to subtitle cue precision, without estimating word timings.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
+## 2026-10-17 — Training start button layout
+
+- Made Start round a full-width, large button without the surrounding Form row background or inset, and moved the empty-state hint to the section footer.
+- No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md require no updates.
+
+
+## 2026-10-17 — Contextual translations in training
+
+- After Check, training cards show saved contextual word explanations and a separate overall phrase translation. Use this as translation replaces the saved phrase translation only on explicit selection.
+- Missing analysis can be generated using the existing contextual translation service, with progress, errors and cancellation when leaving a card. Entries without source context use the phrase itself without inventing surrounding text.
+- This extends the existing training workflow; no architectural decision, project purpose or major boundary changed. DECISIONS.md and PROJECT.md require no further changes.
+
 ## 2026-10-16 — Smoother transcript following
 
 - Keep the active cue stationary inside a 35–60% reading zone; smoothly move its first visual line to 40% when it leaves that zone. Respect Reduce Motion and stop following on manual scrolling or selection.

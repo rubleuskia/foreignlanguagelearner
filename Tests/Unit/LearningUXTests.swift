@@ -372,3 +372,70 @@ final class LearningUXTests: XCTestCase {
                                                        fileExists: { _ in true }))
     }
 }
+
+extension LearningUXTests {
+    @MainActor private func previewEntry(level: Int = 1) -> DictionaryEntry {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "story.m4a", transcriptFilename: "story.srt", duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: nil)
+        entry.translationText = "замок"
+        entry.translationStatus = .ready
+        entry.learningLevel = level
+        return entry
+    }
+
+    @MainActor func testPreviewCollectsOnlyStartLearningAndTransitionsToNormalRound() throws {
+        let entries = [previewEntry(), previewEntry(level: 2), previewEntry()]
+        var preview = LearningPreviewState(selection: .five, selectedIDs: entries.map(\.id) + [entries[0].id])
+        XCTAssertEqual(preview.selectedIDs.count, 3)
+        for (entry, action) in zip(entries, [LearningPreviewAction.startLearning, .moveToNextLevel, .markAsKnown]) {
+            XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+                presentationID: preview.currentPresentationID, action: action, save: {}))
+        }
+        XCTAssertTrue(preview.isComplete)
+        XCTAssertEqual(preview.reviewedCount, 3)
+        XCTAssertEqual(preview.learningIDs, [entries[0].id])
+        XCTAssertEqual(entries.map(\.learningLevel), [1, 3, 4])
+        let round = LearningRoundState(selection: preview.selection, selectedIDs: preview.learningIDs)
+        XCTAssertEqual(round.currentID, entries[0].id)
+        XCTAssertEqual(round.wrongAttemptCount, 0)
+        XCTAssertEqual(round.rightAttemptCount, 0)
+        XCTAssertTrue(round.hasValidPartition)
+    }
+
+    @MainActor func testPreviewFailedSaveKeepsCardAndLevelAndRejectsStaleDoubleTap() throws {
+        struct FailedSave: Error {}
+        let entry = previewEntry(level: 3)
+        var preview = LearningPreviewState(selection: .five, selectedIDs: [entry.id])
+        let original = preview
+        for action in [LearningPreviewAction.moveToNextLevel, .markAsKnown] {
+            XCTAssertThrowsError(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+                presentationID: preview.currentPresentationID, action: action, save: { throw FailedSave() }))
+            XCTAssertEqual(entry.learningLevel, 3)
+            XCTAssertEqual(preview, original)
+        }
+        var saves = 0
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: original.currentPresentationID, action: .moveToNextLevel, save: { saves += 1 }))
+        XCTAssertEqual(entry.learningLevel, 4)
+        XCTAssertEqual(saves, 1)
+        XCTAssertFalse(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: original.currentPresentationID, action: .moveToNextLevel, save: { saves += 1 }))
+        XCTAssertEqual(saves, 1)
+        XCTAssertTrue(preview.learningIDs.isEmpty)
+    }
+
+    @MainActor func testPreviewStartLearningDoesNotMutateOrSaveAndSkipHandlesMissingEntry() throws {
+        let entry = previewEntry(level: 2)
+        let missing = UUID()
+        var preview = LearningPreviewState(selection: .five, selectedIDs: [missing, entry.id])
+        let stale = preview.currentPresentationID
+        XCTAssertTrue(preview.advance(entryID: missing, presentationID: stale, learn: false))
+        XCTAssertFalse(preview.advance(entryID: entry.id, presentationID: stale, learn: false))
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: preview.currentPresentationID, action: .startLearning,
+            save: { XCTFail("Start learning does not change stored progress") }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(preview.learningIDs, [entry.id])
+    }
+}

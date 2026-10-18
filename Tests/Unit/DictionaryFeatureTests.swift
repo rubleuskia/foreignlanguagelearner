@@ -252,3 +252,185 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual(entry.contextAnalysisRevision, 1)
     }
 }
+
+extension DictionaryFeatureTests {
+    @MainActor private func backupFixture() -> (LearningItem, DictionaryEntry) {
+        let item = LearningItem(id: UUID(), title: "Backup story", mediaKind: "audio",
+                                mediaFilename: "", transcriptFilename: "story.txt", duration: 10, segments: [],
+                                tracks: [.init(id: "chapter-1", title: "Chapter 1", mediaFilename: "audio/1.mp3", duration: 10)])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 2,
+                                    context: .init(text: "To jest zamek.", selection: NSRange(location: 8, length: 5)),
+                                    audioStart: 2, audioEnd: 3, sourceTrackID: "chapter-1")
+        entry.translationText = "замок"
+        entry.translationOrigin = .openAI
+        entry.translationStatus = .ready
+        entry.createdAt = Date(timeIntervalSince1970: 100.125)
+        entry.translationUpdatedAt = Date(timeIntervalSince1970: 101.25)
+        entry.learningLevel = 3
+        entry.contextSelectedTranslationText = "старый замок"
+        entry.contextTranslationText = "zamek — zamek — замок, крепость"
+        entry.contextAnalysisUpdatedAt = Date(timeIntervalSince1970: 102.5)
+        entry.wordHelpUpdatedAt = Date(timeIntervalSince1970: 103.75)
+        entry.wordHelpItems = [.init(sourceText: "zamek", translationText: "замок", isGrammarWord: false,
+            polishDictionaryResult: .init(requestedWord: "zamek", headword: "zamek", partOfSpeech: "rzeczownik",
+                meanings: [.init(id: "1", definition: "budowla", examples: ["Stary zamek."], usageLabels: [])],
+                sourceURL: "https://pl.wiktionary.org/wiki/zamek", revisionID: 12,
+                fetchedAt: Date(timeIntervalSince1970: 104.125)))]
+        entry.selectedSenseText = "крепость"
+        entry.userNote = "Здесь речь о здании."
+        return (item, entry)
+    }
+
+    @MainActor func testCompleteBackupRestoresAfterPersistentReopenAndKeepsAudioIdentity() throws {
+        let (item, original) = backupFixture()
+        let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
+        let document = try DictionaryTransferService.decode(file.data)
+        XCTAssertEqual(document.schemaVersion, 2)
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let schema = Schema([LearningItem.self, DictionaryEntry.self])
+        let configuration = ModelConfiguration(schema: schema, url: directory.appending(path: "dictionary.store"))
+        do {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let preview = DictionaryTransferService.preview(document: document, mode: .restore, existing: [])
+            XCTAssertEqual(preview.additions, 1)
+            XCTAssertTrue(try DictionaryTransferService.apply(preview, context: container.mainContext).isEmpty)
+        }
+        let reopened = try ModelContainer(for: schema, configurations: [configuration])
+        let context = reopened.mainContext
+        let restored = try XCTUnwrap(context.fetch(FetchDescriptor<DictionaryEntry>()).first)
+        XCTAssertEqual(restored.id, original.id)
+        XCTAssertEqual(restored.text, original.text)
+        XCTAssertEqual(restored.translationText, original.translationText)
+        XCTAssertEqual(restored.translationOrigin, .openAI)
+        XCTAssertEqual(restored.translationStatus, .ready)
+        XCTAssertEqual(restored.createdAt, original.createdAt)
+        XCTAssertEqual(restored.translationUpdatedAt, original.translationUpdatedAt)
+        XCTAssertEqual(restored.learningLevel, 3)
+        XCTAssertEqual(restored.contextText, original.contextText)
+        XCTAssertEqual(restored.contextSelectionLocation, original.contextSelectionLocation)
+        XCTAssertEqual(restored.contextSelectionLength, original.contextSelectionLength)
+        XCTAssertEqual(restored.contextSelectedTranslationText, original.contextSelectedTranslationText)
+        XCTAssertEqual(restored.contextTranslationText, original.contextTranslationText)
+        XCTAssertEqual(restored.contextAnalysisUpdatedAt, original.contextAnalysisUpdatedAt)
+        XCTAssertEqual(restored.wordHelpItems, original.wordHelpItems)
+        XCTAssertEqual(restored.wordHelpUpdatedAt, original.wordHelpUpdatedAt)
+        XCTAssertEqual(restored.selectedSenseText, original.selectedSenseText)
+        XCTAssertEqual(restored.userNote, original.userNote)
+        XCTAssertEqual(restored.sourceItemID, original.sourceItemID)
+        XCTAssertEqual(restored.localSourceItemID, original.localSourceItemID)
+        XCTAssertEqual(restored.sourceTrackID, "chapter-1")
+        XCTAssertEqual(restored.segmentIndex, 2)
+        XCTAssertEqual(restored.audioStart, 2)
+        XCTAssertEqual(restored.audioEnd, 3)
+        XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: restored, items: [], fileExists: { _ in true }))
+        context.insert(item)
+        try context.save()
+        let source = PhraseAudioSourceResolver.resolve(entry: restored, items: [item], fileExists: { _ in true })
+        XCTAssertEqual(source?.identity.range, 2...3)
+        XCTAssertEqual(source?.identity.trackID, "chapter-1")
+        let repeated = DictionaryTransferService.preview(document: document, mode: .restore, existing: [restored])
+        _ = try DictionaryTransferService.apply(repeated, context: context)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<DictionaryEntry>()), 1)
+        let reexported = try DictionaryTransferService.decode(
+            DictionaryTransferService.export(entries: [restored], includeContext: true, diagnosticEvents: []).data)
+        XCTAssertEqual(reexported.entries.first?.details?.wordHelpItems, original.wordHelpItems)
+    }
+
+    @MainActor func testRestoreReplacesDetailsEvenWhenTranslationIsUnchangedButMergePreservesLocalData() throws {
+        let (_, entry) = backupFixture()
+        let document = try DictionaryTransferService.decode(
+            DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []).data)
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = container.mainContext
+        context.insert(entry)
+        entry.learningLevel = 1
+        entry.userNote = "Changed locally"
+        entry.contextTranslationText = nil
+        try context.save()
+        let merge = DictionaryTransferService.preview(document: document, mode: .merge, existing: [entry])
+        XCTAssertEqual(merge.unchanged, 1)
+        _ = try DictionaryTransferService.apply(merge, context: context)
+        XCTAssertEqual(entry.userNote, "Changed locally")
+        XCTAssertEqual(entry.learningLevel, 1)
+        let restore = DictionaryTransferService.preview(document: document, mode: .restore, existing: [entry])
+        XCTAssertEqual(restore.restorations, 1)
+        _ = try DictionaryTransferService.apply(restore, context: context)
+        XCTAssertEqual(entry.userNote, "Здесь речь о здании.")
+        XCTAssertEqual(entry.learningLevel, 3)
+        XCTAssertNotNil(entry.contextTranslationText)
+        entry.text = "different identity"
+        try context.save()
+        let conflict = DictionaryTransferService.preview(document: document, mode: .restore, existing: [entry])
+        XCTAssertEqual(conflict.conflicts, 1)
+        _ = try DictionaryTransferService.apply(conflict, context: context)
+        XCTAssertEqual(entry.text, "different identity")
+    }
+
+    @MainActor func testLegacyBackupStillRestoresAndPreservesTranslationOrigin() throws {
+        let (_, original) = backupFixture()
+        let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])
+        root["schemaVersion"] = 1
+        root["exportedAt"] = "2026-10-17T19:03:54Z"
+        var entries = try XCTUnwrap(root["entries"] as? [[String: Any]])
+        entries[0].removeValue(forKey: "details")
+        entries[0]["createdAt"] = "2026-10-17T16:29:03Z"
+        root["entries"] = entries
+        let document = try DictionaryTransferService.decode(JSONSerialization.data(withJSONObject: root))
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let preview = DictionaryTransferService.preview(document: document, mode: .merge, existing: [])
+        _ = try DictionaryTransferService.apply(preview, context: container.mainContext)
+        let restored = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<DictionaryEntry>()).first)
+        XCTAssertEqual(restored.translationOrigin, .openAI)
+        XCTAssertEqual(restored.learningLevel, 3)
+        XCTAssertEqual(restored.contextText, original.contextText)
+        XCTAssertNil(restored.contextTranslationText)
+        XCTAssertNil(restored.audioStart)
+    }
+
+    @MainActor func testBackupRejectsIncompleteAndInvalidAudioMetadata() throws {
+        let (_, entry) = backupFixture()
+        let file = try DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: [])
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])
+        for mutation in ["missing-details", "partial-audio", "reversed-audio", "negative-index", "overflow-context"] {
+            var changed = root
+            var entries = try XCTUnwrap(changed["entries"] as? [[String: Any]])
+            var details = try XCTUnwrap(entries[0]["details"] as? [String: Any])
+            switch mutation {
+            case "missing-details": entries[0].removeValue(forKey: "details")
+            case "partial-audio": details.removeValue(forKey: "audioEnd"); entries[0]["details"] = details
+            case "reversed-audio": details["audioEnd"] = 1; entries[0]["details"] = details
+            case "negative-index": details["segmentIndex"] = -1; entries[0]["details"] = details
+            default:
+                var source = try XCTUnwrap(entries[0]["source"] as? [String: Any])
+                var selectionContext = try XCTUnwrap(source["context"] as? [String: Any])
+                selectionContext["selectionUTF16"] = ["location": 1, "length": Int.max]
+                source["context"] = selectionContext; entries[0]["source"] = source
+            }
+            changed["entries"] = entries
+            XCTAssertThrowsError(try DictionaryTransferService.decode(JSONSerialization.data(withJSONObject: changed)), mutation)
+        }
+        entry.audioEnd = 1
+        XCTAssertThrowsError(try DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []))
+    }
+
+    @MainActor func testRestoreRequeuesInterruptedTranslationAndPreservesUntranslatedNotes() throws {
+        let (_, entry) = backupFixture()
+        entry.translationText = nil
+        entry.translationStatus = .translating
+        let document = try DictionaryTransferService.decode(
+            DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []).data)
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let preview = DictionaryTransferService.preview(document: document, mode: .restore, existing: [])
+        let pending = try DictionaryTransferService.apply(preview, context: container.mainContext)
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.translationStatus, .pending)
+        XCTAssertEqual(pending.first?.userNote, entry.userNote)
+        XCTAssertNil(pending.first?.translationOrigin)
+    }
+}

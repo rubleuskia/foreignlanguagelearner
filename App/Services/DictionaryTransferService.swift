@@ -27,6 +27,23 @@ struct DictionaryTransferDocument: Codable {
         let learningLevel: Int
         let createdAt: Date
         let source: Source
+        var details: Details? = nil
+    }
+    struct Details: Codable {
+        var contextSelectedTranslationText: String?
+        var contextTranslationText: String?
+        var contextAnalysisUpdatedAt: Date?
+        var wordHelpItems: [WordHelpItem]
+        var wordHelpUpdatedAt: Date?
+        var selectedSenseText: String?
+        var userNote: String?
+        var localSourceItemID: UUID?
+        var segmentIndex: Int?
+        var sourceTrackID: String?
+        var audioStart: Double?
+        var audioEnd: Double?
+        var translationStatus: TranslationStatus
+        var translationErrorCode: String?
     }
     struct Translation: Codable { let text: String?; let baseText: String?; let origin: String?; let updatedAt: Date? }
     struct Source: Codable { let id: UUID; let title: String; let context: Context? }
@@ -90,6 +107,7 @@ struct DictionaryJSONFile: FileDocument {
 
 enum DictionaryImportMode: String, CaseIterable, Identifiable {
     case merge = "Merge dictionary"
+    case restore = "Restore backup"
     case translations = "Update translations only"
     var id: String { rawValue }
 }
@@ -103,6 +121,7 @@ struct DictionaryImportPreview: Identifiable {
     let unchanged: Int
     let conflicts: Int
     let skipped: Int
+    var restorations: Int = 0
 }
 
 enum DictionaryTransferError: LocalizedError {
@@ -123,7 +142,7 @@ enum DictionaryTransferService {
     static func export(entries: [DictionaryEntry], includeContext: Bool,
                        diagnosticEvents: [PolishLookupDiagnosticEvent] = PolishLookupDiagnosticLog.shared.events()) throws -> DictionaryJSONFile {
         let exported = entries.sorted { $0.id.uuidString < $1.id.uuidString }.map { entry in
-            let translation = entry.translationText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let translation = clean(entry.translationText)
             let context: DictionaryTransferDocument.Context?
             if includeContext, let text = entry.contextText, let location = entry.contextSelectionLocation,
                let length = entry.contextSelectionLength {
@@ -133,9 +152,19 @@ enum DictionaryTransferService {
                 id: entry.id, text: entry.text, sourceLanguage: entry.sourceLanguageCode,
                 targetLanguage: entry.targetLanguageCode,
                 translation: .init(text: translation, baseText: translation,
-                                   origin: entry.translationOriginRaw, updatedAt: entry.translationUpdatedAt),
+                                   origin: translation == nil ? nil : entry.translationOriginRaw,
+                                   updatedAt: translation == nil ? nil : entry.translationUpdatedAt),
                 learningLevel: entry.learningLevel, createdAt: entry.createdAt,
-                source: .init(id: entry.sourceItemID, title: entry.sourceTitle, context: context)
+                source: .init(id: entry.sourceItemID, title: entry.sourceTitle, context: context),
+                details: .init(
+                    contextSelectedTranslationText: entry.contextSelectedTranslationText,
+                    contextTranslationText: entry.contextTranslationText,
+                    contextAnalysisUpdatedAt: entry.contextAnalysisUpdatedAt,
+                    wordHelpItems: entry.wordHelpItems, wordHelpUpdatedAt: entry.wordHelpUpdatedAt,
+                    selectedSenseText: entry.selectedSenseText, userNote: entry.userNote,
+                    localSourceItemID: entry.localSourceItemID, segmentIndex: entry.segmentIndex,
+                    sourceTrackID: entry.sourceTrackID, audioStart: entry.audioStart, audioEnd: entry.audioEnd,
+                    translationStatus: entry.translationStatus, translationErrorCode: entry.translationErrorCode)
             )
         }
         let info = Bundle.main.infoDictionary
@@ -146,43 +175,67 @@ enum DictionaryTransferService {
             operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
             polishDefinitionErrors: diagnosticEvents
         )
-        let document = DictionaryTransferDocument(format: "foreign-language-learner.dictionary", schemaVersion: 1,
+        let document = DictionaryTransferDocument(format: "foreign-language-learner.dictionary", schemaVersion: 2,
                                                    exportedAt: .now, entries: exported, diagnostics: diagnostics)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        return try DictionaryJSONFile(data: encoder.encode(document))
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            try container.encode(formatter.string(from: date))
+        }
+        let data = try encoder.encode(document)
+        // Never produce a backup that our own importer would reject.
+        _ = try decode(data)
+        return DictionaryJSONFile(data: data)
     }
 
     static func decode(_ data: Data) throws -> DictionaryTransferDocument {
         guard data.count <= 20 * 1_024 * 1_024 else { throw DictionaryTransferError.tooLarge }
-        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: value) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: value) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO 8601 date")
+        }
         let document = try decoder.decode(DictionaryTransferDocument.self, from: data)
         guard document.format == "foreign-language-learner.dictionary" else { throw DictionaryTransferError.invalidFormat }
-        guard document.schemaVersion == 1 else { throw DictionaryTransferError.unsupportedVersion }
+        guard (1...2).contains(document.schemaVersion) else { throw DictionaryTransferError.unsupportedVersion }
         guard document.entries.count <= 50_000 else { throw DictionaryTransferError.tooManyEntries }
         guard Set(document.entries.map(\.id)).count == document.entries.count else { throw DictionaryTransferError.duplicateID }
-        for entry in document.entries { try validate(entry) }
+        for entry in document.entries {
+            if document.schemaVersion == 2, entry.details == nil {
+                throw DictionaryTransferError.invalidEntry("\(entry.id): missing backup details")
+            }
+            try validate(entry)
+        }
         return document
     }
 
     @MainActor static func preview(document: DictionaryTransferDocument, mode: DictionaryImportMode,
                                    existing: [DictionaryEntry]) -> DictionaryImportPreview {
         let local = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-        var additions = 0, changes = 0, unchanged = 0, conflicts = 0, skipped = 0
+        var additions = 0, changes = 0, unchanged = 0, conflicts = 0, skipped = 0, restorations = 0
         for incoming in document.entries {
             guard let current = local[incoming.id] else {
-                if mode == .merge { additions += 1 } else { skipped += 1 }
+                if mode != .translations { additions += 1 } else { skipped += 1 }
                 continue
             }
             guard current.text == incoming.text, current.sourceLanguageCode == incoming.sourceLanguage,
                   current.targetLanguageCode == incoming.targetLanguage else { conflicts += 1; continue }
+            if mode == .restore { restorations += 1; continue }
             guard let proposed = clean(incoming.translation.text), proposed != current.translationText else { unchanged += 1; continue }
             if let base = clean(incoming.translation.baseText), base != current.translationText { conflicts += 1 }
             else { changes += 1 }
         }
         return .init(document: document, mode: mode, additions: additions, translationChanges: changes,
-                     unchanged: unchanged, conflicts: conflicts, skipped: skipped)
+                     unchanged: unchanged, conflicts: conflicts, skipped: skipped, restorations: restorations)
     }
 
     @MainActor static func apply(_ preview: DictionaryImportPreview, context: ModelContext) throws -> [DictionaryEntry] {
@@ -193,6 +246,11 @@ enum DictionaryTransferService {
             if let current = local[incoming.id] {
                 guard current.text == incoming.text, current.sourceLanguageCode == incoming.sourceLanguage,
                       current.targetLanguageCode == incoming.targetLanguage else { continue }
+                if preview.mode == .restore {
+                    restore(incoming, to: current)
+                    if current.translationStatus == .pending { pending.append(current) }
+                    continue
+                }
                 guard let proposed = clean(incoming.translation.text), proposed != current.translationText else { continue }
                 if let base = clean(incoming.translation.baseText), base != current.translationText { continue }
                 current.translationText = proposed
@@ -200,7 +258,7 @@ enum DictionaryTransferService {
                 current.translationStatus = .ready
                 current.translationUpdatedAt = .now
                 current.translationRevision += 1
-            } else if preview.mode == .merge {
+            } else if preview.mode != .translations {
                 let contextValue = incoming.source.context.map {
                     SelectionContext(text: $0.text, selection: NSRange(location: $0.selectionUTF16.location, length: $0.selectionUTF16.length))
                 }
@@ -210,12 +268,58 @@ enum DictionaryTransferService {
                                             translationText: clean(incoming.translation.text),
                                             translationUpdatedAt: incoming.translation.updatedAt,
                                             learningLevel: incoming.learningLevel, context: contextValue)
+                restore(incoming, to: entry)
                 context.insert(entry)
-                if !entry.hasTranslation { pending.append(entry) }
+                if entry.translationStatus == .pending { pending.append(entry) }
             }
         }
-        try context.save()
+        do { try context.save() }
+        catch { context.rollback(); throw error }
         return pending
+    }
+
+    @MainActor private static func restore(_ incoming: DictionaryTransferDocument.Entry, to entry: DictionaryEntry) {
+        entry.translationRevision += 1
+        entry.contextAnalysisRevision += 1
+        entry.text = DictionaryEntry.normalized(incoming.text)
+        entry.sourceLanguageCode = incoming.sourceLanguage
+        entry.targetLanguageCode = incoming.targetLanguage
+        entry.sourceItemID = incoming.source.id
+        entry.sourceTitle = incoming.source.title
+        entry.createdAt = incoming.createdAt
+        entry.translationText = clean(incoming.translation.text)
+        entry.translationOriginRaw = incoming.translation.origin
+        entry.translationUpdatedAt = incoming.translation.updatedAt
+        entry.learningLevel = incoming.learningLevel
+        entry.contextText = incoming.source.context?.text
+        entry.contextSelectionLocation = incoming.source.context?.selectionUTF16.location
+        entry.contextSelectionLength = incoming.source.context?.selectionUTF16.length
+        if let details = incoming.details {
+            entry.contextSelectedTranslationText = details.contextSelectedTranslationText
+            entry.contextTranslationText = details.contextTranslationText
+            entry.contextAnalysisUpdatedAt = details.contextAnalysisUpdatedAt
+            entry.wordHelpItems = details.wordHelpItems
+            entry.wordHelpUpdatedAt = details.wordHelpUpdatedAt
+            entry.selectedSenseText = details.selectedSenseText
+            entry.userNote = details.userNote
+            entry.localSourceItemID = details.localSourceItemID
+            entry.segmentIndex = details.segmentIndex
+            entry.sourceTrackID = details.sourceTrackID
+            entry.audioStart = details.audioStart
+            entry.audioEnd = details.audioEnd
+            entry.translationStatus = details.translationStatus
+            entry.translationErrorCode = details.translationErrorCode
+        } else {
+            entry.translationStatus = entry.hasTranslation ? .ready : .pending
+        }
+        // Requests cannot survive a restore; usable translations are immediately ready.
+        if entry.hasTranslation {
+            entry.translationStatus = .ready
+            entry.translationErrorCode = nil
+        } else if entry.translationStatus == .translating || entry.translationStatus == .ready {
+            entry.translationStatus = .pending
+            entry.translationErrorCode = nil
+        }
     }
 
     private static func validate(_ entry: DictionaryTransferDocument.Entry) throws {
@@ -242,10 +346,31 @@ enum DictionaryTransferService {
            entry.translation.baseText != nil || entry.translation.origin != nil || entry.translation.updatedAt != nil {
             throw DictionaryTransferError.invalidEntry("\(entry.id): untranslated entry has translation metadata")
         }
+        if let details = entry.details {
+            let values = [details.contextSelectedTranslationText, details.contextTranslationText,
+                          details.selectedSenseText, details.userNote, details.translationErrorCode]
+            guard values.allSatisfy({ ($0?.utf8.count ?? 0) <= 65_536 }),
+                  details.wordHelpItems.count <= 2_000,
+                  details.wordHelpItems.allSatisfy({
+                      !$0.sourceText.isEmpty && !$0.translationText.isEmpty
+                          && $0.sourceText.utf8.count <= 65_536 && $0.translationText.utf8.count <= 65_536
+                  }),
+                  details.segmentIndex.map({ $0 >= 0 }) ?? true,
+                  details.sourceTrackID.map({ !$0.isEmpty && $0.utf8.count <= 500 }) ?? true else {
+                throw DictionaryTransferError.invalidEntry("\(entry.id): invalid backup details")
+            }
+            switch (details.audioStart, details.audioEnd) {
+            case (nil, nil): break
+            case let (start?, end?) where start.isFinite && end.isFinite && start >= 0 && end > start: break
+            default: throw DictionaryTransferError.invalidEntry("\(entry.id): invalid audio range")
+            }
+        }
         if let context = entry.source.context {
             let count = (context.text as NSString).length
             let range = NSRange(location: context.selectionUTF16.location, length: context.selectionUTF16.length)
-            guard count <= 2_000, range.location >= 0, range.length > 0, NSMaxRange(range) <= count,
+            guard count <= 2_000, range.location >= 0, range.location <= count,
+                  range.length > 0, range.length <= count - range.location,
+                  Range(range, in: context.text) != nil,
                   DictionaryEntry.normalized((context.text as NSString).substring(with: range)) == DictionaryEntry.normalized(entry.text) else {
                 throw DictionaryTransferError.invalidEntry("\(entry.id): invalid context selection")
             }

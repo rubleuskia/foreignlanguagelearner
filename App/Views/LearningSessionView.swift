@@ -4,11 +4,14 @@ import SwiftUI
 struct LearningSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query private var allEntries: [DictionaryEntry]
     @Query private var sourceItems: [LearningItem]
+    @State private var contextual = ContextualTranslationCoordinator()
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
+    @State private var previewRound: LearningPreviewState?
     @State private var revealed = false
     @State private var errorMessage: String?
     @State private var editingEntry: DictionaryEntry?
@@ -19,14 +22,22 @@ struct LearningSessionView: View {
 
     private var eligibleEntries: [DictionaryEntry] { allEntries.filter(\.isLearningEligible) }
     private var current: DictionaryEntry? {
-        guard let id = round?.currentID else { return nil }
+        guard let id = previewRound?.currentID ?? round?.currentID else { return nil }
         return allEntries.first { $0.id == id }
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if let round, round.isComplete {
+                if let previewRound {
+                    if let current, current.isLearningEligible {
+                        questionView(current, round: nil, preview: previewRound)
+                    } else if let missingID = previewRound.currentID {
+                        ProgressView().task(id: previewRound.currentPresentationID) {
+                            skipPreview(id: missingID, presentationID: previewRound.currentPresentationID)
+                        }
+                    }
+                } else if let round, round.isComplete || round.selectedIDs.isEmpty {
                     completionView(round)
                 } else if let round {
                     if let current, current.isLearningEligible {
@@ -40,7 +51,7 @@ struct LearningSessionView: View {
                     setupView
                 }
             }
-            .navigationTitle("Learn")
+            .navigationTitle(previewRound == nil ? "Learn" : "Preview")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -54,7 +65,11 @@ struct LearningSessionView: View {
         }
         .sheet(item: $editingEntry) { entry in editingView(entry) }
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
-        .onDisappear { closeAudio() }
+        .onChange(of: previewRound?.currentPresentationID ?? round?.currentPresentationID) { _, _ in contextual.cancelCurrentRequest() }
+        .onDisappear {
+            closeAudio()
+            contextual.cancelCurrentRequest()
+        }
     }
 
     private var setupView: some View {
@@ -70,37 +85,55 @@ struct LearningSessionView: View {
             Section("Available") {
                 LabeledContent("Eligible phrases", value: "\(eligibleEntries.count)")
                 LabeledContent("This round", value: "\(selection.count(available: eligibleEntries.count))")
-                Text("A round uses a fixed set. Wrong answers return to the end until answered correctly.")
+                Text("Preview each phrase first and choose whether to learn it, advance its level or mark it as known. During learning, wrong answers return to the end until answered correctly.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Button("Start round", systemImage: "play.fill") { startRound() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(eligibleEntries.isEmpty)
-                    .accessibilityIdentifier("learn.start")
+                Button(action: startRound) {
+                    Label("Start round", systemImage: "play.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .disabled(eligibleEntries.isEmpty)
+                .accessibilityIdentifier("learn.start")
+            } footer: {
                 if eligibleEntries.isEmpty {
                     Text("Add or translate more dictionary entries to start practising.")
-                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func questionView(_ entry: DictionaryEntry, round: LearningRoundState) -> some View {
+    private func questionView(_ entry: DictionaryEntry, round: LearningRoundState?,
+                              preview: LearningPreviewState? = nil) -> some View {
         ScrollView {
             VStack(spacing: 24) {
-                VStack(spacing: 4) {
-                    Text("Completed \(round.rightAttemptCount) of \(round.totalSelectedCount)")
-                        .font(.headline)
-                        .accessibilityIdentifier("learn.completed")
-                    Text("Wrong attempts: \(round.wrongAttemptCount)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if !round.skippedIDs.isEmpty {
-                        Text("Skipped: \(round.skippedIDs.count)")
+                if let preview {
+                    VStack(spacing: 4) {
+                        Text("Preview \(preview.reviewedCount + 1) of \(preview.selectedIDs.count)")
+                            .font(.headline)
+                            .accessibilityIdentifier("learn.preview-progress")
+                        Text("Choose which phrases to practise before learning starts.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                } else if let round {
+                    VStack(spacing: 4) {
+                        Text("Completed \(round.rightAttemptCount) of \(round.totalSelectedCount)")
+                            .font(.headline)
+                            .accessibilityIdentifier("learn.completed")
+                        Text("Wrong attempts: \(round.wrongAttemptCount)")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !round.skippedIDs.isEmpty {
+                            Text("Skipped: \(round.skippedIDs.count)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
 
                 Text(entry.translationText ?? "")
                     .font(.largeTitle)
@@ -116,7 +149,7 @@ struct LearningSessionView: View {
                 .font(.caption)
                 .accessibilityIdentifier("learn.edit")
 
-                if revealed {
+                if revealed || preview != nil {
                     Divider()
                     Text(entry.text)
                         .font(.title2)
@@ -134,17 +167,20 @@ struct LearningSessionView: View {
                         CopyButton(value: contextText, label: "Copy source context",
                                    identifier: "learn.copy-source-context")
                     }
-                    HStack(spacing: 20) {
-                        Button("Wrong", systemImage: "xmark.circle") {
-                            answer(entry, presentationID: round.currentPresentationID, right: false)
+                    contextTranslation(for: entry)
+                    if let round {
+                        HStack(spacing: 20) {
+                            Button("Wrong", systemImage: "xmark.circle") {
+                                answer(entry, presentationID: round.currentPresentationID, right: false)
+                            }
+                            .buttonStyle(.bordered).tint(.red)
+                            .accessibilityIdentifier("learn.wrong")
+                            Button("Right", systemImage: "checkmark.circle") {
+                                answer(entry, presentationID: round.currentPresentationID, right: true)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("learn.right")
                         }
-                        .buttonStyle(.bordered).tint(.red)
-                        .accessibilityIdentifier("learn.wrong")
-                        Button("Right", systemImage: "checkmark.circle") {
-                            answer(entry, presentationID: round.currentPresentationID, right: true)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityIdentifier("learn.right")
                     }
                 } else {
                     Button("Check") { revealed = true }
@@ -156,6 +192,79 @@ struct LearningSessionView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
+        .id(preview?.currentPresentationID ?? round?.currentPresentationID)
+        .safeAreaInset(edge: .bottom) {
+            if let preview {
+                VStack(spacing: 8) {
+                    Button("Start learning") { previewAction(entry, preview: preview, action: .startLearning) }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("learn.preview-learn")
+                    Button("Move to next level") { previewAction(entry, preview: preview, action: .moveToNextLevel) }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("learn.preview-next-level")
+                    Button("Mark as known") { previewAction(entry, preview: preview, action: .markAsKnown) }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("learn.preview-known")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(.bar)
+            }
+        }
+    }
+
+    private func contextTranslation(for entry: DictionaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Meaning in context").font(.headline)
+            if let explanation = entry.contextTranslationText, !explanation.isEmpty {
+                Text("Word explanations").font(.caption).foregroundStyle(.secondary)
+                Text(explanation)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("learn.context-words")
+            }
+            if let candidate = entry.contextSelectedTranslationText, !candidate.isEmpty {
+                Divider()
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Overall translation").font(.caption).foregroundStyle(.secondary)
+                        Text(candidate)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("learn.context-translation")
+                    }
+                    Spacer()
+                    if candidate != entry.translationText {
+                        Button("Use this as translation") {
+                            saveTranslation(entry, value: candidate)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("learn.use-context-translation")
+                    }
+                }
+            }
+            if contextual.status == .translatingContext {
+                HStack { ProgressView(); Text("Generating context translation…") }
+            } else {
+                if case .failed(let message) = contextual.status {
+                    Text(message).foregroundStyle(.red)
+                }
+                if entry.contextTranslationText == nil || entry.contextSelectedTranslationText == nil
+                    || contextual.status != .idle {
+                    Button("Generate context translation", systemImage: "character.book.closed") {
+                        contextual.translateContext(for: entry, context: context,
+                                                    service: contextAnalysisService,
+                                                    allowPhraseFallback: true)
+                    }
+                    .accessibilityIdentifier("learn.generate-context")
+                    if ContextSentenceExtractor.sentence(for: entry) == nil {
+                        Text("No source context is saved. The analysis will use the phrase itself.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func completionView(_ round: LearningRoundState) -> some View {
@@ -163,7 +272,11 @@ struct LearningSessionView: View {
             LazyVStack(spacing: 18) {
                 Image(systemName: round.skippedIDs.isEmpty ? "checkmark.circle.fill" : "flag.checkered")
                     .font(.system(size: 54)).foregroundStyle(.tint)
-                Text(round.skippedIDs.isEmpty ? "Round complete" : "Round finished").font(.title)
+                Text(round.selectedIDs.isEmpty ? "Preview complete" : (round.skippedIDs.isEmpty ? "Round complete" : "Round finished")).font(.title)
+                if round.selectedIDs.isEmpty {
+                    Text("No phrases selected for learning. Your level changes have been saved.")
+                        .foregroundStyle(.secondary)
+                }
                 VStack(spacing: 5) {
                     LabeledContent("Selected size", value: round.selection.title)
                     LabeledContent("Phrases selected", value: "\(round.totalSelectedCount)")
@@ -275,13 +388,44 @@ struct LearningSessionView: View {
         var seen = Set<UUID>()
         let snapshot = eligibleEntries.map(\.id).filter { seen.insert($0).inserted }.shuffled()
         let count = selection.count(available: snapshot.count)
-        round = LearningRoundState(selection: selection,
-                                   selectedIDs: Array(snapshot.prefix(count)))
+        round = nil
+        updatePreview(LearningPreviewState(selection: selection,
+                                           selectedIDs: Array(snapshot.prefix(count))))
         revealed = false
     }
 
+    private func previewAction(_ entry: DictionaryEntry, preview: LearningPreviewState,
+                               action: LearningPreviewAction) {
+        guard var updated = previewRound else { return }
+        closeAudio()
+        do {
+            guard try LearningPreviewTransaction.apply(entry: entry, preview: &updated,
+                presentationID: preview.currentPresentationID, action: action,
+                save: { try context.save() }) else { return }
+            updatePreview(updated)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func skipPreview(id: UUID, presentationID: UUID) {
+        guard var updated = previewRound else { return }
+        closeAudio()
+        guard updated.advance(entryID: id, presentationID: presentationID, learn: false) else { return }
+        updatePreview(updated)
+    }
+
+    private func updatePreview(_ updated: LearningPreviewState) {
+        contextual.cancelCurrentRequest()
+        revealed = false
+        if updated.isComplete {
+            round = LearningRoundState(selection: updated.selection, selectedIDs: updated.learningIDs)
+            previewRound = nil
+        } else {
+            previewRound = updated
+        }
+    }
+
     private func answer(_ entry: DictionaryEntry, presentationID: UUID, right: Bool) {
-        guard revealed, var updatedRound = round else { return }
+        guard previewRound == nil, revealed, var updatedRound = round else { return }
         closeAudio()
         guard entry.isLearningEligible else {
             skipCurrent(id: entry.id, presentationID: presentationID)
@@ -344,7 +488,11 @@ struct LearningSessionView: View {
     }
 
     private func saveTranslation(_ entry: DictionaryEntry) {
-        let value = translationDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        saveTranslation(entry, value: translationDraft)
+    }
+
+    private func saveTranslation(_ entry: DictionaryEntry, value: String) {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         let previousText = entry.translationText
         let previousOrigin = entry.translationOrigin

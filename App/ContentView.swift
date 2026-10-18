@@ -118,6 +118,10 @@ struct ContentView: View {
             audioStart: 1, audioEnd: 2
         )
         practice.translationText = "добрый день"
+        if ProcessInfo.processInfo.arguments.contains("--learning-context-fixture") {
+            practice.contextTranslationText = "dzień — dzień — день\n\ndobry — dobry — добрый"
+            practice.contextSelectedTranslationText = "здравствуйте"
+        }
         practice.translationOrigin = .manual
         practice.translationStatus = .ready
         let learnt = DictionaryEntry(text: "do widzenia", item: item, segmentIndex: nil)
