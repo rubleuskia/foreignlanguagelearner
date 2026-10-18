@@ -41,7 +41,7 @@ struct ReaderView: View {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
-            TranscriptTextView(document: document,
+            VocabularyTranscriptView(document: document, language: item.sourceLanguageCode,
                                activeSegment: document.activeSegment(at: playback.position),
                                following: $following,
                                followGeneration: followGeneration,
@@ -73,6 +73,7 @@ struct ReaderView: View {
         .safeAreaInset(edge: .bottom) { playerBar }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ReadingCompletionButton(item: item, scope: .book) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Language", systemImage: "character.book.closed") {
@@ -85,6 +86,8 @@ struct ReaderView: View {
                         }
                     }
                 }
+                .disabled(item.hasReadingCompletion)
+                .help(item.hasReadingCompletion ? "The language is locked after marking a text read." : "Source language")
             }
         }
         .onAppear {
@@ -123,7 +126,7 @@ struct ReaderView: View {
                         }
                     }
                     Spacer()
-                    Button(currentPart?.isCompleted == true ? "Completed" : "Mark completed", systemImage: currentPart?.isCompleted == true ? "checkmark.circle.fill" : "circle") { toggleCompleted() }
+                    if let part = currentPart { ReadingCompletionButton(item: item, scope: .part(part.id)) }
                 }
             }
             Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
@@ -167,12 +170,6 @@ struct ReaderView: View {
         openCurrentPart()
     }
 
-    private func toggleCompleted() {
-        guard item.parts.indices.contains(selectedPart) else { return }
-        item.parts[selectedPart].isCompleted.toggle()
-        try? context.save()
-    }
-
     private func updatePartPosition(_ position: Double) {
         guard item.parts.indices.contains(selectedPart) else { return }
         item.parts[selectedPart].lastPosition = position
@@ -185,7 +182,7 @@ struct ReaderView: View {
     }
 
     private func changeLanguage(to code: String) {
-        guard code != item.sourceLanguageCode else { return }
+        guard !item.hasReadingCompletion, code != item.sourceLanguageCode else { return }
         let itemID = item.id
         do {
             let entries = try context.fetch(FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.localSourceItemID == itemID }))

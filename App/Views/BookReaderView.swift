@@ -52,6 +52,7 @@ struct BookReaderView: View {
         .safeAreaInset(edge: .bottom) { playerBar }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ReadingCompletionButton(item: item, scope: .book) }
         .onAppear { playback.open(item: item); loadFullText() }
         .onChange(of: playback.activeTrackID) { _, _ in
             scrubbing = false
@@ -86,7 +87,7 @@ struct BookReaderView: View {
         } else if let document = displayedDocument {
             let revision = documentRevision
             let trackID = mode == .track ? playback.activeTrackID : nil
-            TranscriptTextView(document: document,
+            VocabularyTranscriptView(document: document, language: item.sourceLanguageCode,
                                activeSegment: mode == .track ? document.activeSegment(at: playback.localPosition) : nil,
                                following: $following,
                                followGeneration: followGeneration,
@@ -136,11 +137,7 @@ struct BookReaderView: View {
             }
             if let id = playback.activeTrackID,
                let index = item.tracks.firstIndex(where: { $0.id == id }) {
-                Button(item.tracks[index].isCompleted ? "Completed" : "Mark track completed",
-                       systemImage: item.tracks[index].isCompleted ? "checkmark.circle.fill" : "circle") {
-                    item.tracks[index].isCompleted.toggle()
-                    try? context.save()
-                }
+                ReadingCompletionButton(item: item, scope: .track(item.tracks[index].id))
                 .font(.caption)
             }
             Slider(value: Binding(

@@ -93,7 +93,7 @@ final class PolishWiktionaryTests: XCTestCase {
         let log = PolishLookupDiagnosticLog(fileURL: fileURL)
         let coordinator = PolishDictionaryLookupCoordinator(provider: FailingPolishDictionaryProvider(),
                                                              diagnostics: log)
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
                                 mediaFilename: "media.m4a", transcriptFilename: "story.srt",

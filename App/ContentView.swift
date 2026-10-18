@@ -3,6 +3,7 @@ import SwiftData
 import Translation
 
 struct ContentView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \LearningItem.createdAt, order: .reverse) private var items: [LearningItem]
@@ -34,6 +35,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top) { ReadingVocabularyStatus() }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { NavigationLink("Dictionary") { DictionaryView() } }
@@ -57,8 +59,15 @@ struct ContentView: View {
             .sheet(isPresented: $showingBookImport) { BookImportView() }
             .task {
                 seedLearningUXFixtureIfNeeded()
+                #if DEBUG
+                do { try ReadingVocabularyUIFixture.seed(context: context) }
+                catch { errorMessage = error.localizedDescription }
+                #endif
                 translationCoordinator.recover(context: context)
-                do { try LibraryRecoveryService.recover(context: context) }
+                do {
+                    try LibraryRecoveryService.recover(context: context)
+                    await vocabulary.start(context: context)
+                }
                 catch { errorMessage = error.localizedDescription }
             }
             .translationTask(translationCoordinator.configuration,

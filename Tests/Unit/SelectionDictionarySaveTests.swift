@@ -16,7 +16,7 @@ private actor CountingAnalysisService: ContextAnalysisServing {
 @MainActor
 final class SelectionDictionarySaveTests: XCTestCase {
     private func fixture() throws -> (ModelContainer, LearningItem, SelectionTranslationPreview) {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
                                             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
                                 mediaFilename: "track.m4a", transcriptFilename: "story.srt",
