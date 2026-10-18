@@ -7,6 +7,8 @@ struct DictionaryView: View {
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var entries: [DictionaryEntry]
+    @AppStorage(LearningRoundCheckpoint.key) private var savedRoundData = Data()
+    @State private var selectedLevel: Int?
     @State private var selectedEntry: DictionaryEntry?
     @State private var showingLearn = false
     @State private var exporting = false
@@ -16,42 +18,66 @@ struct DictionaryView: View {
     @State private var importPreview: DictionaryImportPreview?
     @State private var errorMessage: String?
 
-    private var learningEntries: [DictionaryEntry] { entries.filter { $0.learningLevel != 4 } }
+    private var learningEntries: [DictionaryEntry] {
+        entries.filter { entry in
+            if let selectedLevel { return entry.learningLevel == selectedLevel }
+            return entry.learningLevel != 4
+        }
+    }
     private var learntEntries: [DictionaryEntry] { entries.filter { $0.learningLevel == 4 } }
 
     var body: some View {
         List {
+            if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
+                Section {
+                    Button("Continue unfinished training", systemImage: "play.circle") { showingLearn = true }
+                        .accessibilityIdentifier("dictionary.resume")
+                }
+            }
             Section("Learning progress") {
                 ForEach(1...4, id: \.self) { level in
-                    HStack {
-                        LearningLevelBadge(level: level)
-                        Spacer()
-                        Text(entries.count(where: { $0.learningLevel == level }).formatted())
-                            .font(.headline.monospacedDigit())
-                            .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                    Button { selectedLevel = level } label: {
+                        HStack {
+                            LearningLevelBadge(level: level)
+                            Spacer()
+                            if selectedLevel == level { Image(systemName: "checkmark") }
+                            Text(entries.count(where: { $0.learningLevel == level }).formatted())
+                                .font(.headline.monospacedDigit())
+                                .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("dictionary.filter.level.\(level)")
+                }
+                if selectedLevel != nil {
+                    Button("Reset filter") { selectedLevel = nil }
+                        .accessibilityIdentifier("dictionary.filter.reset")
                 }
             }
             if entries.isEmpty {
                 ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Select text in a transcript and choose Add to Dictionary."))
                     .listRowBackground(Color.clear)
             } else {
-                if !learningEntries.isEmpty {
-                    Section("In progress") {
+                if !learningEntries.isEmpty || selectedLevel != nil {
+                    Section(selectedLevel.map { "In progress · Level \($0)" } ?? "In progress") {
+                        if learningEntries.isEmpty { Text("No phrases at this level").foregroundStyle(.secondary) }
                         ForEach(learningEntries) { entry in
                             entryButton(entry)
                         }
                         .onDelete { deleteEntries($0, from: learningEntries) }
                     }
                 }
-                Section("Learnt phrases") {
-                    if learntEntries.isEmpty {
-                        Text("No learnt phrases yet").foregroundStyle(.secondary)
-                    } else {
-                        ForEach(learntEntries) { entry in
-                            entryButton(entry)
+                if selectedLevel == nil {
+                    Section("Learnt phrases") {
+                        if learntEntries.isEmpty {
+                            Text("No learnt phrases yet").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(learntEntries) { entry in
+                                entryButton(entry)
+                            }
+                            .onDelete { deleteEntries($0, from: learntEntries) }
                         }
-                        .onDelete { deleteEntries($0, from: learntEntries) }
                     }
                 }
             }

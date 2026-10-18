@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-18 — Resumable word training and level filters
+
+- Preview reveals the answer immediately only for level 1; levels 2–3 require Check before the three preview actions appear.
+- Unfinished rounds are checkpointed after the first Right/Wrong and offered again in the dictionary and learning setup. Closing requires confirmation after answers; swipe dismissal is disabled. Each answer still saves its word level immediately.
+- Learning progress rows filter the word list by level, with a reset action and empty state; level 4 shows learnt words in the filtered list.
+- Training card copy/edit and copy/audio controls share horizontal rows.
+- Updated DECISIONS.md and PROJECT.md for the resumable learning workflow.
+
 ## 2026-10-18 — PR integration with main
 
 - Integrated the smoother transcript-following changes from main with dictionary training and phrase-audio improvements, retaining both sets of changelog entries.
