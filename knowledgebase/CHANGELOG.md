@@ -6,6 +6,12 @@
 - After Check, swipe left for Right (green) and right for Wrong (red). The card follows horizontal dragging and exits in that direction before saving the answer; short or vertical gestures return without answering. Reduce Motion uses color and reduced movement. Undo remains available after the answer saves.
 - Updated DECISIONS.md for the reversed swipe mapping. Project purpose, supported workflows and boundaries are unchanged; PROJECT.md requires no update.
 
+## 2026-10-18 — Repository contribution workflow and archived review
+
+- Require new chats to begin from fetched main on a dedicated branch, using a separate worktree when another agent owns the checkout and preserving existing changes.
+- Preserve the historical alignment-backend review of de8eed6 with an explicit snapshot disclaimer; its findings are not assertions about current main.
+- DECISIONS.md records the contribution workflow. Project purpose, supported product workflows and boundaries are unchanged; PROJECT.md requires no update.
+
 ## 2026-10-18 — Level-ordered practice and swipe answers
 
 - Rounds now select only the lowest eligible level, capped by the chosen size; higher levels wait until no eligible lower-level phrases remain. Setup shows the current level and actual round size.

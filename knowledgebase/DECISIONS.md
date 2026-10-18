@@ -184,3 +184,7 @@ Detailed word explanations are a second, explicitly requested level of Meaning i
 The existing persisted `source — lemma — meaning` breakdown is decoded only when every line can be matched in order to the exact selected source tokens. Occurrence-specific UTF-16 ranges disambiguate repeated words. Unsupported legacy output is displayed unchanged; no guessed word lookup is issued. A missing surrounding context can use the selected phrase, matching the existing learning fallback.
 
 Successful details are derived data in a bounded 200-record Caches file, keyed by a hash of the word, lemma, exact context/range, languages, model and detailed-prompt version. The cache survives normal relaunches and works offline when present, but may be purged and is excluded from portable dictionary backups. No SwiftData migration or stored-translation overwrite is needed. Cancelled and invalid responses are not cached.
+
+## Isolated agent contributions
+
+New chats start from fetched origin/main on a dedicated codex/ branch. Concurrent work uses separate worktrees. Existing working-copy changes are preserved rather than reset during setup. Historical review reports explicitly identify their reviewed snapshot and require revalidation before their findings are treated as current.
