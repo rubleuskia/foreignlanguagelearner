@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-18 — Level-ordered practice and swipe answers
+
+- Rounds now select only the lowest eligible level, capped by the chosen size; higher levels wait until no eligible lower-level phrases remain. Setup shows the current level and actual round size.
+- Revealed practice cards accept right/left swipes for Right/Wrong while preserving vertical scrolling and the answer buttons.
+- A three-second Undo restores the last answered card, its level and round counters, including from completion. Save failures retain the answered state; a new answer replaces the previous undo.
+- Preview now offers Skip to exclude a word from the current round without changing its level or dictionary record. Integrated current main, including resumable training and inline word explanations; Undo updates the resume checkpoint.
+- Updated DECISIONS.md and PROJECT.md for the training workflow; project purpose and major boundaries are unchanged.
+
 ## 2026-10-18 — Inline detailed word explanations
 
 - Tap a word in the contextual breakdown to expand a plain-language definition, its meaning in the source sentence, and 1–2 typical source-language phrases with translations. One word is expanded at a time in selection previews, dictionary details and learning cards.
