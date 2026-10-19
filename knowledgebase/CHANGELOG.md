@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-19 — Play selected words using saved alignment timings
+
+- Add optional word-timing sidecars to book imports and local batch publishing. Reader selections, previews, dictionary cards and learning cards use the first/last selected spoken-word boundaries; missing or zero-duration spoken-word timings fall back to clearly labeled Play context.
+- Add Update phrase audio to existing books: validate local audio/text identity, attach timing files without reimporting the book, and refine unambiguous dictionary ranges while preserving source IDs, completion and playback progress. Failed saves restore prior metadata.
+- Add a cache-upgrade utility and validate the final saved Lalka conversion: 39 tracks, 258,855 token timings, 9,589 zero-duration tokens; new recognition was unnecessary. Real-data selection tests cover a phrase inside a multiword subtitle cue.
+- DECISIONS.md records the optional sidecar and update contract; PROJECT.md includes word-level playback and existing-book updates. See docs/WORD_AUDIO_TIMINGS.md for package details and validation limits.
+
 ## 2026-10-19 — Configurable phrase cooldown
 
 - New practice rounds wait 24/72/96 hours after a transition into level 1/2/3, with editable hour values and an “Ignore words cooldown” checkbox on the start screen. New phrases remain available for first practice.

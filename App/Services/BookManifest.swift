@@ -45,6 +45,7 @@ struct BookManifest: Codable, Equatable, Sendable {
         let alignmentStatus: TrackAlignmentStatus
         let subtitle: String?
         let textRange: TextRange?
+        var wordTimings: String? = nil
     }
     struct TextMapping: Codable, Equatable, Sendable {
         let normalization: String
@@ -88,7 +89,7 @@ enum BookManifestValidator {
     private static let identifier = try! NSRegularExpression(pattern: "^[A-Za-z0-9_-]{1,64}$")
     private static let language = try! NSRegularExpression(pattern: "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$")
     private static let topLevelKeys: Set<String> = ["format", "schemaVersion", "title", "sourceLanguage", "transcript", "tracks", "textMapping"]
-    private static let trackKeys: Set<String> = ["id", "title", "audio", "alignmentStatus", "subtitle", "textRange"]
+    private static let trackKeys: Set<String> = ["id", "title", "audio", "alignmentStatus", "subtitle", "textRange", "wordTimings"]
     private static let mappingKeys: Set<String> = ["normalization", "normalizedSHA256", "wordCount"]
     private static let rangeKeys: Set<String> = ["startWord", "endWord"]
 
@@ -139,10 +140,11 @@ enum BookManifestValidator {
             guard audioPaths.insert(normalizedCollisionKey(track.audio)).inserted else { throw invalid("Audio paths must be unique.") }
             switch track.alignmentStatus {
             case .untimed:
-                guard track.subtitle == nil else { throw invalid("Untimed track \(track.id) must not reference subtitles.") }
+                guard track.subtitle == nil, track.wordTimings == nil else { throw invalid("Untimed track \(track.id) must not reference subtitles.") }
             case .aligned, .reviewRequired:
                 guard let subtitle = track.subtitle else { throw invalid("Timed track \(track.id) requires subtitles.") }
                 try validatePath(subtitle, extensions: ["srt", "vtt"])
+                if let timings = track.wordTimings { try validatePath(timings, extensions: ["json"]) }
             }
         }
         try validateMapping(manifest, transcriptData: transcriptData)

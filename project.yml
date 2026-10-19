@@ -50,6 +50,7 @@ targets:
     sources: [Tests/Unit]
     dependencies:
       - target: ForeignLanguageLearner
+      - package: ZIPFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner.tests

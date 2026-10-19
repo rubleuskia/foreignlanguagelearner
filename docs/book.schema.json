@@ -94,12 +94,18 @@
             { "pattern": "\\.(?:[sS][rR][tT]|[vV][tT][tT])$" }
           ]
         },
+        "wordTimings": {
+          "allOf": [
+            { "$ref": "#/$defs/safeRelativePath" },
+            { "pattern": "\\.[jJ][sS][oO][nN]$" }
+          ]
+        },
         "textRange": { "$ref": "#/$defs/textRange" }
       },
       "allOf": [
         {
           "if": { "properties": { "alignmentStatus": { "const": "untimed" } } },
-          "then": { "not": { "required": ["subtitle"] } },
+          "then": { "not": { "anyOf": [{ "required": ["subtitle"] }, { "required": ["wordTimings"] }] } },
           "else": { "required": ["subtitle"] }
         }
       ]

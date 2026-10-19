@@ -11,6 +11,7 @@ actor BookImportService {
         let subtitleFilename: String?
         let duration: Double
         let alignmentStatus: TrackAlignmentStatus
+        var wordTimingsFilename: String? = nil
     }
 
     struct Preview: Identifiable, Equatable, Sendable {
@@ -193,7 +194,7 @@ actor BookImportService {
         let learningTracks = orderedTracks.map {
             LearningTrack(id: $0.id, title: $0.title, mediaFilename: $0.mediaFilename,
                           subtitleFilename: $0.subtitleFilename, duration: $0.duration,
-                          alignmentStatus: $0.alignmentStatus)
+                          alignmentStatus: $0.alignmentStatus, wordTimingsFilename: $0.wordTimingsFilename)
         }
         let duration = learningTracks.reduce(0) { $0 + $1.duration }
         guard duration.isFinite else { throw invalid("Combined duration is invalid.") }
@@ -236,7 +237,7 @@ actor BookImportService {
         let manifestData = try extractData(manifestEntry, from: archive, maximumBytes: limits.maximumManifestBytes)
         var manifest = try BookManifestValidator.decode(manifestData, limits: limits)
         let byPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
-        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle].compactMap { $0 } })
+        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle, $0.wordTimings].compactMap { $0 } })
         let unknown = entries.filter { $0.type == .file && !allowed.contains($0.path) && !isSystemMetadata($0.path) }
         guard unknown.isEmpty else { throw invalid("Strict package contains unreferenced file: \(unknown[0].path)") }
         guard let transcriptEntry = byPath[manifest.transcript], transcriptEntry.type == .file else { throw invalid("Manifest transcript is missing.") }
@@ -249,6 +250,7 @@ actor BookImportService {
         try fileManager.createDirectory(at: book.appending(path: "audio", directoryHint: .isDirectory), withIntermediateDirectories: true)
         try fileManager.createDirectory(at: book.appending(path: "subtitles", directoryHint: .isDirectory), withIntermediateDirectories: true)
         var subtitleTotal = 0
+        var wordTimingTotal = 0
         var previewTracks: [PreviewTrack] = []
         for track in manifest.tracks {
             try Task.checkCancellation()
@@ -271,9 +273,28 @@ actor BookImportService {
                 try extractFile(subtitleEntry, from: archive, to: destination, maximumBytes: UInt64(limits.maximumSubtitleBytes - 1))
                 try validateSubtitle(destination, duration: duration)
             }
+            var wordTimingsFilename: String?
+            if let path = track.wordTimings {
+                guard let entry = byPath[path], entry.type == .file,
+                      entry.uncompressedSize <= WordAudioTimingFile.maximumBytes,
+                      let subtitleFilename else { throw invalid("Missing or oversized word timings for track \(track.id).") }
+                wordTimingTotal += Int(entry.uncompressedSize)
+                guard wordTimingTotal <= WordAudioTimingFile.maximumCombinedBytes else { throw invalid("Combined word timings exceed 50 MB.") }
+                wordTimingsFilename = "word-timings/\(track.id).json"
+                let destination = book.appending(path: wordTimingsFilename!)
+                try extractFile(entry, from: archive, to: destination, maximumBytes: UInt64(WordAudioTimingFile.maximumBytes))
+                let timings = try WordAudioTimingFile.read(destination)
+                let subtitleURL = book.appending(path: subtitleFilename)
+                let document = try TranscriptParser.parse(String(contentsOf: subtitleURL, encoding: .utf8), extension: subtitleURL.pathExtension)
+                _ = try timings.applying(to: document, trackID: track.id, duration: duration)
+                guard try timings.audioSHA256 == WordAudioTimingFile.audioHash(audioDestination) else {
+                    throw invalid("Word timings do not match the audio for track \(track.id).")
+                }
+            }
             previewTracks.append(.init(id: track.id, title: track.title, sourcePath: track.audio,
                                        mediaFilename: mediaFilename, subtitleFilename: subtitleFilename,
-                                       duration: duration, alignmentStatus: track.alignmentStatus))
+                                       duration: duration, alignmentStatus: track.alignmentStatus,
+                                       wordTimingsFilename: wordTimingsFilename))
         }
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
         manifests[transactionID] = manifest

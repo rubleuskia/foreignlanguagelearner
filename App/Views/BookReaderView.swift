@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BookReaderView: View {
     enum ReadingMode: String, CaseIterable, Identifiable {
@@ -25,6 +26,9 @@ struct BookReaderView: View {
     @State private var lastSavedPosition = 0.0
     @State private var followGeneration = 0
     @State private var translationCache = SelectionTranslationCache()
+    @State private var choosingWordTimings = false
+    @State private var updatingWordTimings = false
+    private let timingUpdates = WordTimingUpdateService()
 
     private var activeTrack: LearningTrack? { item.tracks.first { $0.id == playback.activeTrackID } }
     private var displayedDocument: TranscriptDocument? {
@@ -54,6 +58,24 @@ struct BookReaderView: View {
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ReadingCompletionButton(item: item, scope: .book) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    choosingWordTimings = true
+                } label: {
+                    if updatingWordTimings { ProgressView() }
+                    else { Label("Update phrase audio", systemImage: "waveform.badge.plus") }
+                }
+                .disabled(updatingWordTimings)
+                .accessibilityIdentifier("reader.update-phrase-audio")
+                .fileImporter(isPresented: $choosingWordTimings, allowedContentTypes: [.zip]) { result in
+                    switch result {
+                    case .success(let url): updateWordTimings(from: url)
+                    case .failure(let error): message = error.localizedDescription
+                    }
+                }
+            }
+        }
         .onAppear { playback.open(item: item); loadFullText() }
         .onChange(of: playback.activeTrackID) { _, _ in
             scrubbing = false
@@ -188,11 +210,10 @@ struct BookReaderView: View {
 
     private func loadTrackTranscript() {
         guard let track = activeTrack, track.alignmentStatus.hasTimedTranscript,
-              trackDocuments[track.id] == nil, let filename = track.subtitleFilename else { return }
+              trackDocuments[track.id] == nil, track.subtitleFilename != nil else { return }
         do {
-            let url = MediaImportService.directory(for: item.id).appending(path: filename)
-            let text = try String(contentsOf: url, encoding: .utf8)
-            trackDocuments[track.id] = try TranscriptParser.parse(text, extension: url.pathExtension)
+            trackDocuments[track.id] = try TrackTranscriptLoader.load(
+                track: track, directory: MediaImportService.directory(for: item.id))
             transcriptError = nil
         } catch { transcriptError = error.localizedDescription }
     }
@@ -204,6 +225,31 @@ struct BookReaderView: View {
             transcriptError = nil
         } catch { transcriptError = error.localizedDescription }
         loadTrackTranscript()
+    }
+
+    private func updateWordTimings(from url: URL) {
+        updatingWordTimings = true
+        let tracks = item.tracks
+        let directory = MediaImportService.directory(for: item.id)
+        Task {
+            do {
+                let prepared = try await timingUpdates.prepare(archiveURL: url, tracks: tracks, directory: directory)
+                do {
+                    let entries = try context.fetch(FetchDescriptor<DictionaryEntry>())
+                    let updated = try WordTimingUpdateCommit.apply(prepared, to: item, entries: entries) { try context.save() }
+                    trackDocuments.removeAll()
+                    loadTrackTranscript()
+                    translationCache = SelectionTranslationCache()
+                    message = "Phrase audio updated for \(prepared.filenames.count) tracks and \(updated) saved phrases. Words without usable timings still play their context."
+                } catch {
+                    try? FileManager.default.removeItem(at: prepared.directory)
+                    throw error
+                }
+            } catch {
+                message = error.localizedDescription
+            }
+            updatingWordTimings = false
+        }
     }
 
     private func savePosition() {
