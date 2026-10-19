@@ -167,6 +167,7 @@ private struct DictionaryRow: View {
                         .lineLimit(2)
                         .accessibilityIdentifier("dictionary.row-translation")
                 }
+                PhraseCooldownLabel(entry: entry)
                 Text(entry.sourceTitle).font(.caption).foregroundStyle(.secondary)
                 Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
             }
@@ -328,6 +329,7 @@ struct DictionaryEntryDetailView: View {
                     }
                     .pickerStyle(.menu)
                     .accessibilityIdentifier("dictionary.level-picker")
+                    PhraseCooldownLabel(entry: entry)
                 }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Your interpretation") {
@@ -604,5 +606,27 @@ struct LearningLevelBadge: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
             .accessibilityLabel("Level \(level), \(LearningLevel.title(level))")
+    }
+}
+
+/// A snapshot calculated during rendering; deliberately has no timer or TimelineView.
+private struct PhraseCooldownLabel: View {
+    let entry: DictionaryEntry
+
+    var body: some View {
+        if entry.learningLevel < 4 {
+            if let remaining = LearningCooldown.remainingTime(entry) {
+                Label(remaining > 0
+                      ? "Repeat in \(LearningCooldown.remainingDescription(seconds: remaining))"
+                      : "Ready to repeat",
+                      systemImage: remaining > 0 ? "clock" : "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dictionary.cooldown")
+            } else {
+                Label("Cooldown pending", systemImage: "clock")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
