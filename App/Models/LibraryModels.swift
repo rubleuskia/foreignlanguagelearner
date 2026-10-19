@@ -36,6 +36,7 @@ struct LearningTrack: Codable, Equatable, Sendable, Identifiable {
     var title: String
     var mediaFilename: String
     var subtitleFilename: String?
+    var wordTimingsFilename: String?
     var duration: Double
     var alignmentStatus: TrackAlignmentStatus
     var lastPosition: Double
@@ -43,11 +44,12 @@ struct LearningTrack: Codable, Equatable, Sendable, Identifiable {
 
     init(id: String, title: String, mediaFilename: String, subtitleFilename: String? = nil,
          duration: Double, alignmentStatus: TrackAlignmentStatus = .untimed,
-         lastPosition: Double = 0, isCompleted: Bool = false) {
+         lastPosition: Double = 0, isCompleted: Bool = false, wordTimingsFilename: String? = nil) {
         self.id = id
         self.title = title
         self.mediaFilename = mediaFilename
         self.subtitleFilename = subtitleFilename
+        self.wordTimingsFilename = wordTimingsFilename
         self.duration = duration
         self.alignmentStatus = alignmentStatus
         self.lastPosition = lastPosition
@@ -114,9 +116,11 @@ struct TranscriptDocument: Sendable {
     let sourceIndices: [Int]
     let text: String
     let ranges: [NSRange]
+    let wordTimings: [TranscriptWordTiming]
 
-    init(segments: [TranscriptSegment], sourceIndices: [Int]? = nil) {
+    init(segments: [TranscriptSegment], sourceIndices: [Int]? = nil, wordTimings: [TranscriptWordTiming] = []) {
         self.segments = segments
+        self.wordTimings = wordTimings
         self.sourceIndices = sourceIndices ?? Array(segments.indices)
         self.text = segments.map(\.text).joined(separator: "\n\n")
         var offset = 0

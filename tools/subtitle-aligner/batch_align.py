@@ -11,12 +11,13 @@ import sys
 import zipfile
 
 import align
+import word_timings
 
 FORMAT = "foreign-language-learner.book"
 SCHEMA_VERSION = 1
 NORMALIZATION = "aligner-nfc-whitespace-v1"
 ALLOWED_TOP = {"format", "schemaVersion", "title", "sourceLanguage", "transcript", "tracks", "textMapping"}
-ALLOWED_TRACK = {"id", "title", "audio", "alignmentStatus", "subtitle", "textRange"}
+ALLOWED_TRACK = {"id", "title", "audio", "alignmentStatus", "subtitle", "textRange", "wordTimings"}
 ALLOWED_MAPPING = {"normalization", "normalizedSHA256", "wordCount"}
 ALLOWED_RANGE = {"startWord", "endWord"}
 
@@ -219,6 +220,7 @@ def publish_book(output, root, manifest, transcript, prepared, reports):
     book = output / "book"
     (book / "audio").mkdir(parents=True)
     (book / "subtitles").mkdir(parents=True)
+    (book / "word-timings").mkdir(parents=True)
     shutil.copy2(transcript, book / "transcript.txt")
     final_tracks = []
     for track, report in zip(prepared, reports):
@@ -230,12 +232,20 @@ def publish_book(output, root, manifest, transcript, prepared, reports):
         final_track = {"id": identifier, "title": track["manifest"]["title"],
                        "audio": audio_name, "alignmentStatus": report["status"],
                        "subtitle": subtitle_name, "textRange": track["manifest"]["textRange"]}
+        timing_name = f"word-timings/{identifier}.json"
+        timing_data = word_timings.make_file(
+            report, (book / subtitle_name).read_text(encoding="utf-8"), identifier,
+            word_timings.file_hash(book / audio_name), probe_audio(book / audio_name))
+        (book / timing_name).write_bytes(timing_data)
+        final_track["wordTimings"] = timing_name
         final_tracks.append(final_track)
     final_manifest = dict(manifest)
     final_manifest["transcript"] = "transcript.txt"
     final_manifest["tracks"] = final_tracks
     (book / "manifest.json").write_text(
         json.dumps(final_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if sum(p.stat().st_size for p in (book / "word-timings").glob("*.json")) > word_timings.MAXIMUM_COMBINED_BYTES:
+        raise ValueError("Combined word timings exceed 50 MB.")
     archive_path = output / "book.book.zip"
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
         for path in sorted(book.rglob("*")):

@@ -226,7 +226,7 @@ struct DictionaryEntryDetailView: View {
                             .accessibilityIdentifier("dictionary.original")
                         if let source = audioSource {
                             Button { toggleAudio(source) } label: {
-                                Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
+                                Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
                                       systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                     .labelStyle(.iconOnly)
                                     .font(.title2)

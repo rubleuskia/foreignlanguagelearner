@@ -10,6 +10,10 @@ struct PhraseAudioSource: Equatable, Sendable {
 
     let identity: Identity
     let itemTitle: String
+    var usesWordTimings = false
+
+    var playLabel: String { usesWordTimings ? "Play phrase" : "Play context" }
+    var pauseLabel: String { usesWordTimings ? "Pause phrase" : "Pause context" }
 }
 
 enum PhraseAudioSourceResolver {
@@ -19,38 +23,56 @@ enum PhraseAudioSourceResolver {
         let item = items.first { $0.id == (entry.localSourceItemID ?? entry.sourceItemID) }
             ?? items.first { $0.id == entry.sourceItemID }
         var audioRange = storedRange
+        var usesWordTimings = false
         if let item, let storedRange, let index = entry.segmentIndex {
             let document: TranscriptDocument?
             if item.tracks.isEmpty {
                 document = TranscriptDocument(segments: item.segments)
-            } else if let track = item.tracks.first(where: { $0.id == entry.sourceTrackID }),
-                      let filename = track.subtitleFilename {
-                let url = MediaImportService.directory(for: item.id).appending(path: filename)
-                document = (try? String(contentsOf: url, encoding: .utf8)).flatMap {
-                    try? TranscriptParser.parse($0, extension: url.pathExtension)
-                }
+            } else if let track = item.tracks.first(where: { $0.id == entry.sourceTrackID }) {
+                document = try? TrackTranscriptLoader.load(track: track, directory: MediaImportService.directory(for: item.id))
             } else {
                 document = nil
             }
             if let document {
-                audioRange = PhraseAudioTiming.removingLegacyPadding(
-                    from: storedRange, selectedText: entry.text, firstSegment: index, document: document)
+                if let selection = PhraseAudioTiming.savedSelection(selectedText: entry.text, firstSegment: index,
+                                                                   document: document, storedRange: storedRange),
+                   let aligned = PhraseAudioTiming.wordRange(for: selection, in: document, duration: item.tracks.first(where: { $0.id == entry.sourceTrackID })?.duration ?? item.duration) {
+                    audioRange = aligned
+                    usesWordTimings = true
+                } else {
+                    audioRange = PhraseAudioTiming.removingLegacyPadding(
+                        from: storedRange, selectedText: entry.text, firstSegment: index, document: document)
+                }
             }
         }
-        return resolve(localSourceItemID: entry.localSourceItemID,
+        var source = resolve(localSourceItemID: entry.localSourceItemID,
                 sourceItemID: entry.sourceItemID,
                 audioRange: audioRange,
                 sourceTrackID: entry.sourceTrackID,
                 items: items, fileExists: fileExists)
+        source?.usesWordTimings = usesWordTimings
+        return source
     }
 
     static func resolve(preview: SelectionTranslationPreview, items: [LearningItem],
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
-        resolve(localSourceItemID: preview.sourceItemID,
+        var source = resolve(localSourceItemID: preview.sourceItemID,
                 sourceItemID: preview.sourceItemID,
                 audioRange: preview.audioRange,
                 sourceTrackID: preview.sourceTrackID,
                 items: items, fileExists: fileExists)
+        if let item = items.first(where: { $0.id == preview.sourceItemID }),
+           let track = item.tracks.first(where: { $0.id == preview.sourceTrackID }),
+           let document = try? TrackTranscriptLoader.load(track: track, directory: MediaImportService.directory(for: item.id)),
+           let index = preview.segmentIndex, let storedRange = preview.audioRange,
+           let selection = PhraseAudioTiming.savedSelection(selectedText: preview.selectedText, firstSegment: index,
+                                                            document: document, storedRange: storedRange),
+           let aligned = PhraseAudioTiming.wordRange(for: selection, in: document, duration: track.duration) {
+            source = resolve(localSourceItemID: item.id, sourceItemID: item.id, audioRange: aligned,
+                             sourceTrackID: track.id, items: items, fileExists: fileExists)
+            source?.usesWordTimings = true
+        }
+        return source
     }
 
     static func resolve(localSourceItemID: UUID?, sourceItemID: UUID,
@@ -93,13 +115,14 @@ enum PhraseAudioSourceResolver {
     }
 }
 
-/// Uses actual subtitle boundaries; never estimates word timing from character positions.
+/// Prefers aligned word boundaries, falling back to subtitle cues without estimating speech speed.
 enum PhraseAudioTiming {
     static func range(for selection: NSRange, in document: TranscriptDocument,
                       duration: Double) -> ClosedRange<Double>? {
         guard selection.location != NSNotFound, selection.length > 0,
               Range(selection, in: document.text) != nil,
               duration.isFinite, duration > 0 else { return nil }
+        if let words = wordRange(for: selection, in: document, duration: duration) { return words }
         let indices = document.ranges.indices.filter {
             NSIntersectionRange(document.ranges[$0], selection).length > 0
         }
@@ -118,6 +141,48 @@ enum PhraseAudioTiming {
         return start...end
     }
 
+    static func wordRange(for selection: NSRange, in document: TranscriptDocument,
+                          duration: Double) -> ClosedRange<Double>? {
+        guard selection.location != NSNotFound, selection.length > 0,
+              Range(selection, in: document.text) != nil, duration.isFinite, duration > 0 else { return nil }
+        let timings = document.wordTimings
+        var low = 0
+        var high = timings.count
+        while low < high {
+            let middle = (low + high) / 2
+            if NSMaxRange(timings[middle].range) <= selection.location { low = middle + 1 }
+            else { high = middle }
+        }
+        var selected: [TranscriptWordTiming] = []
+        while low < timings.count, timings[low].range.location < NSMaxRange(selection) {
+            if timings[low].isSpoken { selected.append(timings[low]) }
+            low += 1
+        }
+        guard let first = selected.first, let last = selected.last,
+              selected.allSatisfy({ $0.start.isFinite && $0.end.isFinite && $0.start >= 0 && $0.end > $0.start && $0.end <= duration }),
+              last.end > first.start else { return nil }
+        return first.start...last.end
+    }
+
+    /// Old dictionary ranges describe cues. Resolve only an unambiguous occurrence in the saved cue.
+    static func savedSelection(selectedText: String, firstSegment: Int, document: TranscriptDocument,
+                               storedRange: ClosedRange<Double>) -> NSRange? {
+        guard document.ranges.indices.contains(firstSegment) else { return nil }
+        let words = selectedText.split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return nil }
+        let pattern = words.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: "\\s+")
+        guard let expression = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}])" + pattern + "(?![\\p{L}\\p{N}])") else { return nil }
+        let firstRange = document.ranges[firstSegment]
+        let search = NSRange(location: firstRange.location, length: (document.text as NSString).length - firstRange.location)
+        let matches = expression.matches(in: document.text, range: search).filter { NSIntersectionRange($0.range, firstRange).length > 0 }
+        if matches.count == 1 { return matches[0].range }
+        let matchingStored = matches.filter {
+            guard let range = wordRange(for: $0.range, in: document, duration: storedRange.upperBound) else { return false }
+            return abs(range.lowerBound - storedRange.lowerBound) < 0.001 && abs(range.upperBound - storedRange.upperBound) < 0.001
+        }
+        return matchingStored.count == 1 ? matchingStored[0].range : nil
+    }
+
     static func removingLegacyPadding(from stored: ClosedRange<Double>, selectedText: String,
                                       firstSegment: Int, document: TranscriptDocument) -> ClosedRange<Double> {
         guard document.ranges.indices.contains(firstSegment) else { return stored }
@@ -133,7 +198,7 @@ enum PhraseAudioTiming {
         }
         // Repeated text within the same cue is ambiguous; preserve the saved range.
         guard matches.count == 1,
-              let exact = range(for: matches[0].range, in: document, duration: stored.upperBound),
+              let exact = range(for: matches[0].range, in: TranscriptDocument(segments: document.segments), duration: stored.upperBound),
               abs(exact.lowerBound - stored.lowerBound) < 0.001,
               stored.upperBound >= exact.upperBound,
               stored.upperBound - exact.upperBound <= 0.751 else { return stored }
