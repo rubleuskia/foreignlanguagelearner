@@ -113,7 +113,9 @@ enum LearningAnswerTransaction {
               entry.id == expectedEntryID,
               entry.isLearningEligible else { return false }
         let previousLevel = entry.learningLevel
+        let previousDate = entry.levelChangedAt
         entry.learningLevel = LearningLevel.adjusted(previousLevel, correct: right)
+        if entry.learningLevel != previousLevel { entry.levelChangedAt = .now }
         do {
             try save()
             _ = round.recordAnswer(entryID: expectedEntryID,
@@ -121,6 +123,7 @@ enum LearningAnswerTransaction {
             return true
         } catch {
             entry.learningLevel = previousLevel
+            entry.levelChangedAt = previousDate
             throw error
         }
     }
@@ -183,17 +186,22 @@ enum LearningPreviewTransaction {
         guard preview.currentID == entry.id, preview.currentPresentationID == presentationID,
               entry.isLearningEligible else { return false }
         let oldLevel = entry.learningLevel
+        let oldDate = entry.levelChangedAt
         switch action {
         case .startLearning, .skip: break
         case .moveToNextLevel: entry.learningLevel = LearningLevel.adjusted(oldLevel, correct: true)
         case .markAsKnown: entry.learningLevel = 4
         }
         do {
-            if entry.learningLevel != oldLevel { try save() }
+            if entry.learningLevel != oldLevel {
+                entry.levelChangedAt = .now
+                try save()
+            }
             return preview.advance(entryID: entry.id, presentationID: presentationID,
                                    learn: action == .startLearning)
         } catch {
             entry.learningLevel = oldLevel
+            entry.levelChangedAt = oldDate
             throw error
         }
     }
@@ -202,8 +210,10 @@ enum LearningPreviewTransaction {
 /// Fills a round from lower learning levels first, then uses higher levels as needed.
 enum LearningRoundPool {
     @MainActor
-    static func entries(from entries: [DictionaryEntry], limit: Int = .max) -> [DictionaryEntry] {
-        let eligible = entries.filter(\.isLearningEligible)
+    static func entries(from entries: [DictionaryEntry], limit: Int = .max,
+                        ignoreCooldown: Bool = false, now: Date = .now,
+                        defaults: UserDefaults = .standard) -> [DictionaryEntry] {
+        let eligible = entries.filter { $0.isLearningEligible && (ignoreCooldown || LearningCooldown.isReady($0, now: now, defaults: defaults)) }
         var seen = Set<UUID>()
         return (1...3).flatMap { level in
             eligible.filter { $0.learningLevel == level }.shuffled()
@@ -219,13 +229,19 @@ struct LearningAnswerUndo {
     let previousRound: LearningRoundState
     let answeredRound: LearningRoundState
     let expiresAt: Date
+    var previousLevelChangedAt: Date? = nil
+    var savedLevelChangedAt: Date? = nil
 
     @MainActor
     func restore(entry: DictionaryEntry, round: inout LearningRoundState,
                  now: Date = .now, save: () throws -> Void) throws -> Bool {
         guard now < expiresAt, entry.id == entryID,
-              entry.learningLevel == savedLevel, round == answeredRound else { return false }
+              entry.learningLevel == savedLevel,
+              savedLevelChangedAt == nil || entry.levelChangedAt == savedLevelChangedAt,
+              round == answeredRound else { return false }
+        let savedDate = entry.levelChangedAt
         entry.learningLevel = previousLevel
+        entry.levelChangedAt = previousLevelChangedAt
         do {
             try save()
             round = previousRound
@@ -233,6 +249,7 @@ struct LearningAnswerUndo {
             return true
         } catch {
             entry.learningLevel = savedLevel
+            entry.levelChangedAt = savedDate
             throw error
         }
     }
@@ -256,5 +273,30 @@ enum LearningRoundCheckpoint {
             return
         }
         defaults.set(data, forKey: key)
+    }
+}
+
+/// Cooldown applies when selecting a new round, never to retries inside an active round.
+enum LearningCooldown {
+    static func hours(level: Int, defaults: UserDefaults = .standard) -> Double {
+        let fallback: Double = level == 1 ? 24 : level == 2 ? 72 : 96
+        guard let value = defaults.object(forKey: "learning.cooldown.level.\(level)") as? Double,
+              value.isFinite, value >= 0 else { return fallback }
+        return value
+    }
+
+    @MainActor static func isReady(_ entry: DictionaryEntry, now: Date = .now,
+                                   defaults: UserDefaults = .standard) -> Bool {
+        guard let changed = entry.levelChangedAt else { return false }
+        return now >= changed.addingTimeInterval(hours(level: entry.learningLevel, defaults: defaults) * 3600)
+    }
+
+    @MainActor static func backfill(_ entries: [DictionaryEntry], now: Date = .now,
+                                    save: () throws -> Void) throws {
+        let missing = entries.filter { $0.levelChangedAt == nil }
+        guard !missing.isEmpty else { return }
+        missing.forEach { $0.levelChangedAt = now }
+        do { try save() }
+        catch { missing.forEach { $0.levelChangedAt = nil }; throw error }
     }
 }

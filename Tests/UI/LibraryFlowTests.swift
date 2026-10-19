@@ -48,6 +48,7 @@ final class LibraryFlowTests: XCTestCase {
         let learn = app.buttons["dictionary.learn"]
         XCTAssertTrue(learn.waitForExistence(timeout: 5))
         learn.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["learn.ignore-cooldown"].firstMatch.waitForExistence(timeout: 5))
         let start = app.buttons["learn.start"]
         if !start.isHittable { app.swipeUp() }
         XCTAssertTrue(start.waitForExistence(timeout: 5))

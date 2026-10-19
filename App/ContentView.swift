@@ -59,6 +59,10 @@ struct ContentView: View {
             .sheet(isPresented: $showingImport) { ImportItemView() }
             .sheet(isPresented: $showingBookImport) { BookImportView() }
             .task {
+                do {
+                    let entries = try context.fetch(FetchDescriptor<DictionaryEntry>())
+                    try LearningCooldown.backfill(entries, save: { try context.save() })
+                } catch { errorMessage = error.localizedDescription }
                 seedLearningUXFixtureIfNeeded()
                 #if DEBUG
                 do { try ReadingVocabularyUIFixture.seed(context: context) }

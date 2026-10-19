@@ -198,6 +198,7 @@ struct TranscriptDocument: Sendable {
     var translationUpdatedAt: Date?
     var translationRevision: Int = 0
     var learningLevel: Int = 1
+    var levelChangedAt: Date? = nil
     var localSourceItemID: UUID?
     var audioStart: Double?
     var audioEnd: Double?
@@ -222,6 +223,7 @@ struct TranscriptDocument: Sendable {
         sourceTitle = item.title
         self.segmentIndex = segmentIndex
         createdAt = .now
+        levelChangedAt = .distantPast
         sourceLanguageCode = item.sourceLanguageCode
         localSourceItemID = item.id
         self.audioStart = audioStart

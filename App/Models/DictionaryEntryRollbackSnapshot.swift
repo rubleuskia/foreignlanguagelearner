@@ -17,6 +17,7 @@ struct DictionaryEntryRollbackSnapshot {
     private let translationUpdatedAt: Date?
     private let translationRevision: Int
     private let learningLevel: Int
+    private let levelChangedAt: Date?
     private let localSourceItemID: UUID?
     private let audioStart: Double?
     private let audioEnd: Double?
@@ -49,6 +50,7 @@ struct DictionaryEntryRollbackSnapshot {
         translationUpdatedAt = entry.translationUpdatedAt
         translationRevision = entry.translationRevision
         learningLevel = entry.learningLevel
+        levelChangedAt = entry.levelChangedAt
         localSourceItemID = entry.localSourceItemID
         audioStart = entry.audioStart
         audioEnd = entry.audioEnd
@@ -82,6 +84,7 @@ struct DictionaryEntryRollbackSnapshot {
         entry.translationUpdatedAt = translationUpdatedAt
         entry.translationRevision = translationRevision
         entry.learningLevel = learningLevel
+        entry.levelChangedAt = levelChangedAt
         entry.localSourceItemID = localSourceItemID
         entry.audioStart = audioStart
         entry.audioEnd = audioEnd

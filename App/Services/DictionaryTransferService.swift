@@ -39,6 +39,7 @@ struct DictionaryTransferDocument: Codable {
         let createdAt: Date
         let source: Source
         var details: Details? = nil
+        var levelChangedAt: Date? = nil
     }
     struct Details: Codable {
         var contextSelectedTranslationText: String?
@@ -178,7 +179,8 @@ enum DictionaryTransferService {
                     selectedSenseText: entry.selectedSenseText, userNote: entry.userNote,
                     localSourceItemID: entry.localSourceItemID, segmentIndex: entry.segmentIndex,
                     sourceTrackID: entry.sourceTrackID, audioStart: entry.audioStart, audioEnd: entry.audioEnd,
-                    translationStatus: entry.translationStatus, translationErrorCode: entry.translationErrorCode)
+                    translationStatus: entry.translationStatus, translationErrorCode: entry.translationErrorCode),
+                levelChangedAt: entry.levelChangedAt
             )
         }
         let info = Bundle.main.infoDictionary
@@ -378,6 +380,7 @@ enum DictionaryTransferService {
         entry.translationOriginRaw = incoming.translation.origin
         entry.translationUpdatedAt = incoming.translation.updatedAt
         entry.learningLevel = incoming.learningLevel
+        entry.levelChangedAt = incoming.levelChangedAt ?? .now
         entry.contextText = incoming.source.context?.text
         entry.contextSelectionLocation = incoming.source.context?.selectionUTF16.location
         entry.contextSelectionLength = incoming.source.context?.selectionUTF16.length

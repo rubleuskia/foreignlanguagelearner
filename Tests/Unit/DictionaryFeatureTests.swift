@@ -283,6 +283,7 @@ extension DictionaryFeatureTests {
 
     @MainActor func testCompleteBackupRestoresAfterPersistentReopenAndKeepsAudioIdentity() throws {
         let (item, original) = backupFixture()
+        original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
         let document = try DictionaryTransferService.decode(file.data)
         XCTAssertEqual(document.schemaVersion, 3)
@@ -308,6 +309,7 @@ extension DictionaryFeatureTests {
         XCTAssertEqual(restored.createdAt, original.createdAt)
         XCTAssertEqual(restored.translationUpdatedAt, original.translationUpdatedAt)
         XCTAssertEqual(restored.learningLevel, 3)
+        XCTAssertEqual(restored.levelChangedAt, original.levelChangedAt)
         XCTAssertEqual(restored.contextText, original.contextText)
         XCTAssertEqual(restored.contextSelectionLocation, original.contextSelectionLocation)
         XCTAssertEqual(restored.contextSelectionLength, original.contextSelectionLength)
@@ -371,6 +373,7 @@ extension DictionaryFeatureTests {
 
     @MainActor func testLegacyBackupStillRestoresAndPreservesTranslationOrigin() throws {
         let (_, original) = backupFixture()
+        original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])
         root["schemaVersion"] = 1
@@ -388,6 +391,7 @@ extension DictionaryFeatureTests {
         let restored = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<DictionaryEntry>()).first)
         XCTAssertEqual(restored.translationOrigin, .openAI)
         XCTAssertEqual(restored.learningLevel, 3)
+        XCTAssertEqual(restored.levelChangedAt, original.levelChangedAt)
         XCTAssertEqual(restored.contextText, original.contextText)
         XCTAssertNil(restored.contextTranslationText)
         XCTAssertNil(restored.audioStart)

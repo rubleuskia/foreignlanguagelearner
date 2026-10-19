@@ -176,6 +176,13 @@
         },
         "details": {
           "$ref": "#/$defs/details"
+        },
+        "levelChangedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
         }
       }
     },
