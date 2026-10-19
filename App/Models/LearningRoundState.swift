@@ -199,14 +199,15 @@ enum LearningPreviewTransaction {
     }
 }
 
-/// Higher levels cannot enter a round while an eligible lower-level phrase remains.
+/// Fills a round from lower learning levels first, then uses higher levels as needed.
 enum LearningRoundPool {
     @MainActor
-    static func entries(from entries: [DictionaryEntry]) -> [DictionaryEntry] {
+    static func entries(from entries: [DictionaryEntry], limit: Int = .max) -> [DictionaryEntry] {
         let eligible = entries.filter(\.isLearningEligible)
-        guard let level = eligible.map(\.learningLevel).min() else { return [] }
         var seen = Set<UUID>()
-        return eligible.filter { $0.learningLevel == level && seen.insert($0.id).inserted }
+        return (1...3).flatMap { level in
+            eligible.filter { $0.learningLevel == level }.shuffled()
+        }.filter { seen.insert($0.id).inserted }.prefix(max(0, limit)).map { $0 }
     }
 }
 

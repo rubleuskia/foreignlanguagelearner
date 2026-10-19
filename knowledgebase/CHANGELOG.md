@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Fill practice rounds across learning levels
+
+- Practice rounds now fill the requested size from level 1, then level 2 and level 3 as needed. For example, a 30-word round with 5 eligible level-1 phrases takes 20 from level 2 and 5 from level 3.
+- Updated DECISIONS.md for the round selection rule. Project purpose and supported workflow boundaries are unchanged; PROJECT.md requires no update.
+
 ## 2026-10-18 — Compact translation copy and animated swipe answers
 
 - Russian translation and Copy now share one dictionary-detail row; long translations wrap without adding a separate copy row.

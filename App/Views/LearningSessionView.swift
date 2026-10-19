@@ -24,7 +24,9 @@ struct LearningSessionView: View {
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
 
     private var eligibleEntries: [DictionaryEntry] { allEntries.filter(\.isLearningEligible) }
-    private var roundPool: [DictionaryEntry] { LearningRoundPool.entries(from: allEntries) }
+    private var roundPool: [DictionaryEntry] {
+        LearningRoundPool.entries(from: allEntries, limit: selection.count(available: eligibleEntries.count))
+    }
     private var current: DictionaryEntry? {
         guard let id = previewRound?.currentID ?? round?.currentID else { return nil }
         return allEntries.first { $0.id == id }
@@ -452,11 +454,10 @@ struct LearningSessionView: View {
         savedRound = nil
         closeAudio()
         pendingUndo = nil
-        let snapshot = roundPool.map(\.id).shuffled()
-        let count = selection.count(available: snapshot.count)
+        let snapshot = roundPool.map(\.id)
         round = nil
         updatePreview(LearningPreviewState(selection: selection,
-                                           selectedIDs: Array(snapshot.prefix(count))))
+                                           selectedIDs: snapshot))
         revealed = false
     }
 

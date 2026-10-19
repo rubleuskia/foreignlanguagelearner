@@ -133,7 +133,7 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 
 ## Learning rounds and completion
 
-Start round first restricts eligibility to the lowest available learning level (1 before 2 before 3). It shuffles only within that level and caps the selection at the requested round size, never filling spare slots with higher levels. Each new round reevaluates the pool; higher levels unlock only when no eligible lower-level entries remain.
+Start round fills the requested size from eligible learning levels in order (1 before 2 before 3), shuffling within each level. If a lower level has fewer phrases than the round size, the remaining places come from the next level. Each new round reevaluates the pool.
 
 Start round snapshots a unique eligible ID set for a level-aware preliminary review (level 1 reveals immediately; levels 2–3 require Check). Each card offers Start learning (queue at its current level), Move to next level (save one level increase and exclude from this practice round), Mark as known (save level 4 and exclude), or Skip (exclude from this round without changing or saving the entry). Each choice advances the preview, with persistent changes committed before advancement. Stale presentation IDs are rejected and failed saves keep the card and its previous level. Missing/ineligible cards are skipped. The normal practice round starts only after the complete preview, using the IDs explicitly queued for learning; an empty queue finishes the preview directly. Repeat starts a fresh preview.
 
