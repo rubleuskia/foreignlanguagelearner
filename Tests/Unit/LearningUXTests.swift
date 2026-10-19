@@ -25,15 +25,16 @@ final class LearningUXTests: XCTestCase {
     }
 
     @MainActor
-    func testPoolExhaustsLowestLevelBeforeIncludingHigherLevels() {
+    func testPoolFillsRoundFromLowestLevelsFirst() {
         let first = trainingEntry(level: 1), second = trainingEntry(level: 1)
         let higher = trainingEntry(level: 2), highest = trainingEntry(level: 3)
         let known = trainingEntry(level: 4), untranslated = trainingEntry(level: 1)
         untranslated.translationText = nil
         let entries = [highest, first, higher, second, known, untranslated, first]
-        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id])
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries, limit: 30).map(\.id)), [first.id, second.id, higher.id, highest.id])
+        XCTAssertEqual(LearningRoundPool.entries(from: entries, limit: 2).count, 2)
         first.learningLevel = 2
-        XCTAssertEqual(LearningRoundPool.entries(from: entries).map(\.id), [second.id])
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [second.id, higher.id, highest.id])
         second.learningLevel = 2
         XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id])
         first.learningLevel = 3
