@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Remaining cooldown on phrase cards
+
+- Dictionary list cards and phrase details show the remaining days/hours/minutes until repeat, or Ready to repeat when cooldown expires. Completed level-4 phrases have no countdown.
+- Calculate from the persisted level-change date and current global intervals during rendering, rounding remaining minutes up. No ticking timer is used. DECISIONS.md records this display policy; project scope and workflows are unchanged, so PROJECT.md needs no update.
+
 ## 2026-10-19 — Play selected words using saved alignment timings
 
 - Add optional word-timing sidecars to book imports and local batch publishing. Reader selections, previews, dictionary cards and learning cards use the first/last selected spoken-word boundaries; missing or zero-duration spoken-word timings fall back to clearly labeled Play context.

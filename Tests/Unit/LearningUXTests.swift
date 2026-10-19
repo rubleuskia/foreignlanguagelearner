@@ -25,6 +25,23 @@ final class LearningUXTests: XCTestCase {
     }
 
     @MainActor
+    func testCooldownRemainingTimeUsesSavedDateAndCurrentSettings() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let entry = trainingEntry(level: 2)
+        entry.levelChangedAt = now
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now, defaults: defaults), 72 * 3600)
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 72 * 3600), "3d 0h 0m")
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 90061), "1d 1h 2m")
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 1), "0d 0h 1m")
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now.addingTimeInterval(72 * 3600), defaults: defaults), 0)
+        defaults.set(1.0, forKey: "learning.cooldown.level.2")
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now.addingTimeInterval(1800), defaults: defaults), 1800)
+        entry.levelChangedAt = nil
+        XCTAssertNil(LearningCooldown.remainingTime(entry, now: now, defaults: defaults))
+    }
+
+    @MainActor
     func testCooldownBoundariesOverridesAndLegacyBackfill() throws {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
