@@ -285,10 +285,25 @@ enum LearningCooldown {
         return value
     }
 
+    @MainActor static func remainingTime(_ entry: DictionaryEntry, now: Date = .now,
+                                         defaults: UserDefaults = .standard) -> TimeInterval? {
+        guard let changed = entry.levelChangedAt else { return nil }
+        return max(0, changed.addingTimeInterval(hours(level: entry.learningLevel, defaults: defaults) * 3600)
+            .timeIntervalSince(now))
+    }
+
     @MainActor static func isReady(_ entry: DictionaryEntry, now: Date = .now,
                                    defaults: UserDefaults = .standard) -> Bool {
-        guard let changed = entry.levelChangedAt else { return false }
-        return now >= changed.addingTimeInterval(hours(level: entry.learningLevel, defaults: defaults) * 3600)
+        remainingTime(entry, now: now, defaults: defaults) == 0
+    }
+
+    static func remainingDescription(seconds: TimeInterval) -> String {
+        // Round up so a phrase never displays zero minutes before it is ready.
+        let minutes = ceil(max(0, seconds) / 60)
+        let days = floor(minutes / 1440)
+        let hours = floor(minutes.truncatingRemainder(dividingBy: 1440) / 60)
+        let rest = minutes.truncatingRemainder(dividingBy: 60)
+        return "\(days.formatted(.number.precision(.fractionLength(0))))d \(hours.formatted(.number.precision(.fractionLength(0))))h \(rest.formatted(.number.precision(.fractionLength(0))))m"
     }
 
     @MainActor static func backfill(_ entries: [DictionaryEntry], now: Date = .now,
