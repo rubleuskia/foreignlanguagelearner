@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Inline copy actions in context translation
+
+- Keep each Copy action on the same row as its explanation, overall translation, original or source sentence, aligned at the right edge. Remove the standalone divider that produced an empty Form row. Apply the same layout to dictionary source context.
+- Shared content-row layout only; no product or architectural decision or supported workflow boundary changed. DECISIONS.md and PROJECT.md require no additional changes for this fix.
+
 ## 2026-10-19 — Global cooldown settings with explicit save
 
 - Move cooldown interval editing to app Settings with draft fields, validation, Save cooldowns and saved confirmation. Existing global values are preserved; leaving without Save discards edits.

@@ -41,6 +41,23 @@ struct CopyButton: View {
     }
 }
 
+/// Keep copy actions inside the content row so Form cannot split them into separate rows.
+struct CopyableContentRow<Content: View>: View {
+    let value: String
+    let label: String
+    let identifier: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            content()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            CopyButton(value: value, label: label, identifier: identifier)
+        }
+    }
+}
+
 struct PlaybackRateMenu: View {
     let playback: PlaybackController
 
