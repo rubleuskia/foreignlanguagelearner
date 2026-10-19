@@ -9,6 +9,10 @@ struct LearningSessionView: View {
     @Query private var allEntries: [DictionaryEntry]
     @Query private var sourceItems: [LearningItem]
     @State private var contextual = ContextualTranslationCoordinator()
+    @State private var ignoreCooldown = false
+    @AppStorage("learning.cooldown.level.1") private var levelOneHours = 24.0
+    @AppStorage("learning.cooldown.level.2") private var levelTwoHours = 72.0
+    @AppStorage("learning.cooldown.level.3") private var levelThreeHours = 96.0
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
@@ -23,9 +27,9 @@ struct LearningSessionView: View {
     @State private var playback = PlaybackController()
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
 
-    private var eligibleEntries: [DictionaryEntry] { allEntries.filter(\.isLearningEligible) }
+    private var eligibleEntries: [DictionaryEntry] { allEntries.filter { $0.isLearningEligible && (ignoreCooldown || LearningCooldown.isReady($0)) } }
     private var roundPool: [DictionaryEntry] {
-        LearningRoundPool.entries(from: allEntries, limit: selection.count(available: eligibleEntries.count))
+        LearningRoundPool.entries(from: allEntries, limit: selection.count(available: eligibleEntries.count), ignoreCooldown: ignoreCooldown)
     }
     private var current: DictionaryEntry? {
         guard let id = previewRound?.currentID ?? round?.currentID else { return nil }
@@ -54,7 +58,7 @@ struct LearningSessionView: View {
                         }
                     }
                 } else {
-                    setupView
+                    TimelineView(.periodic(from: .now, by: 30)) { _ in setupView }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -88,6 +92,10 @@ struct LearningSessionView: View {
                 set: { if !$0 { errorMessage = nil } }
             )) { Button("OK") {} } message: { Text(errorMessage ?? "") }
         }
+        .task {
+            do { try LearningCooldown.backfill(allEntries, save: { try context.save() }) }
+            catch { errorMessage = error.localizedDescription }
+        }
         .interactiveDismissDisabled()
         .alert("Close training?", isPresented: $confirmingClose) {
             Button("Save and close") { closeAndDismiss() }
@@ -102,6 +110,18 @@ struct LearningSessionView: View {
             pendingUndo = nil
             closeAudio()
             contextual.cancelCurrentRequest()
+        }
+    }
+
+    private func cooldownField(_ title: String, value: Binding<Double>) -> some View {
+        HStack {
+            Text(title)
+            TextField("Hours", value: value, format: .number)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .onChange(of: value.wrappedValue) { _, hours in
+                    if !hours.isFinite || hours < 0 { value.wrappedValue = 0 }
+                }
         }
     }
 
@@ -129,6 +149,20 @@ struct LearningSessionView: View {
                 }
                 .pickerStyle(.inline)
             }
+            Section("Phrase cooldown") {
+                Toggle(isOn: $ignoreCooldown) {
+                    Label("Ignore words cooldown", systemImage: ignoreCooldown ? "checkmark.square" : "square")
+                }
+                    .toggleStyle(.button)
+                    .accessibilityIdentifier("learn.ignore-cooldown")
+                DisclosureGroup("Cooldown settings") {
+                    cooldownField("Level 1 · hours", value: $levelOneHours)
+                    cooldownField("Level 2 · hours", value: $levelTwoHours)
+                    cooldownField("Level 3 · hours", value: $levelThreeHours)
+                }
+                Text("Applies to new rounds after a level change. Set 0 to disable a level’s cooldown.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Available") {
                 LabeledContent("Eligible phrases", value: "\(eligibleEntries.count)")
                 LabeledContent("This round", value: "\(selection.count(available: roundPool.count))")
@@ -152,7 +186,7 @@ struct LearningSessionView: View {
                 .accessibilityIdentifier("learn.start")
             } footer: {
                 if eligibleEntries.isEmpty {
-                    Text("Add or translate more dictionary entries to start practising.")
+                    Text("No phrases are ready. Wait for cooldown, enable Ignore words cooldown, or add translated entries.")
                 }
             }
         }
@@ -500,6 +534,7 @@ struct LearningSessionView: View {
         }
         let previousRound = updatedRound
         let previousLevel = entry.learningLevel
+        let previousDate = entry.levelChangedAt
         do {
             let accepted = try LearningAnswerTransaction.apply(
                 entry: entry, round: &updatedRound,
@@ -509,7 +544,8 @@ struct LearningSessionView: View {
             guard accepted else { return }
             pendingUndo = LearningAnswerUndo(entryID: entry.id, previousLevel: previousLevel,
                 savedLevel: entry.learningLevel, previousRound: previousRound,
-                answeredRound: updatedRound, expiresAt: .now.addingTimeInterval(3))
+                answeredRound: updatedRound, expiresAt: .now.addingTimeInterval(3),
+                previousLevelChangedAt: previousDate, savedLevelChangedAt: entry.levelChangedAt)
             round = updatedRound
             LearningRoundCheckpoint.save(updatedRound)
             revealed = false

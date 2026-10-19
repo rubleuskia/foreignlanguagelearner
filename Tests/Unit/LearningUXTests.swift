@@ -25,6 +25,50 @@ final class LearningUXTests: XCTestCase {
     }
 
     @MainActor
+    func testCooldownBoundariesOverridesAndLegacyBackfill() throws {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for (level, hours) in [(1, 24.0), (2, 72.0), (3, 96.0)] {
+            let entry = trainingEntry(level: level)
+            entry.levelChangedAt = now
+            XCTAssertFalse(LearningCooldown.isReady(entry, now: now.addingTimeInterval(hours * 3600 - 1), defaults: defaults))
+            XCTAssertTrue(LearningCooldown.isReady(entry, now: now.addingTimeInterval(hours * 3600), defaults: defaults))
+            XCTAssertTrue(LearningRoundPool.entries(from: [entry], now: now, defaults: defaults).isEmpty)
+            XCTAssertEqual(LearningRoundPool.entries(from: [entry], ignoreCooldown: true, now: now, defaults: defaults).count, 1)
+        }
+        let legacy = trainingEntry(level: 2)
+        legacy.levelChangedAt = nil
+        try LearningCooldown.backfill([legacy], now: now, save: {})
+        try LearningCooldown.backfill([legacy], now: now.addingTimeInterval(100), save: {})
+        XCTAssertEqual(legacy.levelChangedAt, now)
+        defaults.set(0.0, forKey: "learning.cooldown.level.2")
+        XCTAssertTrue(LearningCooldown.isReady(legacy, now: now, defaults: defaults))
+    }
+
+    @MainActor
+    func testCooldownAnswerRollbackAndUndo() throws {
+        let entry = trainingEntry(level: 1)
+        let originalDate = entry.levelChangedAt
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        let before = round
+        let firstPresentation = round.currentPresentationID
+        XCTAssertThrowsError(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: firstPresentation, right: true,
+            save: { throw CocoaError(.fileWriteUnknown) }))
+        XCTAssertEqual(entry.learningLevel, 1)
+        XCTAssertEqual(entry.levelChangedAt, originalDate)
+        let presentation = round.currentPresentationID
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: presentation, right: true, save: {}))
+        XCTAssertFalse(LearningCooldown.isReady(entry))
+        let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 1, savedLevel: 2,
+            previousRound: before, answeredRound: round, expiresAt: .now.addingTimeInterval(3),
+            previousLevelChangedAt: originalDate, savedLevelChangedAt: entry.levelChangedAt)
+        XCTAssertTrue(try undo.restore(entry: entry, round: &round, save: {}))
+        XCTAssertEqual(entry.levelChangedAt, originalDate)
+    }
+
+    @MainActor
     func testPoolFillsRoundFromLowestLevelsFirst() {
         let first = trainingEntry(level: 1), second = trainingEntry(level: 1)
         let higher = trainingEntry(level: 2), highest = trainingEntry(level: 3)
@@ -34,9 +78,9 @@ final class LearningUXTests: XCTestCase {
         XCTAssertEqual(Set(LearningRoundPool.entries(from: entries, limit: 30).map(\.id)), [first.id, second.id, higher.id, highest.id])
         XCTAssertEqual(LearningRoundPool.entries(from: entries, limit: 2).count, 2)
         first.learningLevel = 2
-        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [second.id, higher.id, highest.id])
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id, highest.id])
         second.learningLevel = 2
-        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id])
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id, highest.id])
         first.learningLevel = 3
         second.learningLevel = 3
         higher.learningLevel = 3

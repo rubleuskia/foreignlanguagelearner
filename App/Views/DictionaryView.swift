@@ -489,10 +489,13 @@ struct DictionaryEntryDetailView: View {
     private func saveLevel(_ level: Int) {
         guard (1...4).contains(level), level != entry.learningLevel else { return }
         let previousLevel = entry.learningLevel
+        let previousDate = entry.levelChangedAt
         entry.learningLevel = level
+        entry.levelChangedAt = .now
         do { try context.save() }
         catch {
             entry.learningLevel = previousLevel
+            entry.levelChangedAt = previousDate
             errorMessage = error.localizedDescription
         }
     }

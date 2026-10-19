@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-19 — Configurable phrase cooldown
+
+- New practice rounds wait 24/72/96 hours after a transition into level 1/2/3, with editable hour values and an “Ignore words cooldown” checkbox on the start screen. New phrases remain available for first practice.
+- Preserve transition dates across backup/restore, failed saves and Undo. Backfill existing missing dates with current time because previous level transitions were not recorded.
+- Added cooldown boundary, bypass, migration and rollback/Undo regression coverage. DECISIONS.md records the policy; PROJECT.md describes the updated practice workflow.
+
 ## 2026-10-19 — Verify manual transcript swipes with audio paused
 
 - Added a dedicated long-transcript UI regression test for play → pause → successive fast manual swipes, highlight toggling without viewport movement, and reverse scrolling while playback stays paused. The scenario passes with the existing scrolling fix.

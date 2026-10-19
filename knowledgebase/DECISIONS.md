@@ -209,3 +209,9 @@ Portable JSON v3 carries reading vocabulary together with dictionary details, wi
 New-word foreground, optional underline and active-cue background are drawn by `TranscriptLayoutManager`. Painting invalidates display only and must not edit `NSTextStorage` from layout or scroll callbacks. Base font changes still use text attributes. Native text selection, wrapping and glyph layout remain managed by TextKit. Follow requests depend on document/cue, explicit resume, viewport dimensions and insets, and text size category; changing estimated content height alone must not cancel or restart an in-flight movement.
 
 Both physical chapters and legacy virtual parts use a dedicated sheet List built from an immutable opening snapshot with stable IDs. Playback position updates do not rebuild the presented rows. Selection resolves the chosen ID against the current item before navigation; closing without selection leaves playback unchanged.
+
+## Phrase level cooldown (2026-10-19)
+
+Store an optional `levelChangedAt` on each dictionary entry. Legacy entries have no reliable transition history: translation timestamps describe a different event, so missing dates are backfilled once with the current time. Freshly added phrases are immediately available for first practice. Level changes from answers, preview and manual editing reset the clock, with transactional rollback and Undo restoring the old date.
+
+New rounds filter by the current level's user-editable cooldown (24/72/96 hours for levels 1/2/3). An unchecked-by-default “Ignore words cooldown” option bypasses selection filtering for that session. Retries and resumed rounds retain their selected membership. Settings are local UserDefaults preferences; transition dates travel in dictionary backups as an optional, backward-compatible field. Level 4 remains excluded.
