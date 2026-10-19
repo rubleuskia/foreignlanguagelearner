@@ -222,6 +222,17 @@ struct TranscriptTextView: UIViewRepresentable {
             guard let lineRect = Self.firstVisualLineRect(
                 for: parent.document.ranges[active], in: view
             ) else { return }
+            // Measuring a distant cue can extend TextKit's layout before UITextView
+            // publishes its new contentSize. Resolve the destination viewport and use
+            // that measured extent before clamping or UIKit will stop at the old end.
+            let targetViewport = CGRect(x: 0, y: max(0, lineRect.minY - view.textContainerInset.top),
+                                        width: view.textContainer.size.width, height: view.bounds.height)
+            view.layoutManager.ensureLayout(forBoundingRect: targetViewport, in: view.textContainer)
+            let measuredHeight = view.layoutManager.usedRect(for: view.textContainer).maxY
+                + view.textContainerInset.top + view.textContainerInset.bottom
+            if measuredHeight > view.contentSize.height {
+                view.contentSize.height = measuredHeight
+            }
             let previous = followKey
             let geometryChanged = previous.map {
                 $0.boundsSize != key.boundsSize || $0.adjustedInsets != key.adjustedInsets
@@ -313,7 +324,10 @@ struct TranscriptTextView: UIViewRepresentable {
             guard characterRange.location != NSNotFound, characterRange.length > 0,
                   NSMaxRange(characterRange) <= textLength else { return nil }
             let firstCharacter = NSRange(location: characterRange.location, length: 1)
-            textView.layoutManager.ensureLayout(forCharacterRange: firstCharacter)
+            // Establish real vertical positions through the destination even when
+            // noncontiguous layout was enabled by UIKit for a long transcript.
+            textView.layoutManager.ensureLayout(forCharacterRange:
+                NSRange(location: 0, length: NSMaxRange(firstCharacter)))
             let glyphRange = textView.layoutManager.glyphRange(
                 forCharacterRange: firstCharacter, actualCharacterRange: nil
             )

@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Follow audio reaches distant cues in one action
+
+- Resolve transcript layout through the active cue and its destination viewport before calculating the scroll limit. Synchronize an underestimated scroll extent with measured text geometry so Follow audio reaches the highlighted passage on the first press.
+- Added a 2,000-cue regression with noncontiguous layout and stale content height. Existing same-cue deduplication and manual-scroll behavior remain covered. DECISIONS.md records the geometry rule; project scope and supported workflows are unchanged, so PROJECT.md needs no update.
+
 ## 2026-10-19 — Play selected words using saved alignment timings
 
 - Add optional word-timing sidecars to book imports and local batch publishing. Reader selections, previews, dictionary cards and learning cards use the first/last selected spoken-word boundaries; missing or zero-duration spoken-word timings fall back to clearly labeled Play context.
