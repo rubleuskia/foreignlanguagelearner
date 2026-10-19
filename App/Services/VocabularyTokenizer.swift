@@ -32,6 +32,25 @@ enum VocabularyTokenizer {
         return output
     }
 
+    static func textIndex(in text: String) throws -> VocabularyTextIndex {
+        var ids: [String: Int] = [:]
+        var forms: [String] = []
+        var positions: [VocabularyTextIndex.Position] = []
+        var cancelled = false
+        let source = text as NSString
+        expression.enumerateMatches(in: text, range: NSRange(location: 0, length: source.length)) { match, _, stop in
+            if Task<Never, Never>.isCancelled { cancelled = true; stop.pointee = true; return }
+            guard let match else { return }
+            let form = normalized(source.substring(with: match.range))
+            let id: Int
+            if let existing = ids[form] { id = existing }
+            else { id = forms.count; forms.append(form); ids[form] = id }
+            positions.append(.init(start: match.range.location, length: match.range.length, formID: id))
+        }
+        if cancelled { throw CancellationError() }
+        return .init(forms: forms, positions: positions, utf16Length: source.length)
+    }
+
     static func forms(in text: String) throws -> Set<String> {
         var output = Set<String>()
         var cancelled = false

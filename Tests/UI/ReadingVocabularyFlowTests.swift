@@ -7,6 +7,10 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"]
         XCTAssertTrue(story.waitForExistence(timeout: 10))
+        let badge = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "library.vocabulary.")).firstMatch
+        let initialCount = NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "New", "4")
+        expectation(for: initialCount, evaluatedWith: badge)
+        waitForExpectations(timeout: 10)
         story.tap()
         let chapter = app.buttons["reader.complete-chapter"]
         XCTAssertTrue(chapter.waitForExistence(timeout: 10))
@@ -38,5 +42,10 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertTrue(toggle.exists)
         toggle.tap()
         XCTAssertTrue(stats.label.contains("New: 0"))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 5))
+        let completedCount = NSPredicate(format: "label CONTAINS %@ AND NOT label CONTAINS %@", "4", "New")
+        expectation(for: completedCount, evaluatedWith: badge)
+        waitForExpectations(timeout: 10)
     }
 }

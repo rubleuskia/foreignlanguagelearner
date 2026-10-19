@@ -26,6 +26,7 @@ struct ContentView: View {
                             Label {
                                 VStack(alignment: .leading) {
                                     Text(item.title)
+                                    BookVocabularyBadge(item: item)
                                     Text(summary(for: item))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
@@ -70,10 +71,17 @@ struct ContentView: View {
                 }
                 catch { errorMessage = error.localizedDescription }
             }
+            .task(id: vocabularyIndexIdentity) {
+                await vocabulary.refreshLibrary(items)
+            }
             .translationTask(translationCoordinator.configuration,
                              action: translationCoordinator.perform(session:))
             .alert("Could not delete item", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
         }
+    }
+
+    private var vocabularyIndexIdentity: String {
+        "\(vocabulary.ready):\(vocabulary.revision):" + items.map(ReadingVocabularyStore.catalogKey).joined(separator: ";")
     }
 
     private func deleteItems(at offsets: IndexSet) {

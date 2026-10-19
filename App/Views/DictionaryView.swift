@@ -134,7 +134,7 @@ struct DictionaryView: View {
     private func prepareExport() {
         do {
             guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
-            exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true, readingWords: try context.fetch(FetchDescriptor<ReadVocabularyWord>())); exporting = true }
+            exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true, readingWords: try ReadingKnowledge.words(context: context)); exporting = true }
         catch { errorMessage = error.localizedDescription }
     }
 
@@ -144,7 +144,7 @@ struct DictionaryView: View {
             let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
             let document = try DictionaryTransferService.decode(Data(contentsOf: url, options: .mappedIfSafe))
-            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries, existingVocabulary: try context.fetch(FetchDescriptor<ReadVocabularyWord>()))
+            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries, existingVocabulary: try ReadingKnowledge.words(context: context))
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -567,7 +567,7 @@ private struct DictionaryImportPreviewView: View {
             guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
             let current = DictionaryTransferService.preview(document: preview.document, mode: preview.mode,
                 existing: try context.fetch(FetchDescriptor<DictionaryEntry>()),
-                existingVocabulary: try context.fetch(FetchDescriptor<ReadVocabularyWord>()))
+                existingVocabulary: try ReadingKnowledge.words(context: context))
             if current.vocabularySnapshot != preview.vocabularySnapshot {
                 preview = current
                 throw ReadingVocabularyError.changed

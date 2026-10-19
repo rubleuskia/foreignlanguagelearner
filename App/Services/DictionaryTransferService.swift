@@ -289,7 +289,7 @@ enum DictionaryTransferService {
 
     @MainActor static func apply(_ preview: DictionaryImportPreview, context: ModelContext, commitSave: (ModelContext) throws -> Void = { try $0.save() }) throws -> [DictionaryEntry] {
         let readingWords = preview.document.schemaVersion == 3 && preview.mode != .translations ? preview.document.readingVocabulary?.words : nil
-        let vocabulary = readingWords == nil ? [] : try context.fetch(FetchDescriptor<ReadVocabularyWord>())
+        let vocabulary = readingWords == nil ? [] : try ReadingKnowledge.words(context: context)
         if readingWords != nil, let expected = preview.vocabularySnapshot,
            expected != Dictionary(uniqueKeysWithValues: vocabulary.map { ($0.key, $0.firstLearnedAt) }) {
             throw ReadingVocabularyError.changed
@@ -300,7 +300,24 @@ enum DictionaryTransferService {
         let local = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
         let incomingIDs = Set(preview.document.entries.map(\.id))
         let rollbackEntries = existing.filter { incomingIDs.contains($0.id) }.map { ($0, DictionaryEntryRollbackSnapshot($0)) }
-        let rollbackWordDates = vocabulary.map { ($0, $0.firstLearnedAt) }
+        let persistedWords = readingWords == nil ? [] : try context.fetch(FetchDescriptor<ReadVocabularyWord>())
+        let persistedByKey = Dictionary(uniqueKeysWithValues: persistedWords.map { ($0.key, $0) })
+        let rollbackWordDates = persistedWords.map { ($0, $0.firstLearnedAt) }
+        struct KnowledgeGroup: Hashable { let language: String; let date: Date }
+        let localWords = Dictionary(uniqueKeysWithValues: vocabulary.map { ($0.key, $0) })
+        var additions: [KnowledgeGroup: Set<String>] = [:]
+        var dateUpdates: [(ReadVocabularyWord, Date)] = []
+        for word in readingWords ?? [] {
+            let key = ReadVocabularyWord.key(word.languageCode, word.normalizedForm)
+            if let current = localWords[key], current.firstLearnedAt <= word.firstLearnedAt { continue }
+            if let persistent = persistedByKey[key] {
+                dateUpdates.append((persistent, word.firstLearnedAt))
+            } else {
+                additions[KnowledgeGroup(language: word.languageCode, date: word.firstLearnedAt), default: []].insert(word.normalizedForm)
+            }
+        }
+        // Encode before changing any model, so a preparation failure cannot leave partial edits.
+        let encoded = try additions.map { (group: $0.key, data: try ReadingKnowledge.encode($0.value)) }
         var pending: [DictionaryEntry] = []
         for incoming in preview.document.entries {
             if let current = local[incoming.id] {
@@ -333,13 +350,9 @@ enum DictionaryTransferService {
                 if entry.translationStatus == .pending { pending.append(entry) }
             }
         }
-        if let readingWords {
-            let localWords = Dictionary(uniqueKeysWithValues: vocabulary.map { ($0.key, $0) })
-            for word in readingWords {
-                let key = ReadVocabularyWord.key(word.languageCode, word.normalizedForm)
-                if let current = localWords[key] { current.firstLearnedAt = min(current.firstLearnedAt, word.firstLearnedAt) }
-                else { context.insert(ReadVocabularyWord(languageCode: word.languageCode, normalizedForm: word.normalizedForm, firstLearnedAt: word.firstLearnedAt)) }
-            }
+        for (word, date) in dateUpdates { word.firstLearnedAt = date }
+        for batch in encoded {
+            ReadingKnowledge.insert(batch.data, language: batch.group.language, date: batch.group.date, context: context)
         }
         context.processPendingChanges()
         do { try commitSave(context) }

@@ -46,6 +46,7 @@ actor BookImportService {
 
     private let limits: BookImportLimits
     private let fileManager: FileManager
+    private var vocabularyCache: [String: VocabularyImportPreview] = [:]
     private var manifests: [UUID: BookManifest] = [:]
 
     init(limits: BookImportLimits = .standard, fileManager: FileManager = .default) {
@@ -99,12 +100,36 @@ actor BookImportService {
             url = Self.stagingRoot.appending(path: preview.id.uuidString)
                 .appending(path: "transcript-candidates").appending(path: candidateName(for: path))
         } else { throw invalid("Choose the book transcript before importing.") }
-        return try VocabularyImportPreview.file(url, fileExtension: "txt", limit: limits.maximumTranscriptBytes)
+        let directory = Self.stagingRoot.appending(path: preview.id.uuidString).appending(path: "book")
+        var values = [try cachedVocabulary(url, fileExtension: "txt")]
+        for track in preview.tracks {
+            if let filename = track.subtitleFilename {
+                values.append(try cachedVocabulary(directory.appending(path: filename)))
+            }
+        }
+        return .combined(values)
     }
 
     func vocabularyPreview(_ prepared: Prepared) throws -> VocabularyImportPreview {
-        try VocabularyImportPreview.file(prepared.stagedBookDirectory.appending(path: prepared.transcriptFilename),
-                                         fileExtension: "txt", limit: limits.maximumTranscriptBytes)
+        var values = [try cachedVocabulary(prepared.stagedBookDirectory.appending(path: prepared.transcriptFilename), fileExtension: "txt")]
+        for track in prepared.tracks {
+            if let filename = track.subtitleFilename {
+                values.append(try cachedVocabulary(prepared.stagedBookDirectory.appending(path: filename)))
+            }
+        }
+        return .combined(values)
+    }
+
+    private func cachedVocabulary(_ url: URL, fileExtension: String? = nil) throws -> VocabularyImportPreview {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let source = ReadingTextSource(text: nil, url: url, fileExtension: fileExtension ?? url.pathExtension)
+        let key = try source.cacheKey()
+        if let cached = vocabularyCache[key] { return cached }
+        let value = try VocabularyImportPreview.file(url, fileExtension: source.fileExtension, limit: limits.maximumTranscriptBytes)
+        guard try source.cacheKey() == key else { throw ReadingVocabularyError.changed }
+        vocabularyCache[key] = value
+        return value
     }
 
     func prepare(_ preview: Preview, title: String, sourceLanguage: String? = nil,
@@ -191,16 +216,19 @@ actor BookImportService {
         try? writeJournal(.init(transactionID: prepared.transactionID, itemID: prepared.itemID, state: .committed))
         cleanup(transactionID: prepared.transactionID, removeFinal: false, itemID: prepared.itemID)
         manifests[prepared.transactionID] = nil
+        vocabularyCache.removeAll()
     }
 
     func rollback(_ prepared: Prepared) {
         cleanup(transactionID: prepared.transactionID, removeFinal: true, itemID: prepared.itemID)
         manifests[prepared.transactionID] = nil
+        vocabularyCache.removeAll()
     }
 
     func cancel(_ preview: Preview) {
         cleanup(transactionID: preview.id, removeFinal: false, itemID: preview.itemID)
         manifests[preview.id] = nil
+        vocabularyCache.removeAll()
     }
 
     private func previewManifest(archive: Archive, entries: [Entry], manifestEntry: Entry,

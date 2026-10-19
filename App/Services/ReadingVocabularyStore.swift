@@ -8,10 +8,21 @@ import SwiftData
     private(set) var errorMessage: String?
     private var known: [String: Set<String>] = [:]
     private var starting = false
+    private(set) var bookSummaries: [UUID: BookVocabularySummary] = [:]
+    private(set) var bookErrors: [UUID: String] = [:]
+    private(set) var summariesUpdating = false
+    @ObservationIgnored let index: VocabularyIndex
+    @ObservationIgnored private var indexedKnowledgeRevision = -1
+    @ObservationIgnored private var pendingKnowledge: [String: Set<String>] = [:]
+    @ObservationIgnored private var indexedCatalog: [UUID: String] = [:]
+    @ObservationIgnored private var needsReconcile = true
+    @ObservationIgnored private var refreshGeneration = 0
+
     @ObservationIgnored private let commitSave: (ModelContext) throws -> Void
 
-    init(commitSave: @escaping (ModelContext) throws -> Void = { try $0.save() }) {
+    init(indexURL: URL? = nil, commitSave: @escaping (ModelContext) throws -> Void = { try $0.save() }) {
         self.commitSave = commitSave
+        index = VocabularyIndex(url: indexURL)
     }
 
     func forms(for language: String) -> Set<String> {
@@ -20,12 +31,16 @@ import SwiftData
     }
 
     func statistics(_ words: Set<String>, language: String) -> VocabularyStatistics {
-        .init(total: words.count, new: words.subtracting(forms(for: language)).count)
+        let knownForms = forms(for: language)
+        return .init(total: words.count, new: words.reduce(into: 0) { count, word in
+            if !knownForms.contains(word) { count += 1 }
+        })
     }
 
     func reload(context: ModelContext) throws {
-        let records = try context.fetch(FetchDescriptor<ReadVocabularyWord>())
-        known = Dictionary(grouping: records, by: \.languageCode).mapValues { Set($0.map(\.normalizedForm)) }
+        known = try ReadingKnowledge.forms(context: context)
+        needsReconcile = true
+        summariesUpdating = true
         revision += 1
     }
 
@@ -37,7 +52,9 @@ import SwiftData
         defer { starting = false }
         var migrationTitle: String?
         do {
-            try reload(context: context)
+            known = try await ReadingKnowledge.loadForms(context: context)
+            needsReconcile = true
+            revision += 1
             let items = try context.fetch(FetchDescriptor<LearningItem>())
             for item in items where item.readingVocabularyMigrationVersion < 1 {
                 migrationTitle = item.title
@@ -48,23 +65,29 @@ import SwiftData
                     for part in item.parts where part.isCompleted { sources += try ReadingCompletionService.sources(item: item, scope: .part(part.id)) }
                 }
                 let language = sources.isEmpty ? "" : try VocabularyTokenizer.language(item.sourceLanguageCode)
-                let result = try await ReadingCompletionService.analyze(sources)
+                let result = try await index.analyze(sources, language: language)
+                try Task.checkCancellation()
+                guard item.modelContext != nil else { continue }
+                let delta = result.words.subtracting(forms(for: language))
+                let blobs = try await Task.detached { try ReadingKnowledge.encode(delta) }.value
                 try Task.checkCancellation()
                 guard item.modelContext != nil else { continue }
                 try context.save()
                 let previousMigrationVersion = item.readingVocabularyMigrationVersion
                 do {
-                    try Self.insert(words: result.words, language: language, context: context)
+                    ReadingKnowledge.insert(blobs, language: language, context: context)
                     item.readingVocabularyMigrationVersion = 1
                     context.processPendingChanges()
                     try commitSave(context)
+                    known[language, default: []].formUnion(result.words)
                 } catch {
                     context.rollback()
                     item.readingVocabularyMigrationVersion = previousMigrationVersion
                     throw error
                 }
             }
-            try reload(context: context)
+            needsReconcile = true
+            revision += 1
             ready = true
         } catch is CancellationError { errorMessage = "Updating reading vocabulary was interrupted. Retry." }
         catch { errorMessage = "Could not update reading vocabulary\(migrationTitle.map { " for \($0)" } ?? ""): \(error.localizedDescription)" }
@@ -75,8 +98,11 @@ import SwiftData
         let itemID = item.id
         let language = try VocabularyTokenizer.language(item.sourceLanguageCode)
         let sources = try ReadingCompletionService.sources(item: item, scope: scope)
-        let result = try await ReadingCompletionService.analyze(sources)
+        let result = try await index.analyze(sources, language: language)
         try Task.checkCancellation()
+        guard item.modelContext != nil,
+              try VocabularyTokenizer.language(item.sourceLanguageCode) == language,
+              try ReadingCompletionService.sources(item: item, scope: scope) == sources else { throw ReadingVocabularyError.changed }
         return .init(itemID: itemID, language: language, scope: scope, words: result.words,
                      fingerprint: result.fingerprint, added: statistics(result.words, language: language).new, hasText: !sources.isEmpty)
     }
@@ -91,6 +117,16 @@ import SwiftData
         let fresh = try await prepare(item: item, scope: proposal.scope)
         guard fresh.language == proposal.language, fresh.fingerprint == proposal.fingerprint,
               fresh.added == proposal.added, statistics(fresh.words, language: fresh.language).new == proposal.added, item.modelContext != nil else { throw ReadingVocabularyError.changed }
+        let delta = fresh.words.subtracting(forms(for: fresh.language))
+        let knowledgeRevision = revision
+        let sourceSnapshot = try ReadingCompletionService.sources(item: item, scope: proposal.scope)
+        let encoding = Task.detached { try ReadingKnowledge.encode(delta) }
+        let blobs = try await encoding.value
+        try Task.checkCancellation()
+        guard knowledgeRevision == revision, item.modelContext != nil,
+              try VocabularyTokenizer.language(item.sourceLanguageCode) == fresh.language,
+              try ReadingCompletionService.sources(item: item, scope: proposal.scope) == sourceSnapshot else { throw ReadingVocabularyError.changed }
+        if Self.completed(item, scope: proposal.scope) { return }
         // No await from this point through commit: playback and UI edits use this same context.
         try context.save()
         let previousBookCompleted = item.isBookCompleted
@@ -98,7 +134,7 @@ import SwiftData
         let previousParts = item.parts
         let previousMigrationVersion = item.readingVocabularyMigrationVersion
         do {
-            try Self.insert(words: fresh.words, language: fresh.language, context: context)
+            ReadingKnowledge.insert(blobs, language: fresh.language, context: context)
             switch fresh.scope {
             case .book:
                 item.isBookCompleted = true
@@ -123,7 +159,87 @@ import SwiftData
             item.readingVocabularyMigrationVersion = previousMigrationVersion
             throw error
         }
-        try reload(context: context)
+        known[fresh.language, default: []].formUnion(delta)
+        pendingKnowledge[fresh.language, default: []].formUnion(delta)
+        revision += 1
+        summariesUpdating = true
+        // A projection failure never turns a successfully committed reading action into a failure.
+        // The library task reconciles the authoritative snapshot before publishing fresh counts.
+    }
+
+    func refreshLibrary(_ items: [LearningItem]) async {
+        guard ready else { return }
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        let expectedRevision = revision
+        let knowledge = known
+        let pending = pendingKnowledge
+        summariesUpdating = true
+        do {
+            if indexedKnowledgeRevision != expectedRevision {
+                if needsReconcile {
+                    _ = try await index.reconcile(knowledge)
+                } else {
+                    for (language, delta) in pending {
+                        if !delta.isEmpty {
+                            _ = try await index.learn(delta, language: language)
+                        }
+                    }
+                }
+                let summaries = try await index.summaries()
+                try Task.checkCancellation()
+                guard revision == expectedRevision, generation == refreshGeneration else { return }
+                bookSummaries = summaries
+                indexedKnowledgeRevision = expectedRevision
+                for (language, forms) in pending { pendingKnowledge[language]?.subtract(forms) }
+                needsReconcile = false
+            }
+            let ids = Set(items.map(\.id))
+            bookSummaries = bookSummaries.filter { ids.contains($0.key) }
+            bookErrors = bookErrors.filter { ids.contains($0.key) }
+            for item in items {
+                try Task.checkCancellation()
+                let id = item.id
+                let language = item.sourceLanguageCode
+                let catalogKey = Self.catalogKey(item)
+                if indexedCatalog[id] == catalogKey, bookSummaries[id] != nil, bookErrors[id] == nil { continue }
+                do {
+                    let sources = try ReadingCompletionService.sources(item: item, scope: .book)
+                    let summary = try await index.indexBook(id: id, language: VocabularyTokenizer.language(language), sources: sources)
+                    try Task.checkCancellation()
+                    guard revision == expectedRevision, generation == refreshGeneration, item.modelContext != nil, Self.catalogKey(item) == catalogKey else { return }
+                    bookSummaries[id] = summary
+                    indexedCatalog[id] = catalogKey
+                    bookErrors[id] = nil
+                } catch is CancellationError { throw CancellationError() }
+                catch {
+                    guard generation == refreshGeneration else { return }
+                    bookErrors[id] = error.localizedDescription; bookSummaries[id] = nil
+                }
+            }
+            guard revision == expectedRevision, generation == refreshGeneration else { return }
+            try await index.retainBooks(ids)
+            try Task.checkCancellation()
+            if revision == expectedRevision, generation == refreshGeneration { summariesUpdating = false }
+        } catch is CancellationError { }
+        catch {
+            guard generation == refreshGeneration else { return }
+            for item in items { bookErrors[item.id] = error.localizedDescription }
+        }
+    }
+
+    func rebuildLibrary(_ items: [LearningItem]) async {
+        refreshGeneration += 1
+        summariesUpdating = true
+        do {
+            try await index.reset()
+            indexedKnowledgeRevision = -1
+            indexedCatalog = [:]
+            needsReconcile = true
+            bookSummaries = [:]
+            bookErrors = [:]
+            await refreshLibrary(items)
+        } catch { for item in items { bookErrors[item.id] = error.localizedDescription } }
     }
 
     static func completed(_ item: LearningItem, scope: ReadingScope) -> Bool {
@@ -134,9 +250,7 @@ import SwiftData
         }
     }
 
-    static func insert(words: Set<String>, language: String, context: ModelContext) throws {
-        let existing = try context.fetch(FetchDescriptor<ReadVocabularyWord>(predicate: #Predicate { $0.languageCode == language }))
-        let forms = Set(existing.map(\.normalizedForm))
-        for form in words.subtracting(forms) { context.insert(ReadVocabularyWord(languageCode: language, normalizedForm: form)) }
+    static func catalogKey(_ item: LearningItem) -> String {
+        "\(item.id):\(item.sourceLanguageCode):\(item.transcriptFilename):" + item.tracks.map { "\($0.id):\($0.subtitleFilename ?? "")" }.joined(separator: "|")
     }
 }

@@ -108,50 +108,67 @@ struct VocabularyTranscriptView: View {
     let followGeneration: Int
     let onSelectionBegan: () -> Void
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
-    @State private var tokens: [VocabularyOccurrence] = []
+    @State private var textIndex: VocabularyTextIndex?
     @State private var indexedText: String?
     @State private var error: String?
     @State private var enabled = true
-
-    @State private var words: Set<String>?
-    @State private var unknownRanges: [NSRange] = []
-    @State private var highlightGeneration = 0
-
-    private func updateUnknown() {
-        let known = vocabulary.forms(for: language)
-        unknownRanges = enabled && vocabulary.ready && indexedText == document.text
-            ? tokens.compactMap { known.contains($0.normalizedForm) ? nil : $0.rangeUTF16 } : []
-        highlightGeneration += 1
-    }
 
     var body: some View {
         VStack(spacing: 4) {
             ReadingVocabularyStatus()
             HStack(alignment: .top) {
-                VocabularyStatisticsView(words: indexedText == document.text ? words : nil, language: language, error: error)
+                VocabularyStatisticsView(words: indexedText == document.text ? textIndex?.uniqueForms : nil, language: language, error: error)
                 Spacer()
                 Toggle("New words", isOn: $enabled).fixedSize()
                     .font(.caption).accessibilityIdentifier("reader.new-words")
             }.padding(.horizontal)
             TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
-                               unknownWordRanges: indexedText == document.text ? unknownRanges : [], wordStyleRevision: highlightGeneration,
-                               differentiateWithoutColor: differentiateWithoutColor, handleSelection: handleSelection)
+                               wordStyleRevision: vocabulary.revision,
+                               differentiateWithoutColor: differentiateWithoutColor,
+                               vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
+                               knownForms: vocabulary.forms(for: language), wordStyleLanguage: language, handleSelection: handleSelection)
         }
-        .onChange(of: vocabulary.revision) { _, _ in updateUnknown() }
-        .onChange(of: vocabulary.ready) { _, _ in updateUnknown() }
-        .onChange(of: enabled) { _, _ in updateUnknown() }
-        .onChange(of: language) { _, _ in updateUnknown() }
         .task(id: document.text) {
             let text = document.text
             error = nil
-            let task = Task.detached(priority: .userInitiated) { try VocabularyTokenizer.occurrences(in: text) }
+            let task = Task.detached(priority: .userInitiated) { try VocabularyTextIndex.load(text: text) }
             do {
                 let result = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
                 try Task.checkCancellation()
-                tokens = result; indexedText = text; words = Set(result.map(\.normalizedForm)); updateUnknown()
+                textIndex = result; indexedText = text
             } catch is CancellationError { }
             catch { self.error = "Could not count words: \(error.localizedDescription)" }
         }
+    }
+}
+
+struct BookVocabularyBadge: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
+    @Environment(\.modelContext) private var context
+    let item: LearningItem
+
+    var body: some View {
+        Group {
+            if let error = vocabulary.bookErrors[item.id] {
+                Button("Could not count words · Retry") {
+                    Task { await vocabulary.rebuildLibrary((try? context.fetch(FetchDescriptor<LearningItem>())) ?? []) }
+                }
+                .buttonStyle(.borderless)
+                .accessibilityHint(error)
+            } else if let summary = vocabulary.bookSummaries[item.id] {
+                HStack(spacing: 4) {
+                    Text(item.isBookCompleted ? "Words: \(summary.total)" : "New words: \(summary.new)")
+                    if vocabulary.summariesUpdating { Text("· Updating…") }
+                }
+                .accessibilityLabel(item.isBookCompleted ? "Unique word forms: \(summary.total)" : "New unique word forms: \(summary.new)")
+            } else {
+                Text("Counting words…")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("library.vocabulary.\(item.id)")
     }
 }

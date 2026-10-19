@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-19 — Persistent vocabulary index and library counts
+
+- Library rows show new unique word forms for unread books and total unique forms for explicitly completed books, with loading, updating and retry states. ZIP import and book badges count the same TXT-plus-subtitles corpus.
+- Cache parsed source vocabularies and update book counters through a word-to-book index; repeated completion preparation does not tokenize the book again. Reconcile the disposable index with primary knowledge on startup/restore and rebuild it on retry.
+- Store new knowledge in bounded SwiftData batches together with completion flags. Preserve old individual records, earliest learned dates, atomic restore and the portable v3 format. No separate competing writer was introduced.
+- Cache compact occurrence positions and limit new-word decoration to visible text, preserving native selection, cue backgrounds and following.
+- Added index/recovery, representative large-vocabulary, 100-book and library UI checks. DECISIONS.md records the implementation choices and deviations from the initial proposal; PROJECT.md includes the library counter workflow.
+
 ## 2026-10-18 — Compact translation copy and animated swipe answers
 
 - Russian translation and Copy now share one dictionary-detail row; long translations wrap without adding a separate copy row.

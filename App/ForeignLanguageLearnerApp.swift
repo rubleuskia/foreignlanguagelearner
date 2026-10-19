@@ -3,7 +3,7 @@ import SwiftData
 
 @main
 struct ForeignLanguageLearnerApp: App {
-    @State private var readingVocabulary = ReadingVocabularyStore()
+    @State private var readingVocabulary = ReadingVocabularyStore(indexURL: ProcessInfo.processInfo.arguments.contains("--uitesting") ? nil : VocabularyIndex.defaultURL)
     @State private var translationCoordinator = DictionaryTranslationCoordinator()
     private let contextAnalysisService = ContextAnalysisService()
     private var wordExplanationService: any WordExplanationServing {
@@ -19,7 +19,7 @@ struct ForeignLanguageLearnerApp: App {
 
     var body: some Scene {
         WindowGroup { ContentView() }
-            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
+            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
             .environment(translationCoordinator)
             .environment(readingVocabulary)
             .environment(\.contextAnalysisService, contextAnalysisService)

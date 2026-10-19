@@ -9,7 +9,7 @@ import XCTest
 
 final class ReadingVocabularyTests: XCTestCase {
     @MainActor private func container() throws -> ModelContainer {
-        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
@@ -47,7 +47,7 @@ final class ReadingVocabularyTests: XCTestCase {
         XCTAssertTrue(story.isBookCompleted)
         XCTAssertEqual(store.forms(for: "pl"), ["kot", "i", "kota", "śpi"])
         try await store.complete(proposal, context: db.mainContext)
-        XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 4)
+        XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 4)
         XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<DictionaryEntry>()), 0)
         db.mainContext.delete(story); try db.mainContext.save(); try store.reload(context: db.mainContext)
         XCTAssertEqual(store.forms(for: "pl").count, 4)
@@ -118,7 +118,7 @@ final class ReadingVocabularyTests: XCTestCase {
         do { try await store.complete(proposal, context: db.mainContext); XCTFail("Expected failure") } catch { }
         XCTAssertFalse(story.isBookCompleted)
         XCTAssertEqual(story.lastPosition, 7)
-        XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 0)
+        XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 0)
         XCTAssertTrue(store.forms(for: "pl").isEmpty)
     }
 
@@ -134,7 +134,7 @@ final class ReadingVocabularyTests: XCTestCase {
         XCTAssertFalse(story.isBookCompleted)
         XCTAssertEqual(story.readingVocabularyMigrationVersion, 1)
         await store.start(context: db.mainContext)
-        XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 1)
+        XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 1)
     }
 
     @MainActor func testMissingDeclaredSubtitleDoesNotPartiallyCompleteBook() async throws {
@@ -165,11 +165,11 @@ final class ReadingVocabularyTests: XCTestCase {
             _ = try DictionaryTransferService.apply(preview, context: db.mainContext)
             XCTAssertEqual(existing.firstLearnedAt, Date(timeIntervalSince1970: mode == .translations ? 20 : 10))
         }
-        XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 2)
+        XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 2)
         let fresh = try container()
         let preview = DictionaryTransferService.preview(document: doc, mode: .restore, existing: [], existingVocabulary: [])
         _ = try DictionaryTransferService.apply(preview, context: fresh.mainContext)
-        XCTAssertEqual(try fresh.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 1)
+        XCTAssertEqual(try ReadingKnowledge.words(context: fresh.mainContext).count, 1)
         XCTAssertEqual(try fresh.mainContext.fetchCount(FetchDescriptor<LearningItem>()), 0)
     }
 
@@ -182,7 +182,7 @@ final class ReadingVocabularyTests: XCTestCase {
         let preview = DictionaryTransferService.preview(document: try DictionaryTransferService.decode(file.data), mode: .restore, existing: [], existingVocabulary: [])
         XCTAssertThrowsError(try DictionaryTransferService.apply(preview, context: db.mainContext, commitSave: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
         XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<DictionaryEntry>()), 0)
-        XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 0)
+        XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 0)
     }
 
     @MainActor func testBackupFailureRestoresExistingFieldsAndKnownWordDates() throws {
@@ -228,7 +228,7 @@ final class ReadingVocabularyTests: XCTestCase {
             let document = try DictionaryTransferService.decode(JSONSerialization.data(withJSONObject: root))
             db.mainContext.insert(ReadVocabularyWord(languageCode: "pl", normalizedForm: "pies")); try db.mainContext.save()
             _ = try DictionaryTransferService.apply(.init(document: document, mode: .restore, additions: 0, translationChanges: 0, unchanged: 0, conflicts: 0, skipped: 0), context: db.mainContext)
-            XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 1)
+            XCTAssertEqual(try ReadingKnowledge.words(context: db.mainContext).count, 1)
             for word in try db.mainContext.fetch(FetchDescriptor<ReadVocabularyWord>()) { db.mainContext.delete(word) }; try db.mainContext.save()
         }
     }

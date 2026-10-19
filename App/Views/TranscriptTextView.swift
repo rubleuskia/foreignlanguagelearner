@@ -44,6 +44,9 @@ struct TranscriptTextView: UIViewRepresentable {
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
+    var vocabularyIndex: VocabularyTextIndex? = nil
+    var knownForms: Set<String> = []
+    var wordStyleLanguage: String = ""
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -64,6 +67,7 @@ struct TranscriptTextView: UIViewRepresentable {
         view.didLayout = { [weak view, weak coordinator = context.coordinator] in
             guard let view, let coordinator else { return }
             coordinator.applyFollow(to: view)
+            coordinator.updateWordStyles(in: view)
         }
         return view
     }
@@ -116,7 +120,11 @@ struct TranscriptTextView: UIViewRepresentable {
         private var appliedWordRevision: Int?
         private var appliedWordRanges: [NSRange] = []
         private var appliedWordUnderline = false
+        private var appliedWordLanguage = ""
         private var appliedContentSizeCategory: UIContentSizeCategory?
+        private var appliedWindow: NSRange?
+        private var appliedIndexIdentity: ObjectIdentifier?
+        private var applyingWordStyles = false
         private var applyingFollow = false
         private var wasFollowing: Bool
 
@@ -221,6 +229,10 @@ struct TranscriptTextView: UIViewRepresentable {
                                   animated: !UIAccessibility.isReduceMotionEnabled && !geometryChanged)
         }
 
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if let view = scrollView as? UITextView { updateWordStyles(in: view) }
+        }
+
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             // A drag interrupts UIKit's scroll animation; preserve the user's inertia.
             followKey = nil
@@ -281,8 +293,8 @@ struct TranscriptTextView: UIViewRepresentable {
             let textLength = (textView.text as NSString).length
             guard characterRange.location != NSNotFound, characterRange.length > 0,
                   NSMaxRange(characterRange) <= textLength else { return nil }
-            textView.layoutManager.ensureLayout(for: textView.textContainer)
             let firstCharacter = NSRange(location: characterRange.location, length: 1)
+            textView.layoutManager.ensureLayout(forCharacterRange: firstCharacter)
             let glyphRange = textView.layoutManager.glyphRange(
                 forCharacterRange: firstCharacter, actualCharacterRange: nil
             )
@@ -338,12 +350,29 @@ struct TranscriptTextView: UIViewRepresentable {
             return SelectionContext(text: excerpt, selection: relative)
         }
 
-        private func updateWordStyles(in view: UITextView) {
+        func updateWordStyles(in view: UITextView) {
+            guard !applyingWordStyles, !isApplyingProgrammaticUpdate, view.selectedRange.length == 0 else { return }
+            applyingWordStyles = true
+            defer { applyingWordStyles = false }
+            let length = view.textStorage.length
+            let window: NSRange
+            if parent.vocabularyIndex != nil, view.bounds.height > 0 {
+                var visible = view.bounds.insetBy(dx: 0, dy: -view.bounds.height * 0.5)
+                visible.origin.x -= view.textContainerInset.left
+                visible.origin.y -= view.textContainerInset.top
+                let glyphs = view.layoutManager.glyphRange(forBoundingRect: visible, in: view.textContainer)
+                window = view.layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            } else { window = NSRange(location: 0, length: min(length, 8192)) }
+            let identity = parent.vocabularyIndex.map(ObjectIdentifier.init)
             let category = view.traitCollection.preferredContentSizeCategory
             guard appliedWordRevision != parent.wordStyleRevision
                     || appliedWordUnderline != parent.differentiateWithoutColor
-                    || appliedContentSizeCategory != category else { return }
-            let length = view.textStorage.length
+                    || appliedContentSizeCategory != category || appliedWindow != window
+                    || appliedIndexIdentity != identity || appliedWordLanguage != parent.wordStyleLanguage else { return }
+            let ranges = parent.vocabularyIndex?.unknownRanges(in: window, known: parent.knownForms)
+                ?? parent.unknownWordRanges
+            appliedWindow = window
+            appliedIndexIdentity = identity
             isApplyingProgrammaticUpdate = true
             view.textStorage.beginEditing()
             if appliedContentSizeCategory != category {
@@ -356,7 +385,7 @@ struct TranscriptTextView: UIViewRepresentable {
             }
             // Share one adaptive color across every occurrence, including large full-book texts.
             let color = UIColor { $0.userInterfaceStyle == .dark ? UIColor.systemYellow : UIColor.systemBrown }
-            for range in parent.unknownWordRanges where range.location >= 0 && NSMaxRange(range) <= length {
+            for range in ranges where range.location >= 0 && NSMaxRange(range) <= length {
                 view.textStorage.addAttribute(.foregroundColor, value: color, range: range)
                 if parent.differentiateWithoutColor {
                     view.textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
@@ -364,9 +393,10 @@ struct TranscriptTextView: UIViewRepresentable {
             }
             view.textStorage.endEditing()
             isApplyingProgrammaticUpdate = false
-            appliedWordRanges = parent.unknownWordRanges
+            appliedWordRanges = ranges
             appliedWordRevision = parent.wordStyleRevision
             appliedWordUnderline = parent.differentiateWithoutColor
+            appliedWordLanguage = parent.wordStyleLanguage
             appliedContentSizeCategory = category
         }
 
