@@ -1,6 +1,29 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testChapterListScrollsWhilePlaybackKeepsUpdating() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-scroll-fixture"]
+        app.launch()
+        let story = app.staticTexts["Reading vocabulary story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        let play = app.buttons["Play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 10)); play.tap()
+        app.buttons["reader.choose-chapter"].tap()
+        let list = app.collectionViews["reader.chapters-list"]
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        let last = app.buttons["reader.chapter.chapter-100"]
+        for _ in 0..<20 {
+            if last.exists && last.isHittable { break }
+            list.swipeUp()
+        }
+        XCTAssertTrue(last.isHittable, "Playback ticks must not reset chapter list scrolling")
+        last.tap()
+        let picker = app.buttons["reader.choose-chapter"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertEqual(picker.label, "Chapter 100")
+    }
+
     @MainActor func testChapterConfirmationAndWholeBookCompletionUpdateCounts() {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"]

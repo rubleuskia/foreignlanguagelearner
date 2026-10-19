@@ -60,3 +60,11 @@ Debug simulator timing samples (iPhone 17 Pro, iOS 26.5, Xcode 26.6):
 The 50k-form test asserts only 25 batch models are saved and that warm prepare/complete does not increment the source tokenization counter. The 100-book test asserts exactly 100,000 visited postings and no further membership visits on reconciliation with unchanged knowledge. Tests also compare every resulting count against a Set difference reference.
 
 These are single local samples, not physical-device p50/p95 guarantees. No physical iPhone memory/frame profile was available. Initial indexing still reads every source once; the UITextView still owns the whole document. Startup knowledge loading now uses a background read-only context. Large backup preview/export/restore still performs main-context work, although restore groups additions into compact batches. Native selection and existing following/foreground regression tests remain required.
+
+## 2026-10-19 — Scrolling regression correction
+
+- 144 unit tests passed after moving cue/word paint out of NSTextStorage and stabilizing follow identity. New checks verify that changing estimated content height does not restart a cue's movement, viewport decoration leaves both text storage and scroll offset unchanged, and native selection still defers updates.
+- Both reading UI scenarios passed: completion/count updates and scrolling a 100-chapter sheet to select Chapter 100 while audio and position persistence continue (the latter ran for ~34 seconds).
+- The chapter list uses an immutable snapshot instead of a live SwiftUI Menu; both physical tracks and legacy parts share the new chooser.
+
+- The additional paint-rendering test passed: word tint, accessibility underline and cue background each change the rendered image independently, clearing them restores the exact original image, and NSTextStorage is unchanged. This brings the distinct passing unit tests to 145. The unsigned Release simulator build also succeeded.

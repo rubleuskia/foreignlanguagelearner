@@ -22,6 +22,13 @@ import SwiftData
                 .init(id: "one", title: "Chapter one", mediaFilename: "media.wav", subtitleFilename: "one.srt", duration: 20, alignmentStatus: .aligned),
                 .init(id: "two", title: "Chapter two", mediaFilename: "media.wav", duration: 20)
             ], lastTrackID: "one")
+        if ProcessInfo.processInfo.arguments.contains("--chapter-scroll-fixture") {
+            item.tracks = (1...100).map { number in
+                .init(id: "chapter-\(number)", title: "Chapter \(number)", mediaFilename: "media.wav",
+                      subtitleFilename: "one.srt", duration: 20, alignmentStatus: .aligned)
+            }
+            item.lastTrackID = item.tracks.first?.id
+        }
         item.readingVocabularyMigrationVersion = 1
         context.insert(item); try context.save()
     }

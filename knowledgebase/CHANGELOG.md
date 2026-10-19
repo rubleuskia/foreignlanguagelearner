@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-19 — Stable reader and chapter-list scrolling
+
+- Paint unknown-word colors, accessibility underlines and active-cue backgrounds through a dedicated layout-manager drawing layer without editing text storage during scrolling. Follow requests are keyed to cue/document/viewport changes rather than fluctuating estimated content height.
+- Replace updating chapter/part menus with a native sheet list captured when opened; playback ticks and saved positions cannot rebuild its rows or reset its scroll position. Playback continues while selecting a chapter.
+- Added regression checks for viewport stability, redundant follow requests and scrolling to chapter 100 during playback. DECISIONS.md records paint-only decoration and stable chapter snapshots. PROJECT.md notes the chapter chooser; project purpose and network boundaries are unchanged.
+
 ## 2026-10-19 — Persistent vocabulary index and library counts
 
 - Library rows show new unique word forms for unread books and total unique forms for explicitly completed books, with loading, updating and retry states. ZIP import and book badges count the same TXT-plus-subtitles corpus.

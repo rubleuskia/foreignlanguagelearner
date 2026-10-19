@@ -437,6 +437,10 @@ final class LearningUXTests: XCTestCase {
         coordinator.applyFollow(to: view)
         XCTAssertTrue(view.destinations.isEmpty, "Unchanged layout must not restart scrolling")
 
+        view.contentSize.height += 50
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Estimated content height changes must not interrupt the same cue's scrolling")
+
         view.textContainerInset.top += 100
         view.layoutIfNeeded()
         coordinator.applyFollow(to: view)

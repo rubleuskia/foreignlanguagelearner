@@ -12,6 +12,7 @@ struct BookReaderView: View {
     @Environment(\.scenePhase) private var scenePhase
     let item: LearningItem
     @State private var playback = BookPlaybackController()
+    @State private var chapterPicker: ChapterPickerSnapshot?
     @State private var mode: ReadingMode = .track
     @State private var following = true
     @State private var scrubbing = false
@@ -70,6 +71,13 @@ struct BookReaderView: View {
         }
         .onChange(of: scenePhase) { _, phase in if phase != .active { savePosition() } }
         .onDisappear { savePosition(); playback.close() }
+        .sheet(item: $chapterPicker) { snapshot in
+            ChapterPickerView(snapshot: snapshot) { id in
+                guard item.tracks.contains(where: { $0.id == id }) else { return }
+                savePosition()
+                playback.selectTrack(id)
+            }
+        }
         .sheet(item: $selectionPreview) { SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen) }
         .alert("Book", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
@@ -121,17 +129,12 @@ struct BookReaderView: View {
     private var playerBar: some View {
         VStack(spacing: 8) {
             HStack {
-                Menu(activeTrack?.title ?? "Track") {
-                    ForEach(item.tracks) { track in
-                        Button {
-                            savePosition()
-                            playback.selectTrack(track.id)
-                        } label: {
-                            if track.id == playback.activeTrackID { Label(track.title, systemImage: "checkmark") }
-                            else { Text(track.title) }
-                        }
-                    }
+                Button(activeTrack?.title ?? "Track") {
+                    chapterPicker = .init(chapters: item.tracks.map {
+                        .init(id: $0.id, title: $0.title, completed: $0.isCompleted)
+                    }, selectedID: playback.activeTrackID)
                 }
+                .accessibilityIdentifier("reader.choose-chapter")
                 Spacer()
                 PlaybackRateMenu(playback: playback.playback)
             }
@@ -157,6 +160,7 @@ struct BookReaderView: View {
                 Button { playback.toggle(); if playback.wantsToPlay { followGeneration += 1; following = true } } label: {
                     Image(systemName: playback.wantsToPlay ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
                 }
+                .accessibilityLabel(playback.wantsToPlay ? "Pause" : "Play")
                 Button { playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true } label: {
                     Image(systemName: "goforward.10")
                 }

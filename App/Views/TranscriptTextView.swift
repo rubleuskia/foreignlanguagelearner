@@ -49,10 +49,19 @@ struct TranscriptTextView: UIViewRepresentable {
     var wordStyleLanguage: String = ""
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
+    static func makeTextView(frame: CGRect = .zero) -> LayoutAwareTextView {
+        let storage = NSTextStorage()
+        let manager = TranscriptLayoutManager()
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(manager)
+        manager.addTextContainer(container)
+        return LayoutAwareTextView(frame: frame, textContainer: container)
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> LayoutAwareTextView {
-        let view = LayoutAwareTextView(usingTextLayoutManager: false)
+        let view = Self.makeTextView()
         view.isEditable = false
         view.isSelectable = true
         view.alwaysBounceVertical = true
@@ -104,9 +113,8 @@ struct TranscriptTextView: UIViewRepresentable {
             let followGeneration: Int
             let boundsSize: CGSize
             let adjustedInsets: UIEdgeInsets
+            let textInsets: UIEdgeInsets
             let contentSizeCategory: UIContentSizeCategory
-            let contentSize: CGSize
-            let lineRect: CGRect
         }
 
         var parent: TranscriptTextView
@@ -152,6 +160,7 @@ struct TranscriptTextView: UIViewRepresentable {
             if identity != documentIdentity {
                 resetFollow(in: view)
                 isApplyingProgrammaticUpdate = true
+                (view.layoutManager as? TranscriptLayoutManager)?.clearDecorations()
                 view.text = parent.document.text
                 view.selectedRange = NSRange(location: 0, length: 0)
                 isApplyingProgrammaticUpdate = false
@@ -190,23 +199,21 @@ struct TranscriptTextView: UIViewRepresentable {
             else { return }
             applyingFollow = true
             defer { applyingFollow = false }
-            guard let lineRect = Self.firstVisualLineRect(
-                for: parent.document.ranges[active], in: view
-            ) else { return }
             let key = FollowKey(documentRevision: documentRevision,
                                 activeSegment: active,
                                 followGeneration: parent.followGeneration,
                                 boundsSize: view.bounds.size,
                                 adjustedInsets: view.adjustedContentInset,
-                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory,
-                                contentSize: view.contentSize, lineRect: lineRect)
+                                textInsets: view.textContainerInset,
+                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory)
             guard key != followKey else { return }
+            guard let lineRect = Self.firstVisualLineRect(
+                for: parent.document.ranges[active], in: view
+            ) else { return }
             let previous = followKey
             let geometryChanged = previous.map {
                 $0.boundsSize != key.boundsSize || $0.adjustedInsets != key.adjustedInsets
-                    || $0.contentSizeCategory != key.contentSizeCategory
-                    || $0.contentSize != key.contentSize
-                    || ($0.activeSegment == active && $0.lineRect != lineRect)
+                    || $0.textInsets != key.textInsets || $0.contentSizeCategory != key.contentSizeCategory
             } ?? false
             guard let y = TranscriptFollowLayout.followOffsetY(
                 lineRect: lineRect, currentOffset: view.contentOffset.y,
@@ -374,24 +381,11 @@ struct TranscriptTextView: UIViewRepresentable {
             appliedWindow = window
             appliedIndexIdentity = identity
             isApplyingProgrammaticUpdate = true
-            view.textStorage.beginEditing()
             if appliedContentSizeCategory != category {
                 view.textStorage.addAttribute(.font, value: UIFont.preferredFont(forTextStyle: .body),
                                               range: NSRange(location: 0, length: length))
             }
-            for range in appliedWordRanges where NSMaxRange(range) <= length {
-                view.textStorage.addAttribute(.foregroundColor, value: UIColor.label, range: range)
-                view.textStorage.removeAttribute(.underlineStyle, range: range)
-            }
-            // Share one adaptive color across every occurrence, including large full-book texts.
-            let color = UIColor { $0.userInterfaceStyle == .dark ? UIColor.systemYellow : UIColor.systemBrown }
-            for range in ranges where range.location >= 0 && NSMaxRange(range) <= length {
-                view.textStorage.addAttribute(.foregroundColor, value: color, range: range)
-                if parent.differentiateWithoutColor {
-                    view.textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
-                }
-            }
-            view.textStorage.endEditing()
+            (view.layoutManager as? TranscriptLayoutManager)?.setWords(ranges, underline: parent.differentiateWithoutColor)
             isApplyingProgrammaticUpdate = false
             appliedWordRanges = ranges
             appliedWordRevision = parent.wordStyleRevision
@@ -402,15 +396,8 @@ struct TranscriptTextView: UIViewRepresentable {
 
         private func updateHighlight(in view: UITextView) {
             guard highlighted != parent.activeSegment else { return }
-            if let previous = highlighted, parent.document.ranges.indices.contains(previous) {
-                view.textStorage.removeAttribute(.backgroundColor,
-                                                 range: parent.document.ranges[previous])
-            }
-            if let active = parent.activeSegment, parent.document.ranges.indices.contains(active) {
-                view.textStorage.addAttribute(.backgroundColor,
-                                              value: UIColor.systemYellow.withAlphaComponent(0.25),
-                                              range: parent.document.ranges[active])
-            }
+            let range = parent.activeSegment.flatMap { parent.document.ranges.indices.contains($0) ? parent.document.ranges[$0] : nil }
+            (view.layoutManager as? TranscriptLayoutManager)?.setActiveRange(range)
             highlighted = parent.activeSegment
         }
 

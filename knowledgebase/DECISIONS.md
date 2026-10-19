@@ -202,3 +202,10 @@ A versioned Unicode tokenizer supplies all completion, import statistics and rea
 Reader new-word foreground color and optional accessibility underline are independent of the active cue background; color-only changes preserve native selection and following. Tokenization is asynchronous, cached for the active text, and not repeated on playback ticks. Language is locked after the first completion to preserve the namespace used for accumulated knowledge.
 
 Portable JSON v3 carries reading vocabulary together with dictionary details, without library files or completion flags. Restore and merge form a union and retain the earliest first-studied date; translations-only and v1/v2 files leave reading vocabulary untouched. Both domains share one save/rollback, and vocabulary changes invalidate stale import confirmations. V3 is limited to 64 MiB / 500,000 reading forms with 32 MiB of language/form bytes; v1/v2 retain their 20 MiB limit. No partial export or silent truncation is allowed.
+
+
+## Reader paint and chapter navigation stability
+
+New-word foreground, optional underline and active-cue background are drawn by `TranscriptLayoutManager`. Painting invalidates display only and must not edit `NSTextStorage` from layout or scroll callbacks. Base font changes still use text attributes. Native text selection, wrapping and glyph layout remain managed by TextKit. Follow requests depend on document/cue, explicit resume, viewport dimensions and insets, and text size category; changing estimated content height alone must not cancel or restart an in-flight movement.
+
+Both physical chapters and legacy virtual parts use a dedicated sheet List built from an immutable opening snapshot with stable IDs. Playback position updates do not rebuild the presented rows. Selection resolves the chosen ID against the current item before navigation; closing without selection leaves playback unchanged.

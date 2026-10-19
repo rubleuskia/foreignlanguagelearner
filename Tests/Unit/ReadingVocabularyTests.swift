@@ -239,19 +239,77 @@ final class ReadingVocabularyTests: XCTestCase {
             onSelectionBegan: {}, unknownWordRanges: [NSRange(location: 4, length: 4)], wordStyleRevision: 1,
             handleSelection: { _, _, _, _, _ in })
         let coordinator = parent.makeCoordinator()
-        let view = UITextView()
+        let view = TranscriptTextView.makeTextView()
+        let renderer = try XCTUnwrap(view.layoutManager as? TranscriptLayoutManager)
         view.text = document.text; coordinator.apply(to: view)
-        XCTAssertNotNil(view.textStorage.attribute(.foregroundColor, at: 4, effectiveRange: nil))
-        XCTAssertNotNil(view.textStorage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+        XCTAssertEqual(renderer.unknownRanges, [NSRange(location: 4, length: 4)])
+        XCTAssertEqual(renderer.activeRange, document.ranges[0])
         parent = TranscriptTextView(document: document, activeSegment: 1, following: .constant(false), followGeneration: 0,
             onSelectionBegan: {}, unknownWordRanges: [], wordStyleRevision: 2, handleSelection: { _, _, _, _, _ in })
         view.selectedRange = NSRange(location: 4, length: 4)
         coordinator.parent = parent; coordinator.apply(to: view)
         XCTAssertEqual(view.selectedRange, NSRange(location: 4, length: 4))
         view.selectedRange = NSRange(location: 0, length: 0); coordinator.apply(to: view)
-        XCTAssertNil(view.textStorage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
-        XCTAssertNotNil(view.textStorage.attribute(.backgroundColor, at: document.ranges[1].location, effectiveRange: nil))
-        XCTAssertEqual(view.textStorage.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? UIColor, UIColor.label)
+        XCTAssertEqual(renderer.activeRange, document.ranges[1])
+        XCTAssertTrue(renderer.unknownRanges.isEmpty)
+    }
+
+    @MainActor func testViewportDecorationDoesNotEditTextStorageOrMoveScrollPosition() throws {
+        let document = TranscriptDocument(segments: (0..<200).map {
+            .init(start: Double($0), end: Double($0 + 1), text: "Kot pies śpi. Kot pies śpi. Kot pies śpi.")
+        })
+        let index = try VocabularyTokenizer.textIndex(in: document.text)
+        var parent = TranscriptTextView(document: document, activeSegment: 0, following: .constant(false), followGeneration: 0,
+            onSelectionBegan: {}, vocabularyIndex: index, handleSelection: { _, _, _, _, _ in })
+        let view = TranscriptTextView.makeTextView(frame: CGRect(x: 0, y: 0, width: 300, height: 400))
+        let coordinator = parent.makeCoordinator()
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        let original = NSAttributedString(attributedString: view.textStorage)
+        for step in 1...20 {
+            view.setContentOffset(CGPoint(x: 0, y: step * 50), animated: false)
+            let position = view.contentOffset
+            parent.wordStyleRevision = step
+            parent.knownForms = step.isMultiple(of: 2) ? ["kot"] : []
+            coordinator.parent = parent
+            coordinator.updateWordStyles(in: view)
+            view.layoutIfNeeded()
+            XCTAssertEqual(view.contentOffset.y, position.y, accuracy: 1)
+            XCTAssertEqual(view.textStorage, original, "Color/underline updates must not edit storage and invalidate TextKit layout during scrolling")
+        }
+    }
+
+    @MainActor func testPaintLayerActuallyRendersWordColorAndCueBackground() throws {
+        let view = TranscriptTextView.makeTextView(frame: CGRect(x: 0, y: 0, width: 300, height: 100))
+        view.backgroundColor = .white
+        view.textColor = .black
+        view.font = .systemFont(ofSize: 24)
+        view.text = "Kot pies"
+        view.layoutIfNeeded()
+        let manager = try XCTUnwrap(view.layoutManager as? TranscriptLayoutManager)
+        let storage = NSAttributedString(attributedString: view.textStorage)
+        func render() -> Data? {
+            UIGraphicsImageRenderer(size: view.bounds.size).image { context in
+                view.layer.render(in: context.cgContext)
+            }.pngData()
+        }
+        let plain = try XCTUnwrap(render())
+        manager.setWords([NSRange(location: 4, length: 4)], underline: false)
+        view.setNeedsDisplay(); view.layoutIfNeeded()
+        let colored = try XCTUnwrap(render())
+        XCTAssertNotEqual(colored, plain, "The paint layer must visibly tint unknown words")
+        manager.setWords([NSRange(location: 4, length: 4)], underline: true)
+        view.setNeedsDisplay(); view.layoutIfNeeded()
+        let underlined = try XCTUnwrap(render())
+        XCTAssertNotEqual(underlined, colored, "Accessibility underline must render independently of color")
+        manager.setActiveRange(NSRange(location: 0, length: 8))
+        view.setNeedsDisplay(); view.layoutIfNeeded()
+        let highlighted = try XCTUnwrap(render())
+        XCTAssertNotEqual(highlighted, underlined)
+        XCTAssertEqual(view.textStorage, storage)
+        manager.clearDecorations()
+        view.setNeedsDisplay(); view.layoutIfNeeded()
+        XCTAssertEqual(render(), plain, "Removing paint must restore the original rendering")
     }
 
     func testZIPAndExternalTranscriptPreviewRemainReadOnlyAndDetectChanges() async throws {
