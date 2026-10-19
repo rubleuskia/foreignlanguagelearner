@@ -1,6 +1,40 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testManualSwipeWhilePausedWithNewWordHighlighting() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
+        app.launch()
+        let story = app.staticTexts["Reading vocabulary story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        let text = app.textViews["reader.transcript"]
+        XCTAssertTrue(text.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["vocabulary.statistics"].waitForExistence(timeout: 10))
+        app.buttons["Play"].tap()
+        let pause = app.buttons["Pause"]
+        XCTAssertTrue(pause.waitForExistence(timeout: 5)); pause.tap()
+        XCTAssertTrue(app.buttons["Play"].exists)
+        func offset() throws -> Int {
+            let value = try XCTUnwrap(text.value as? String)
+            return try XCTUnwrap(Int(value.replacingOccurrences(of: "offset:", with: "")))
+        }
+        let initial = try offset()
+        text.swipeUp(velocity: .fast)
+        let first = try offset()
+        XCTAssertGreaterThan(first, initial + 100, "Paused audio must not hold the transcript at its cue")
+        XCTAssertTrue(app.buttons["Follow audio"].exists)
+        text.swipeUp(velocity: .fast)
+        let second = try offset()
+        XCTAssertGreaterThan(second, first + 100, "Successive swipes must keep advancing after inertia settles")
+        app.switches["reader.new-words"].tap()
+        XCTAssertEqual(try offset(), second, accuracy: 5)
+        app.switches["reader.new-words"].tap()
+        XCTAssertEqual(try offset(), second, accuracy: 5, "Refreshing paint while paused must preserve the viewport")
+        text.swipeDown(velocity: .fast)
+        XCTAssertLessThan(try offset(), second - 100)
+        XCTAssertTrue(app.buttons["Play"].exists, "Manual scrolling must leave playback paused")
+    }
+
     @MainActor func testChapterListScrollsWhilePlaybackKeepsUpdating() {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-scroll-fixture"]

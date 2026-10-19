@@ -68,3 +68,7 @@ These are single local samples, not physical-device p50/p95 guarantees. No physi
 - The chapter list uses an immutable snapshot instead of a live SwiftUI Menu; both physical tracks and legacy parts share the new chooser.
 
 - The additional paint-rendering test passed: word tint, accessibility underline and cue background each change the rendered image independently, clearing them restores the exact original image, and NSTextStorage is unchanged. This brings the distinct passing unit tests to 145. The unsigned Release simulator build also succeeded.
+
+## Paused manual-swipe verification
+
+After clarification that the issue occurs while audio is paused, added and passed `testManualSwipeWhilePausedWithNewWordHighlighting` on the iPhone 17 Pro simulator. The fixture contains 200 long timed cues. The test starts playback, pauses it, performs two fast upward swipes, checks that each advances the viewport after settling, toggles new-word highlighting off/on without moving the viewport, swipes back down and verifies playback remains paused. The test completed in 19.6 seconds. It exercises the already committed paint/follow fix; this verification adds no further Release behavior change. DEBUG-only launch-gated accessibility telemetry exposes the offset to the test without altering production accessibility.

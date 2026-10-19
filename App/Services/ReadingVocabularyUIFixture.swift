@@ -29,6 +29,16 @@ import SwiftData
             }
             item.lastTrackID = item.tracks.first?.id
         }
+        if ProcessInfo.processInfo.arguments.contains("--paused-scroll-fixture") {
+            let sentence = String(repeating: "Kot i pies czytają książkę przy oknie. ", count: 8)
+            let subtitles = (0..<200).map { index in
+                let start = String(format: "00:00:%02d,%03d", index / 10, (index % 10) * 100)
+                let next = index + 1
+                let end = String(format: "00:00:%02d,%03d", next / 10, (next % 10) * 100)
+                return "\(index + 1)\n\(start) --> \(end)\n\(sentence)\n"
+            }.joined(separator: "\n")
+            try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
+        }
         item.readingVocabularyMigrationVersion = 1
         context.insert(item); try context.save()
     }

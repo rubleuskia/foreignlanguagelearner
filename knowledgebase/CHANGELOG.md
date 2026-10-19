@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Verify manual transcript swipes with audio paused
+
+- Added a dedicated long-transcript UI regression test for play → pause → successive fast manual swipes, highlight toggling without viewport movement, and reverse scrolling while playback stays paused. The scenario passes with the existing scrolling fix.
+- Test fixtures and launch-gated DEBUG telemetry only; no additional Release behavior, architectural decision or project scope changed. DECISIONS.md and PROJECT.md require no further changes.
+
 ## 2026-10-19 — Stable reader and chapter-list scrolling
 
 - Paint unknown-word colors, accessibility underlines and active-cue backgrounds through a dedicated layout-manager drawing layer without editing text storage during scrolling. Follow requests are keyed to cue/document/viewport changes rather than fluctuating estimated content height.

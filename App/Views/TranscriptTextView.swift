@@ -93,6 +93,18 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     final class LayoutAwareTextView: UITextView {
+        #if DEBUG
+        // UI-test telemetry only; production accessibility keeps the native transcript value.
+        override var accessibilityValue: String? {
+            get {
+                if ProcessInfo.processInfo.arguments.contains("--paused-scroll-fixture") {
+                    return "offset:\(Int(contentOffset.y))"
+                }
+                return super.accessibilityValue
+            }
+            set { super.accessibilityValue = newValue }
+        }
+        #endif
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
             super.layoutSubviews()
