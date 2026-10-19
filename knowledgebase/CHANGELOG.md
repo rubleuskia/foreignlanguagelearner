@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Follow audio reaches distant cues in one action
+
+- Resolve transcript layout through the active cue and its destination viewport before calculating the scroll limit. Synchronize an underestimated scroll extent with measured text geometry so Follow audio reaches the highlighted passage on the first press.
+- Added a 2,000-cue regression with noncontiguous layout and stale content height. Existing same-cue deduplication and manual-scroll behavior remain covered. DECISIONS.md records the geometry rule; project scope and supported workflows are unchanged, so PROJECT.md needs no update.
+
 ## 2026-10-19 — Remaining cooldown on phrase cards
 
 - Dictionary list cards and phrase details show the remaining days/hours/minutes until repeat, or Ready to repeat when cooldown expires. Completed level-4 phrases have no countdown.

@@ -520,6 +520,47 @@ final class LearningUXTests: XCTestCase {
     }
 
     @MainActor
+    func testOneFollowReachesDistantCueWithStaleContentSize() throws {
+        let document = TranscriptDocument(segments: (0..<2000).map {
+            .init(start: Double($0), end: Double($0 + 1),
+                  text: "Passage \($0). A long sentence that wraps across several visual lines on the phone.")
+        })
+        let active = 1700
+        let parent = TranscriptTextView(document: document, activeSegment: active,
+            following: .constant(true), followGeneration: 1, onSelectionBegan: {},
+            handleSelection: { _, _, _, _, _ in })
+        let coordinator = parent.makeCoordinator()
+        final class ImmediateTextView: UITextView {
+            override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+                super.setContentOffset(contentOffset, animated: false)
+            }
+        }
+        let storage = NSTextStorage()
+        let manager = TranscriptLayoutManager()
+        manager.allowsNonContiguousLayout = true
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(manager)
+        manager.addTextContainer(container)
+        let view = ImmediateTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 500), textContainer: container)
+        view.font = .systemFont(ofSize: 17)
+        view.textContainerInset = UIEdgeInsets(top: 20, left: 16, bottom: 40, right: 16)
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        // TextKit may know the distant line before UITextView publishes the new scroll extent.
+        view.contentSize.height = 500
+        UIView.performWithoutAnimation { coordinator.applyFollow(to: view) }
+        let line = try XCTUnwrap(TranscriptTextView.Coordinator.firstVisualLineRect(
+            for: document.ranges[active], in: view))
+        let visible = view.bounds.inset(by: view.adjustedContentInset)
+        XCTAssertGreaterThanOrEqual(line.midY, visible.minY)
+        XCTAssertLessThanOrEqual(line.midY, visible.maxY,
+            "A single follow must reach the highlighted cue even when the old content height is stale")
+        let offset = view.contentOffset.y
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(view.contentOffset.y, offset, accuracy: 1)
+    }
+
+    @MainActor
     func testTextKitUsesFirstVisualLineOfLongCueAndSelectionPausesOnce() throws {
         var following = true
         var pauseCount = 0
