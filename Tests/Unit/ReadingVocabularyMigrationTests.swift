@@ -23,7 +23,7 @@ final class ReadingVocabularyMigrationTests: XCTestCase {
             old.mainContext.insert(item); old.mainContext.insert(entry); try old.mainContext.save()
         }
         do {
-            let upgraded = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+            let upgraded = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                               configurations: ModelConfiguration(url: url))
             let item = try XCTUnwrap(upgraded.mainContext.fetch(FetchDescriptor<LearningItem>()).first)
             XCTAssertEqual(item.id, id); XCTAssertEqual(item.lastPosition, 3)
@@ -35,9 +35,9 @@ final class ReadingVocabularyMigrationTests: XCTestCase {
             XCTAssertTrue(store.ready, store.errorMessage ?? "")
             XCTAssertEqual(store.forms(for: "pl"), ["kot", "śpi"])
         }
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                           configurations: ModelConfiguration(url: url))
-        XCTAssertEqual(try reopened.mainContext.fetchCount(FetchDescriptor<ReadVocabularyWord>()), 2)
+        XCTAssertEqual(try ReadingKnowledge.words(context: reopened.mainContext).count, 2)
         XCTAssertEqual(try reopened.mainContext.fetch(FetchDescriptor<LearningItem>()).first?.readingVocabularyMigrationVersion, 1)
     }
 }

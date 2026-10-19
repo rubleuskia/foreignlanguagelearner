@@ -12,6 +12,7 @@ struct ReaderView: View {
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     @State private var message: String?
+    @State private var chapterPicker: ChapterPickerSnapshot?
     @State private var selectedPart = 0
     @State private var sourceLanguages = [SourceLanguage.polish]
     @State private var translationPreview: SelectionTranslationPreview?
@@ -95,6 +96,11 @@ struct ReaderView: View {
             openCurrentPart()
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
+        .sheet(item: $chapterPicker) { snapshot in
+            ChapterPickerView(snapshot: snapshot) { id in
+                if let index = item.parts.firstIndex(where: { $0.id.uuidString == id }) { switchToPart(index) }
+            }
+        }
         .sheet(item: $translationPreview) {
             SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen)
         }
@@ -120,11 +126,12 @@ struct ReaderView: View {
         VStack(spacing: 8) {
             if !item.parts.isEmpty {
                 HStack {
-                    Menu("Part \(selectedPart + 1) of \(item.parts.count)") {
-                        ForEach(item.parts.indices, id: \.self) { index in
-                            Button("Part \(index + 1)\(item.parts[index].isCompleted ? " · Completed" : "")") { switchToPart(index) }
-                        }
+                    Button("Part \(selectedPart + 1) of \(item.parts.count)") {
+                        chapterPicker = .init(chapters: item.parts.enumerated().map { index, part in
+                            .init(id: part.id.uuidString, title: "Part \(index + 1)", completed: part.isCompleted)
+                        }, selectedID: currentPart?.id.uuidString)
                     }
+                    .accessibilityIdentifier("reader.choose-chapter")
                     Spacer()
                     if let part = currentPart { ReadingCompletionButton(item: item, scope: .part(part.id)) }
                 }

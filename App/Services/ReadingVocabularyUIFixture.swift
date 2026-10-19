@@ -22,6 +22,23 @@ import SwiftData
                 .init(id: "one", title: "Chapter one", mediaFilename: "media.wav", subtitleFilename: "one.srt", duration: 20, alignmentStatus: .aligned),
                 .init(id: "two", title: "Chapter two", mediaFilename: "media.wav", duration: 20)
             ], lastTrackID: "one")
+        if ProcessInfo.processInfo.arguments.contains("--chapter-scroll-fixture") {
+            item.tracks = (1...100).map { number in
+                .init(id: "chapter-\(number)", title: "Chapter \(number)", mediaFilename: "media.wav",
+                      subtitleFilename: "one.srt", duration: 20, alignmentStatus: .aligned)
+            }
+            item.lastTrackID = item.tracks.first?.id
+        }
+        if ProcessInfo.processInfo.arguments.contains("--paused-scroll-fixture") {
+            let sentence = String(repeating: "Kot i pies czytają książkę przy oknie. ", count: 8)
+            let subtitles = (0..<200).map { index in
+                let start = String(format: "00:00:%02d,%03d", index / 10, (index % 10) * 100)
+                let next = index + 1
+                let end = String(format: "00:00:%02d,%03d", next / 10, (next % 10) * 100)
+                return "\(index + 1)\n\(start) --> \(end)\n\(sentence)\n"
+            }.joined(separator: "\n")
+            try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
+        }
         item.readingVocabularyMigrationVersion = 1
         context.insert(item); try context.save()
     }

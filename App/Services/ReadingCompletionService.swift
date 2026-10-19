@@ -1,7 +1,6 @@
-import CryptoKit
 import Foundation
 
-struct ReadingTextSource: Sendable {
+struct ReadingTextSource: Sendable, Equatable {
     let text: String?
     let url: URL?
     let fileExtension: String
@@ -55,24 +54,4 @@ enum ReadingCompletionService {
         }
     }
 
-    static func analyze(_ sources: [ReadingTextSource]) async throws -> (words: Set<String>, fingerprint: String) {
-        let job = Task.detached(priority: .userInitiated) {
-            var words = Set<String>()
-            var hash = SHA256()
-            for source in sources {
-                try Task.checkCancellation()
-                let text = try source.load()
-                let data = Data(text.utf8)
-                // Length prefixes distinguish source arrays with the same concatenation.
-                hash.update(data: Data("\(data.count):".utf8)); hash.update(data: data)
-                words.formUnion(try VocabularyTokenizer.forms(in: text))
-            }
-            return (words, SHA256DigestString(hash.finalize()))
-        }
-        return try await withTaskCancellationHandler(operation: { try await job.value }, onCancel: { job.cancel() })
-    }
-
-    private static func SHA256DigestString(_ digest: SHA256.Digest) -> String {
-        digest.map { String(format: "%02x", $0) }.joined()
-    }
 }

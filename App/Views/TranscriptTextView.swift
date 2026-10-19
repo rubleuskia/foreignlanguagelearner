@@ -44,12 +44,24 @@ struct TranscriptTextView: UIViewRepresentable {
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
+    var vocabularyIndex: VocabularyTextIndex? = nil
+    var knownForms: Set<String> = []
+    var wordStyleLanguage: String = ""
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
+
+    static func makeTextView(frame: CGRect = .zero) -> LayoutAwareTextView {
+        let storage = NSTextStorage()
+        let manager = TranscriptLayoutManager()
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(manager)
+        manager.addTextContainer(container)
+        return LayoutAwareTextView(frame: frame, textContainer: container)
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> LayoutAwareTextView {
-        let view = LayoutAwareTextView(usingTextLayoutManager: false)
+        let view = Self.makeTextView()
         view.isEditable = false
         view.isSelectable = true
         view.alwaysBounceVertical = true
@@ -64,6 +76,7 @@ struct TranscriptTextView: UIViewRepresentable {
         view.didLayout = { [weak view, weak coordinator = context.coordinator] in
             guard let view, let coordinator else { return }
             coordinator.applyFollow(to: view)
+            coordinator.updateWordStyles(in: view)
         }
         return view
     }
@@ -80,6 +93,18 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     final class LayoutAwareTextView: UITextView {
+        #if DEBUG
+        // UI-test telemetry only; production accessibility keeps the native transcript value.
+        override var accessibilityValue: String? {
+            get {
+                if ProcessInfo.processInfo.arguments.contains("--paused-scroll-fixture") {
+                    return "offset:\(Int(contentOffset.y))"
+                }
+                return super.accessibilityValue
+            }
+            set { super.accessibilityValue = newValue }
+        }
+        #endif
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
             super.layoutSubviews()
@@ -100,9 +125,8 @@ struct TranscriptTextView: UIViewRepresentable {
             let followGeneration: Int
             let boundsSize: CGSize
             let adjustedInsets: UIEdgeInsets
+            let textInsets: UIEdgeInsets
             let contentSizeCategory: UIContentSizeCategory
-            let contentSize: CGSize
-            let lineRect: CGRect
         }
 
         var parent: TranscriptTextView
@@ -116,7 +140,11 @@ struct TranscriptTextView: UIViewRepresentable {
         private var appliedWordRevision: Int?
         private var appliedWordRanges: [NSRange] = []
         private var appliedWordUnderline = false
+        private var appliedWordLanguage = ""
         private var appliedContentSizeCategory: UIContentSizeCategory?
+        private var appliedWindow: NSRange?
+        private var appliedIndexIdentity: ObjectIdentifier?
+        private var applyingWordStyles = false
         private var applyingFollow = false
         private var wasFollowing: Bool
 
@@ -144,6 +172,7 @@ struct TranscriptTextView: UIViewRepresentable {
             if identity != documentIdentity {
                 resetFollow(in: view)
                 isApplyingProgrammaticUpdate = true
+                (view.layoutManager as? TranscriptLayoutManager)?.clearDecorations()
                 view.text = parent.document.text
                 view.selectedRange = NSRange(location: 0, length: 0)
                 isApplyingProgrammaticUpdate = false
@@ -182,23 +211,21 @@ struct TranscriptTextView: UIViewRepresentable {
             else { return }
             applyingFollow = true
             defer { applyingFollow = false }
-            guard let lineRect = Self.firstVisualLineRect(
-                for: parent.document.ranges[active], in: view
-            ) else { return }
             let key = FollowKey(documentRevision: documentRevision,
                                 activeSegment: active,
                                 followGeneration: parent.followGeneration,
                                 boundsSize: view.bounds.size,
                                 adjustedInsets: view.adjustedContentInset,
-                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory,
-                                contentSize: view.contentSize, lineRect: lineRect)
+                                textInsets: view.textContainerInset,
+                                contentSizeCategory: view.traitCollection.preferredContentSizeCategory)
             guard key != followKey else { return }
+            guard let lineRect = Self.firstVisualLineRect(
+                for: parent.document.ranges[active], in: view
+            ) else { return }
             let previous = followKey
             let geometryChanged = previous.map {
                 $0.boundsSize != key.boundsSize || $0.adjustedInsets != key.adjustedInsets
-                    || $0.contentSizeCategory != key.contentSizeCategory
-                    || $0.contentSize != key.contentSize
-                    || ($0.activeSegment == active && $0.lineRect != lineRect)
+                    || $0.textInsets != key.textInsets || $0.contentSizeCategory != key.contentSizeCategory
             } ?? false
             guard let y = TranscriptFollowLayout.followOffsetY(
                 lineRect: lineRect, currentOffset: view.contentOffset.y,
@@ -219,6 +246,10 @@ struct TranscriptTextView: UIViewRepresentable {
             // UIKit replaces the current scrolling destination rather than queueing moves.
             view.setContentOffset(CGPoint(x: view.contentOffset.x, y: y),
                                   animated: !UIAccessibility.isReduceMotionEnabled && !geometryChanged)
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if let view = scrollView as? UITextView { updateWordStyles(in: view) }
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -281,8 +312,8 @@ struct TranscriptTextView: UIViewRepresentable {
             let textLength = (textView.text as NSString).length
             guard characterRange.location != NSNotFound, characterRange.length > 0,
                   NSMaxRange(characterRange) <= textLength else { return nil }
-            textView.layoutManager.ensureLayout(for: textView.textContainer)
             let firstCharacter = NSRange(location: characterRange.location, length: 1)
+            textView.layoutManager.ensureLayout(forCharacterRange: firstCharacter)
             let glyphRange = textView.layoutManager.glyphRange(
                 forCharacterRange: firstCharacter, actualCharacterRange: nil
             )
@@ -338,49 +369,47 @@ struct TranscriptTextView: UIViewRepresentable {
             return SelectionContext(text: excerpt, selection: relative)
         }
 
-        private func updateWordStyles(in view: UITextView) {
+        func updateWordStyles(in view: UITextView) {
+            guard !applyingWordStyles, !isApplyingProgrammaticUpdate, view.selectedRange.length == 0 else { return }
+            applyingWordStyles = true
+            defer { applyingWordStyles = false }
+            let length = view.textStorage.length
+            let window: NSRange
+            if parent.vocabularyIndex != nil, view.bounds.height > 0 {
+                var visible = view.bounds.insetBy(dx: 0, dy: -view.bounds.height * 0.5)
+                visible.origin.x -= view.textContainerInset.left
+                visible.origin.y -= view.textContainerInset.top
+                let glyphs = view.layoutManager.glyphRange(forBoundingRect: visible, in: view.textContainer)
+                window = view.layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            } else { window = NSRange(location: 0, length: min(length, 8192)) }
+            let identity = parent.vocabularyIndex.map(ObjectIdentifier.init)
             let category = view.traitCollection.preferredContentSizeCategory
             guard appliedWordRevision != parent.wordStyleRevision
                     || appliedWordUnderline != parent.differentiateWithoutColor
-                    || appliedContentSizeCategory != category else { return }
-            let length = view.textStorage.length
+                    || appliedContentSizeCategory != category || appliedWindow != window
+                    || appliedIndexIdentity != identity || appliedWordLanguage != parent.wordStyleLanguage else { return }
+            let ranges = parent.vocabularyIndex?.unknownRanges(in: window, known: parent.knownForms)
+                ?? parent.unknownWordRanges
+            appliedWindow = window
+            appliedIndexIdentity = identity
             isApplyingProgrammaticUpdate = true
-            view.textStorage.beginEditing()
             if appliedContentSizeCategory != category {
                 view.textStorage.addAttribute(.font, value: UIFont.preferredFont(forTextStyle: .body),
                                               range: NSRange(location: 0, length: length))
             }
-            for range in appliedWordRanges where NSMaxRange(range) <= length {
-                view.textStorage.addAttribute(.foregroundColor, value: UIColor.label, range: range)
-                view.textStorage.removeAttribute(.underlineStyle, range: range)
-            }
-            // Share one adaptive color across every occurrence, including large full-book texts.
-            let color = UIColor { $0.userInterfaceStyle == .dark ? UIColor.systemYellow : UIColor.systemBrown }
-            for range in parent.unknownWordRanges where range.location >= 0 && NSMaxRange(range) <= length {
-                view.textStorage.addAttribute(.foregroundColor, value: color, range: range)
-                if parent.differentiateWithoutColor {
-                    view.textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
-                }
-            }
-            view.textStorage.endEditing()
+            (view.layoutManager as? TranscriptLayoutManager)?.setWords(ranges, underline: parent.differentiateWithoutColor)
             isApplyingProgrammaticUpdate = false
-            appliedWordRanges = parent.unknownWordRanges
+            appliedWordRanges = ranges
             appliedWordRevision = parent.wordStyleRevision
             appliedWordUnderline = parent.differentiateWithoutColor
+            appliedWordLanguage = parent.wordStyleLanguage
             appliedContentSizeCategory = category
         }
 
         private func updateHighlight(in view: UITextView) {
             guard highlighted != parent.activeSegment else { return }
-            if let previous = highlighted, parent.document.ranges.indices.contains(previous) {
-                view.textStorage.removeAttribute(.backgroundColor,
-                                                 range: parent.document.ranges[previous])
-            }
-            if let active = parent.activeSegment, parent.document.ranges.indices.contains(active) {
-                view.textStorage.addAttribute(.backgroundColor,
-                                              value: UIColor.systemYellow.withAlphaComponent(0.25),
-                                              range: parent.document.ranges[active])
-            }
+            let range = parent.activeSegment.flatMap { parent.document.ranges.indices.contains($0) ? parent.document.ranges[$0] : nil }
+            (view.layoutManager as? TranscriptLayoutManager)?.setActiveRange(range)
             highlighted = parent.activeSegment
         }
 

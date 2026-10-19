@@ -4,6 +4,13 @@ import Foundation
 struct VocabularyImportPreview: Sendable {
     let words: Set<String>
     let fingerprint: String
+    init(words: Set<String>, fingerprint: String) {
+        self.words = words; self.fingerprint = fingerprint
+    }
+    static func combined(_ previews: [Self]) -> Self {
+        .init(words: previews.reduce(into: Set<String>()) { $0.formUnion($1.words) },
+              fingerprint: VocabularyIndex.digest(previews.map(\.fingerprint).sorted().joined(separator: ":")))
+    }
     init(text: String) throws {
         words = try VocabularyTokenizer.forms(in: text)
         fingerprint = SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()

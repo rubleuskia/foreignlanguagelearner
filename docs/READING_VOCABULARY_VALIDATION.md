@@ -36,3 +36,39 @@ The large-book fixture has repetitive vocabulary (six unique forms after combini
 Generate the project using `scripts/bootstrap.sh`, then run `scripts/test.sh` with an available iPhone simulator. The same suite can be run with `xcodebuild test -project ForeignLanguageLearner.xcodeproj -scheme ForeignLanguageLearner -destination 'platform=iOS Simulator,id=<available device UUID>' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO`.
 
 For a production configuration build: `xcodebuild build -project ForeignLanguageLearner.xcodeproj -scheme ForeignLanguageLearner -configuration Release -sdk iphonesimulator -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO`.
+
+## 2026-10-19 — Indexed vocabulary and library badges
+
+Implementation details and deviations from the original proposed outbox/writer design are recorded in `READING_VOCABULARY_INDEX_ARCHITECTURE.md`.
+
+- Added source-cache reuse, exact Set reference comparisons, language isolation, idempotent postings, missed-delivery recovery, cache rebuild, changed/missing files, compact Unicode position-cache round trips, legacy per-word-store migration, 50,000-form completion/export/restore, and a 100-book shared-vocabulary test.
+- The reading UI test now verifies the library's new-word count before reading and the total-word count after whole-book completion, alongside chapter counts and the highlight toggle.
+- Full regression initially passed 142 unit tests and 12/13 UI tests. The unrelated inline-explanation test failed on its second expand assertion; it passed unchanged in an isolated rerun alongside the reading UI test. This transient failure is retained here rather than describing the first run as wholly green.
+- Final verification: **143 unit tests passed** after the background-read and stale-result guards; the final unsigned Release simulator build succeeded. All 13 UI scenarios have passed across the full run and unchanged isolated rerun (the initial flake is described above).
+- A separate persistence test verifies opening the previous three-model store with the new batch model, retaining old forms/dates, writing a new batch and reopening the combined data.
+
+Debug simulator timing samples (iPhone 17 Pro, iOS 26.5, Xcode 26.6):
+
+| Scenario | Observed time |
+| --- | --- |
+| 9.9 MB TXT + 100 subtitle tracks, cold prepare | 2.91 s |
+| Same book, cached revalidation + atomic completion | 28.5 ms (previous implementation: 2.85 s) |
+| 50,000 distinct forms, warm prepare + completion | 56.9 ms |
+| 50,000-form knowledge delta, projection update | 190.9 ms off MainActor |
+| 100 books, 1,000 shared forms learned, 100,000 affected memberships | 19.9 ms off MainActor |
+
+The 50k-form test asserts only 25 batch models are saved and that warm prepare/complete does not increment the source tokenization counter. The 100-book test asserts exactly 100,000 visited postings and no further membership visits on reconciliation with unchanged knowledge. Tests also compare every resulting count against a Set difference reference.
+
+These are single local samples, not physical-device p50/p95 guarantees. No physical iPhone memory/frame profile was available. Initial indexing still reads every source once; the UITextView still owns the whole document. Startup knowledge loading now uses a background read-only context. Large backup preview/export/restore still performs main-context work, although restore groups additions into compact batches. Native selection and existing following/foreground regression tests remain required.
+
+## 2026-10-19 — Scrolling regression correction
+
+- 144 unit tests passed after moving cue/word paint out of NSTextStorage and stabilizing follow identity. New checks verify that changing estimated content height does not restart a cue's movement, viewport decoration leaves both text storage and scroll offset unchanged, and native selection still defers updates.
+- Both reading UI scenarios passed: completion/count updates and scrolling a 100-chapter sheet to select Chapter 100 while audio and position persistence continue (the latter ran for ~34 seconds).
+- The chapter list uses an immutable snapshot instead of a live SwiftUI Menu; both physical tracks and legacy parts share the new chooser.
+
+- The additional paint-rendering test passed: word tint, accessibility underline and cue background each change the rendered image independently, clearing them restores the exact original image, and NSTextStorage is unchanged. This brings the distinct passing unit tests to 145. The unsigned Release simulator build also succeeded.
+
+## Paused manual-swipe verification
+
+After clarification that the issue occurs while audio is paused, added and passed `testManualSwipeWhilePausedWithNewWordHighlighting` on the iPhone 17 Pro simulator. The fixture contains 200 long timed cues. The test starts playback, pauses it, performs two fast upward swipes, checks that each advances the viewport after settling, toggles new-word highlighting off/on without moving the viewport, swipes back down and verifies playback remains paused. The test completed in 19.6 seconds. It exercises the already committed paint/follow fix; this verification adds no further Release behavior change. DEBUG-only launch-gated accessibility telemetry exposes the offset to the test without altering production accessibility.

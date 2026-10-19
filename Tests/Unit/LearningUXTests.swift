@@ -136,7 +136,7 @@ final class LearningUXTests: XCTestCase {
         let id: UUID
         var checkpoint: Data
         do {
-            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                                configurations: configuration)
             let context = ModelContext(container)
             let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -157,7 +157,7 @@ final class LearningUXTests: XCTestCase {
             XCTAssertFalse(round.isComplete)
             checkpoint = try JSONEncoder().encode(round)
         }
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                            configurations: configuration)
         let entries = try ModelContext(reopened).fetch(FetchDescriptor<DictionaryEntry>())
         XCTAssertEqual(entries.first(where: { $0.id == id })?.learningLevel, 3)
@@ -283,7 +283,7 @@ final class LearningUXTests: XCTestCase {
 
     @MainActor
     func testPreviewSuccessFailureRetryDismissAndLateResponseDoNotMutatePersistence() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -436,6 +436,10 @@ final class LearningUXTests: XCTestCase {
         view.destinations.removeAll()
         coordinator.applyFollow(to: view)
         XCTAssertTrue(view.destinations.isEmpty, "Unchanged layout must not restart scrolling")
+
+        view.contentSize.height += 50
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Estimated content height changes must not interrupt the same cue's scrolling")
 
         view.textContainerInset.top += 100
         view.layoutIfNeeded()
