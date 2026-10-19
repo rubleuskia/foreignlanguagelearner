@@ -33,16 +33,18 @@ struct SelectionTranslationView: View {
                     if coordinator.isSaving { Text("Translating before saving…").foregroundStyle(.secondary) }
                 }
                 Section("Original") {
-                    Text(preview.selectedText).textSelection(.enabled)
-                    CopyButton(value: preview.selectedText, label: "Copy original",
-                               identifier: "preview.copy-original")
+                    CopyableContentRow(value: preview.selectedText, label: "Copy original",
+                                       identifier: "preview.copy-original") {
+                        Text(preview.selectedText).textSelection(.enabled)
+                    }
                 }
                 Section("Audio") { audioContent }
                 if let sentence = coordinator.sourceSentence {
                     Section("Source sentence") {
-                        Text(sentence).textSelection(.enabled)
-                        CopyButton(value: sentence, label: "Copy source sentence",
-                                   identifier: "preview.copy-source-sentence")
+                        CopyableContentRow(value: sentence, label: "Copy source sentence",
+                                           identifier: "preview.copy-source-sentence") {
+                            Text(sentence).textSelection(.enabled)
+                        }
                     }
                 } else if coordinator.contextUnavailable {
                     Section("Source context") {
@@ -85,21 +87,22 @@ struct SelectionTranslationView: View {
             if let explanation = coordinator.contextExplanation,
                let translation = coordinator.selectedTranslation {
                 if !explanation.isEmpty {
-                    ContextWordExplanationView(explanation: explanation, selectedText: preview.selectedText,
-                        context: preview.context, sourceLanguage: preview.sourceLanguageCode,
-                        targetLanguage: preview.targetLanguageCode)
-                    CopyButton(value: explanation, label: "Copy word explanations",
-                               identifier: "preview.copy-word-explanations")
-                    Divider()
+                    CopyableContentRow(value: explanation, label: "Copy word explanations",
+                                       identifier: "preview.copy-word-explanations") {
+                        ContextWordExplanationView(explanation: explanation, selectedText: preview.selectedText,
+                            context: preview.context, sourceLanguage: preview.sourceLanguageCode,
+                            targetLanguage: preview.targetLanguageCode)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Overall translation")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(translation).textSelection(.enabled)
+                CopyableContentRow(value: translation, label: "Copy phrase translation",
+                                   identifier: "preview.copy-translation") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Overall translation")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(translation).textSelection(.enabled)
+                    }
                 }
-                CopyButton(value: translation, label: "Copy phrase translation",
-                           identifier: "preview.copy-translation")
             }
         case .failed(let message):
             Text(message).foregroundStyle(.red)

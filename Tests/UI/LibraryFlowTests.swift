@@ -2,6 +2,35 @@ import XCTest
 
 final class LibraryFlowTests: XCTestCase {
     @MainActor
+    func testGlobalCooldownSettingsRequireSave() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+        app.buttons["library.settings"].tap()
+        let field = app.textFields["settings.cooldown.level.1"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let original = field.value as! String
+        func replace(_ text: String) {
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue,
+                                  count: (field.value as? String ?? "").count) + text)
+        }
+        replace("25.5")
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        app.buttons["library.settings"].tap()
+        XCTAssertEqual(field.value as? String, original, "Unsaved edits must be discarded")
+        replace("25.5")
+        app.buttons["settings.cooldown.save"].tap()
+        XCTAssertTrue(app.staticTexts["Cooldown settings saved."].exists)
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        app.buttons["library.settings"].tap()
+        XCTAssertEqual(field.value as? String, "25.5")
+        replace(original)
+        app.buttons["settings.cooldown.save"].tap()
+    }
+
+    @MainActor
     func testBothFilePickersPresentDocumentBrowser() {
         continueAfterFailure = false
         let app = XCUIApplication()

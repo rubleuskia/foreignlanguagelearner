@@ -216,6 +216,8 @@ Store an optional `levelChangedAt` on each dictionary entry. Legacy entries have
 
 New rounds filter by the current level's user-editable cooldown (24/72/96 hours for levels 1/2/3). An unchecked-by-default “Ignore words cooldown” option bypasses selection filtering for that session. Retries and resumed rounds retain their selected membership. Settings are local UserDefaults preferences; transition dates travel in dictionary backups as an optional, backward-compatible field. Level 4 remains excluded.
 
+Cooldown interval editing lives in app Settings, with draft values committed only by Save cooldowns. Existing UserDefaults keys and defaults remain unchanged. Exercise setup exposes only the session override; unsaved global edits never affect practice selection.
+
 ## Optional word timings refine phrase playback without changing reader cues
 
 Timed book tracks may reference a schema-v1 word-timing JSON sidecar through optional `wordTimings`. Bind it to track ID, normalized parsed subtitle text and exact audio SHA-256, validate every token and local finite ordered time, and preserve explicit zero-duration tokens. Keep ordinary cue text/highlighting for reading. Selection audio uses the first and last selected spoken-word boundaries only when every selected spoken word has a usable duration; otherwise label the existing cue range Play context. Never interpolate speech timing from character/word counts or infer timing for untimed full-book TXT.

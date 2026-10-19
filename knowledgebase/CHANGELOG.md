@@ -7,6 +7,16 @@
 - Add a cache-upgrade utility and validate the final saved Lalka conversion: 39 tracks, 258,855 token timings, 9,589 zero-duration tokens; new recognition was unnecessary. Real-data selection tests cover a phrase inside a multiword subtitle cue.
 - DECISIONS.md records the optional sidecar and update contract; PROJECT.md includes word-level playback and existing-book updates. See docs/WORD_AUDIO_TIMINGS.md for package details and validation limits.
 
+## 2026-10-19 — Inline copy actions in context translation
+
+- Keep each Copy action on the same row as its explanation, overall translation, original or source sentence, aligned at the right edge. Remove the standalone divider that produced an empty Form row. Apply the same layout to dictionary source context.
+- Shared content-row layout only; no product or architectural decision or supported workflow boundary changed. DECISIONS.md and PROJECT.md require no additional changes for this fix.
+
+## 2026-10-19 — Global cooldown settings with explicit save
+
+- Move cooldown interval editing to app Settings with draft fields, validation, Save cooldowns and saved confirmation. Existing global values are preserved; leaving without Save discards edits.
+- Exercise setup retains only Ignore words cooldown and a pointer to Settings. DECISIONS.md and PROJECT.md describe the corrected workflow; project purpose and boundaries are unchanged.
+
 ## 2026-10-19 — Configurable phrase cooldown
 
 - New practice rounds wait 24/72/96 hours after a transition into level 1/2/3, with editable hour values and an “Ignore words cooldown” checkbox on the start screen. New phrases remain available for first practice.

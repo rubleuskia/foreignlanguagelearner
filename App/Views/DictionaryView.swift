@@ -309,11 +309,12 @@ struct DictionaryEntryDetailView: View {
                 }
                 if let contextText = entry.contextText {
                     Section("Source context") {
-                        Text(highlightedContext(contextText))
-                            .textSelection(.enabled)
-                            .accessibilityIdentifier("dictionary.source-context")
-                        CopyButton(value: contextText, label: "Copy source context",
-                                   identifier: "dictionary.copy-source-context")
+                        CopyableContentRow(value: contextText, label: "Copy source context",
+                                           identifier: "dictionary.copy-source-context") {
+                            Text(highlightedContext(contextText))
+                                .textSelection(.enabled)
+                                .accessibilityIdentifier("dictionary.source-context")
+                        }
                     }
                 }
                 Section("Progress") {
