@@ -13,8 +13,47 @@ struct ContextualTranslationSettingsView: View {
     @State private var promptMessage: String?
     @State private var promptMessageIsError = false
 
+    @State private var cooldownDrafts = ["24", "72", "96"]
+    @State private var cooldownMessage: String?
+
+    private var cooldownValues: [Double]? {
+        let values = cooldownDrafts.compactMap { Double($0.replacingOccurrences(of: ",", with: ".")) }
+        guard values.count == 3, values.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
+        return values
+    }
+
     var body: some View {
         Form {
+            Section("Phrase cooldown") {
+                ForEach(0..<3, id: \.self) { index in
+                    HStack {
+                        Text("Level \(index + 1) · hours")
+                        TextField("Hours", text: $cooldownDrafts[index])
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("settings.cooldown.level.\(index + 1)")
+                    }
+                }
+                Button("Save cooldowns", systemImage: "checkmark") {
+                    guard let values = cooldownValues else { return }
+                    for (index, hours) in values.enumerated() {
+                        UserDefaults.standard.set(hours, forKey: "learning.cooldown.level.\(index + 1)")
+                    }
+                    cooldownMessage = "Cooldown settings saved."
+                }
+                .disabled(cooldownValues == nil)
+                .accessibilityIdentifier("settings.cooldown.save")
+                if cooldownValues == nil {
+                    Text("Enter a non-negative number of hours for each level.")
+                        .font(.caption).foregroundStyle(.red)
+                }
+                if let cooldownMessage {
+                    Text(cooldownMessage).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Global settings for new practice rounds. Set 0 to disable a level’s cooldown. Changes apply after Save cooldowns.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .onChange(of: cooldownDrafts) { _, _ in cooldownMessage = nil }
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
                 Picker("Model", selection: selectedModelBinding) {
@@ -75,6 +114,7 @@ struct ContextualTranslationSettingsView: View {
         }
         .navigationTitle("Settings")
         .task {
+            cooldownDrafts = (1...3).map { String(LearningCooldown.hours(level: $0)) }
             refreshKeyStatus()
             refreshPrompt()
         }

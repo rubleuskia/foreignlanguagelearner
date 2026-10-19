@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-19 — Global cooldown settings with explicit save
+
+- Move cooldown interval editing to app Settings with draft fields, validation, Save cooldowns and saved confirmation. Existing global values are preserved; leaving without Save discards edits.
+- Exercise setup retains only Ignore words cooldown and a pointer to Settings. DECISIONS.md and PROJECT.md describe the corrected workflow; project purpose and boundaries are unchanged.
+
 ## 2026-10-19 — Configurable phrase cooldown
 
 - New practice rounds wait 24/72/96 hours after a transition into level 1/2/3, with editable hour values and an “Ignore words cooldown” checkbox on the start screen. New phrases remain available for first practice.

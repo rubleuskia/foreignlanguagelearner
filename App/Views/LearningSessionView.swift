@@ -10,9 +10,6 @@ struct LearningSessionView: View {
     @Query private var sourceItems: [LearningItem]
     @State private var contextual = ContextualTranslationCoordinator()
     @State private var ignoreCooldown = false
-    @AppStorage("learning.cooldown.level.1") private var levelOneHours = 24.0
-    @AppStorage("learning.cooldown.level.2") private var levelTwoHours = 72.0
-    @AppStorage("learning.cooldown.level.3") private var levelThreeHours = 96.0
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
@@ -113,18 +110,6 @@ struct LearningSessionView: View {
         }
     }
 
-    private func cooldownField(_ title: String, value: Binding<Double>) -> some View {
-        HStack {
-            Text(title)
-            TextField("Hours", value: value, format: .number)
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .onChange(of: value.wrappedValue) { _, hours in
-                    if !hours.isFinite || hours < 0 { value.wrappedValue = 0 }
-                }
-        }
-    }
-
     private var setupView: some View {
         Form {
             if let savedRound {
@@ -155,12 +140,7 @@ struct LearningSessionView: View {
                 }
                     .toggleStyle(.button)
                     .accessibilityIdentifier("learn.ignore-cooldown")
-                DisclosureGroup("Cooldown settings") {
-                    cooldownField("Level 1 · hours", value: $levelOneHours)
-                    cooldownField("Level 2 · hours", value: $levelTwoHours)
-                    cooldownField("Level 3 · hours", value: $levelThreeHours)
-                }
-                Text("Applies to new rounds after a level change. Set 0 to disable a level’s cooldown.")
+                Text("Cooldown intervals can be changed in app Settings.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Available") {
