@@ -227,3 +227,9 @@ Update phrase audio attaches validated sidecars to an existing book with immutab
 Follow audio resolves contiguous layout through the destination cue and lays out its viewport before clamping the scroll target. If UITextView still exposes an older, smaller content height, raise it to the measured TextKit extent. Keep follow requests keyed by cue/document/viewport rather than estimated content-size changes, so scroll animations do not restart during lazy layout.
 
 Phrase cards display remaining cooldown as a render-time snapshot in days/hours/minutes, rounded up to a whole minute. They use the same saved transition date and current global intervals as round selection, without a periodic timer; level 4 has no countdown.
+
+## Dictionary review readiness and round results
+
+Dictionary readiness counts, the Ready to repeat filter, and Quick start require both learning eligibility (including a saved ready Russian translation and a level below 4) and an expired cooldown. The filter combines with the selected level; Quick start uses up to 10 ready phrases across all levels, lower levels first, and opens the existing preview. Like Start round, it replaces an unfinished checkpoint. Dictionary readiness refreshes every 30 seconds.
+
+Capture starting levels before preview and retain them in the round checkpoint so completion cards show the net starting → current level, including preview changes and retries. Undo restores the round and entry together. Old checkpoints omit the transition rather than guessing. Completion retains access to all learnt phrases alongside this round's cards.

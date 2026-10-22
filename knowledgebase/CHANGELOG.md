@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-22 — Dictionary review shortcuts and round level changes
+
+- Remove the redundant Translation available label; keep translation errors and pending states. Show ready-to-repeat counts in parentheses after each level total, add a combinable readiness filter, and offer Quick start when eligible phrases have finished cooldown. Counts refresh every 30 seconds.
+- Quick start opens the usual preview for up to 10 ready phrases, using the existing lower-level-first selection and new-round checkpoint replacement behavior.
+- Completion cards include round phrases and highlight their starting → current level. Starting levels survive round checkpoints and Undo; older checkpoints remain readable without invented starting levels.
+- DECISIONS.md records these behaviors; PROJECT.md documents the added review workflow. Project purpose and boundaries are unchanged.
+
 ## 2026-10-19 — Follow audio reaches distant cues in one action
 
 - Resolve transcript layout through the active cue and its destination viewport before calculating the scroll limit. Synchronize an underestimated scroll extent with measured text geometry so Follow audio reaches the highlighted passage on the first press.
