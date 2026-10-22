@@ -28,6 +28,7 @@ enum LearningRoundSelection: String, CaseIterable, Identifiable, Codable, Sendab
 }
 
 struct LearningRoundState: Codable, Equatable, Sendable {
+    var initialLevels: [UUID: Int]? = nil
     let selection: LearningRoundSelection
     let selectedIDs: [UUID]
     private(set) var pendingIDs: [UUID]
@@ -314,4 +315,9 @@ enum LearningCooldown {
         do { try save() }
         catch { missing.forEach { $0.levelChangedAt = nil }; throw error }
     }
+}
+
+// Shared by dictionary counts, filtering and the quick-start pool.
+extension DictionaryEntry {
+    @MainActor var isReadyForReview: Bool { isLearningEligible && LearningCooldown.isReady(self) }
 }
