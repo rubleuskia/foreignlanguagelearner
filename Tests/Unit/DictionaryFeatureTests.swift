@@ -254,6 +254,27 @@ final class DictionaryFeatureTests: XCTestCase {
 }
 
 extension DictionaryFeatureTests {
+    @MainActor func testManualBackupValidationAndRollback() throws {
+        let (_, entry) = backupFixture()
+        entry.manualAudioStart = 1.8
+        entry.manualAudioEnd = 3.2
+        let snapshot = DictionaryEntryRollbackSnapshot(entry)
+        entry.manualAudioStart = nil
+        entry.manualAudioEnd = nil
+        snapshot.restore(entry)
+        XCTAssertEqual(entry.manualAudioStart, 1.8)
+        XCTAssertEqual(entry.manualAudioEnd, 3.2)
+        entry.manualAudioEnd = nil
+        XCTAssertThrowsError(try DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []))
+        entry.manualAudioEnd = 1
+        XCTAssertThrowsError(try DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []))
+        entry.manualAudioStart = nil
+        entry.manualAudioEnd = nil
+        let old = try DictionaryTransferService.decode(DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []).data)
+        XCTAssertNil(old.entries.first?.details?.manualAudioStart)
+        XCTAssertNil(old.entries.first?.details?.manualAudioEnd)
+    }
+
     @MainActor private func backupFixture() -> (LearningItem, DictionaryEntry) {
         let item = LearningItem(id: UUID(), title: "Backup story", mediaKind: "audio",
                                 mediaFilename: "", transcriptFilename: "story.txt", duration: 10, segments: [],
@@ -283,6 +304,8 @@ extension DictionaryFeatureTests {
 
     @MainActor func testCompleteBackupRestoresAfterPersistentReopenAndKeepsAudioIdentity() throws {
         let (item, original) = backupFixture()
+        original.manualAudioStart = 1.85
+        original.manualAudioEnd = 3.2
         original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
         let document = try DictionaryTransferService.decode(file.data)
@@ -326,11 +349,13 @@ extension DictionaryFeatureTests {
         XCTAssertEqual(restored.segmentIndex, 2)
         XCTAssertEqual(restored.audioStart, 2)
         XCTAssertEqual(restored.audioEnd, 3)
+        XCTAssertEqual(restored.manualAudioStart, 1.85)
+        XCTAssertEqual(restored.manualAudioEnd, 3.2)
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: restored, items: [], fileExists: { _ in true }))
         context.insert(item)
         try context.save()
         let source = PhraseAudioSourceResolver.resolve(entry: restored, items: [item], fileExists: { _ in true })
-        XCTAssertEqual(source?.identity.range, 2...3)
+        XCTAssertEqual(source?.identity.range, 1.85...3.2)
         XCTAssertEqual(source?.identity.trackID, "chapter-1")
         let repeated = DictionaryTransferService.preview(document: document, mode: .restore, existing: [restored])
         _ = try DictionaryTransferService.apply(repeated, context: context)
@@ -373,6 +398,8 @@ extension DictionaryFeatureTests {
 
     @MainActor func testLegacyBackupStillRestoresAndPreservesTranslationOrigin() throws {
         let (_, original) = backupFixture()
+        original.manualAudioStart = 1.85
+        original.manualAudioEnd = 3.2
         original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let file = try DictionaryTransferService.export(entries: [original], includeContext: true, diagnosticEvents: [])
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])

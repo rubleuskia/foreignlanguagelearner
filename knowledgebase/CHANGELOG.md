@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-22 — Manual phrase audio boundaries
+
+- Long-press the audio button in dictionary or learning cards to edit the start/end boundary, move it earlier/later by fractional seconds, preview, save, or reset to automatic timing.
+- Persist per-entry manual ranges, prefer them during playback, preserve them during word-timing updates, and include them in dictionary backup/restore with validation and rollback.
+- Record the manual-range decision in DECISIONS.md. Project purpose and major boundaries are unchanged; PROJECT.md now mentions this supported workflow.
+
 ## 2026-10-22 — Dictionary review shortcuts and round level changes
 
 - Remove the redundant Translation available label; keep translation errors and pending states. Show ready-to-repeat counts in parentheses after each level total, add a combinable readiness filter, and offer Quick start when eligible phrases have finished cooldown. Counts refresh every 30 seconds.

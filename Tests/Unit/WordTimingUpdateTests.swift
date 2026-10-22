@@ -66,6 +66,36 @@ final class WordTimingUpdateTests: XCTestCase {
         XCTAssertNotNil(item.tracks[0].wordTimingsFilename)
     }
 
+    func testManualRangeSurvivesAlignmentUpdateAndResetUsesUpdatedTiming() async throws {
+        let (item, directory, url) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entry = DictionaryEntry(text: "two", item: item, segmentIndex: 0, audioStart: 0, audioEnd: 2, sourceTrackID: "001")
+        entry.manualAudioStart = 0.45
+        entry.manualAudioEnd = 1.1
+        let prepared = try await WordTimingUpdateService().prepare(archiveURL: url, tracks: item.tracks, directory: directory)
+        _ = try WordTimingUpdateCommit.apply(prepared, to: item, entries: [entry]) {}
+        XCTAssertEqual(entry.audioStart, 0.6)
+        XCTAssertEqual(entry.audioEnd, 0.9)
+        XCTAssertEqual(entry.manualAudioStart, 0.45)
+        XCTAssertEqual(entry.manualAudioEnd, 1.1)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item])?.identity.range, 0.45...1.1)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], ignoreManualRange: true)?.identity.range, 0.6...0.9)
+        entry.manualAudioStart = nil
+        entry.manualAudioEnd = nil
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item])?.identity.range, 0.6...0.9)
+    }
+
+    func testInvalidManualRangesNeverFallBackToAutomaticPlayback() throws {
+        let (item, directory, _) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entry = DictionaryEntry(text: "two", item: item, segmentIndex: 0, audioStart: 0, audioEnd: 2, sourceTrackID: "001")
+        for (start, end) in [(nil, 1.0), (0.5, nil), (-0.1, 1), (1, 1), (1, 0.5), (0, 2.1), (Double.nan, 1), (0, Double.infinity)] as [(Double?, Double?)] {
+            entry.manualAudioStart = start
+            entry.manualAudioEnd = end
+            XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item]))
+        }
+    }
+
     func testSmallTimingOnlyArchiveUpdatesExistingBook() async throws {
         let (item, directory, url) = try fixture(timingsOnly: true)
         defer { try? FileManager.default.removeItem(at: directory) }

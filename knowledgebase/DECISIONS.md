@@ -228,6 +228,10 @@ Follow audio resolves contiguous layout through the destination cue and lays out
 
 Phrase cards display remaining cooldown as a render-time snapshot in days/hours/minutes, rounded up to a whole minute. They use the same saved transition date and current global intervals as round selection, without a periodic timer; level 4 has no countdown.
 
+## Manual phrase audio ranges take precedence
+
+Store optional manualAudioStart/manualAudioEnd as a paired absolute range in track-local seconds on each dictionary entry, separately from automatic audioStart/audioEnd. Playback uses a valid manual range before resolving word timings; invalid overrides fail closed. Word-timing updates may refine automatic bounds but never overwrite manual bounds. Reset clears the pair after Save. Editing is a draft with preview and cancellation, supports fractional earlier/later shifts on either boundary, and rejects nonfinite, inverted, negative or out-of-track ranges. Dictionary backups carry the optional pair; old backups omit it. Restore snapshots include both fields. The shared editor is available from both dictionary and learning cards.
+
 ## Dictionary review readiness and round results
 
 Dictionary readiness counts, the Ready to repeat filter, and Quick start require both learning eligibility (including a saved ready Russian translation and a level below 4) and an expired cooldown. The filter combines with the selected level; Quick start uses up to 10 ready phrases across all levels, lower levels first, and opens the existing preview. Like Start round, it replaces an unfinished checkpoint. Dictionary readiness refreshes every 30 seconds.

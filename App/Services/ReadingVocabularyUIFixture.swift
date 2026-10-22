@@ -40,7 +40,15 @@ import SwiftData
             try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
         }
         item.readingVocabularyMigrationVersion = 1
-        context.insert(item); try context.save()
+        context.insert(item)
+        if ProcessInfo.processInfo.arguments.contains("--audio-boundary-fixture") {
+            let entry = DictionaryEntry(text: "Kot", item: item, segmentIndex: 0,
+                                        audioStart: 2, audioEnd: 3, sourceTrackID: "one")
+            entry.translationText = "Кот"
+            entry.translationStatus = .ready
+            context.insert(entry)
+        }
+        try context.save()
     }
 }
 #endif

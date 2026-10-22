@@ -17,8 +17,13 @@ struct PhraseAudioSource: Equatable, Sendable {
 }
 
 enum PhraseAudioSourceResolver {
-    static func resolve(entry: DictionaryEntry, items: [LearningItem],
+    static func resolve(entry: DictionaryEntry, items: [LearningItem], ignoreManualRange: Bool = false,
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
+        if !ignoreManualRange, entry.manualAudioStart != nil || entry.manualAudioEnd != nil {
+            return resolve(localSourceItemID: entry.localSourceItemID, sourceItemID: entry.sourceItemID,
+                           audioRange: range(start: entry.manualAudioStart, end: entry.manualAudioEnd),
+                           sourceTrackID: entry.sourceTrackID, items: items, fileExists: fileExists)
+        }
         let storedRange = range(start: entry.audioStart, end: entry.audioEnd)
         let item = items.first { $0.id == (entry.localSourceItemID ?? entry.sourceItemID) }
             ?? items.first { $0.id == entry.sourceItemID }

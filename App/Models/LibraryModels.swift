@@ -206,6 +206,8 @@ struct TranscriptDocument: Sendable {
     var localSourceItemID: UUID?
     var audioStart: Double?
     var audioEnd: Double?
+    var manualAudioStart: Double? = nil
+    var manualAudioEnd: Double? = nil
     var sourceTrackID: String? = nil
     var contextText: String?
     var contextSelectionLocation: Int?
