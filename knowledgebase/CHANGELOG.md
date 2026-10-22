@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-22 — Manual phrase audio boundaries
+
+- Long-press the audio button in dictionary or learning cards to edit the start/end boundary, move it earlier/later by fractional seconds, preview, save, or reset to automatic timing.
+- Persist per-entry manual ranges, prefer them during playback, preserve them during word-timing updates, and include them in dictionary backup/restore with validation and rollback.
+- Record the manual-range decision in DECISIONS.md. Project purpose and major boundaries are unchanged; PROJECT.md now mentions this supported workflow.
+
 ## 2026-10-19 — Follow audio reaches distant cues in one action
 
 - Resolve transcript layout through the active cue and its destination viewport before calculating the scroll limit. Synchronize an underestimated scroll extent with measured text geometry so Follow audio reaches the highlighted passage on the first press.

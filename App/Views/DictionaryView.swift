@@ -235,6 +235,7 @@ struct DictionaryEntryDetailView: View {
                             }
                             .buttonStyle(.borderless)
                             .accessibilityIdentifier("dictionary.play-audio")
+                            .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }))
                         }
                         CopyButton(value: entry.text, label: "Copy original",
                                    identifier: "dictionary.copy-original")

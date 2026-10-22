@@ -432,6 +432,7 @@ struct LearningSessionView: View {
                           systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                 }
                 .accessibilityIdentifier("learn.play-audio")
+                .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }))
                 PlaybackRateMenu(playback: playback)
             }
         } else {

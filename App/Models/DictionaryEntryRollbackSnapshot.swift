@@ -20,7 +20,9 @@ struct DictionaryEntryRollbackSnapshot {
     private let levelChangedAt: Date?
     private let localSourceItemID: UUID?
     private let audioStart: Double?
+    private let manualAudioStart: Double?
     private let audioEnd: Double?
+    private let manualAudioEnd: Double?
     private let sourceTrackID: String?
     private let contextText: String?
     private let contextSelectionLocation: Int?
@@ -53,7 +55,9 @@ struct DictionaryEntryRollbackSnapshot {
         levelChangedAt = entry.levelChangedAt
         localSourceItemID = entry.localSourceItemID
         audioStart = entry.audioStart
+        manualAudioStart = entry.manualAudioStart
         audioEnd = entry.audioEnd
+        manualAudioEnd = entry.manualAudioEnd
         sourceTrackID = entry.sourceTrackID
         contextText = entry.contextText
         contextSelectionLocation = entry.contextSelectionLocation
@@ -87,7 +91,9 @@ struct DictionaryEntryRollbackSnapshot {
         entry.levelChangedAt = levelChangedAt
         entry.localSourceItemID = localSourceItemID
         entry.audioStart = audioStart
+        entry.manualAudioStart = manualAudioStart
         entry.audioEnd = audioEnd
+        entry.manualAudioEnd = manualAudioEnd
         entry.sourceTrackID = sourceTrackID
         entry.contextText = contextText
         entry.contextSelectionLocation = contextSelectionLocation

@@ -227,3 +227,7 @@ Update phrase audio attaches validated sidecars to an existing book with immutab
 Follow audio resolves contiguous layout through the destination cue and lays out its viewport before clamping the scroll target. If UITextView still exposes an older, smaller content height, raise it to the measured TextKit extent. Keep follow requests keyed by cue/document/viewport rather than estimated content-size changes, so scroll animations do not restart during lazy layout.
 
 Phrase cards display remaining cooldown as a render-time snapshot in days/hours/minutes, rounded up to a whole minute. They use the same saved transition date and current global intervals as round selection, without a periodic timer; level 4 has no countdown.
+
+## Manual phrase audio ranges take precedence
+
+Store optional manualAudioStart/manualAudioEnd as a paired absolute range in track-local seconds on each dictionary entry, separately from automatic audioStart/audioEnd. Playback uses a valid manual range before resolving word timings; invalid overrides fail closed. Word-timing updates may refine automatic bounds but never overwrite manual bounds. Reset clears the pair after Save. Editing is a draft with preview and cancellation, supports fractional earlier/later shifts on either boundary, and rejects nonfinite, inverted, negative or out-of-track ranges. Dictionary backups carry the optional pair; old backups omit it. Restore snapshots include both fields. The shared editor is available from both dictionary and learning cards.
