@@ -24,6 +24,42 @@ final class LearningUXTests: XCTestCase {
         return entry
     }
 
+    func testRoundLevelsSurviveCheckpointAndLegacyDecoding() throws {
+        let first = UUID(), second = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [first, second])
+        round.initialLevels = [first: 2, second: 3]
+        round.recordAnswer(entryID: first, presentationID: round.currentPresentationID, right: true)
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(defaults: defaults)?.initialLevels, round.initialLevels)
+
+        let data = try JSONEncoder().encode(round)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "initialLevels")
+        let restored = try JSONDecoder().decode(LearningRoundState.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(restored.initialLevels)
+        XCTAssertTrue(restored.canResume)
+        LearningRoundCheckpoint.save(nil, defaults: defaults)
+    }
+
+    @MainActor
+    func testReviewReadinessExcludesLearntAndUntranslatedWords() {
+        let entry = trainingEntry(level: 2)
+        entry.levelChangedAt = .distantPast
+        XCTAssertTrue(entry.isReadyForReview)
+        entry.learningLevel = 4
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.learningLevel = 2
+        entry.translationText = nil
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.translationText = "замок"
+        entry.levelChangedAt = .distantFuture
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.levelChangedAt = nil
+        XCTAssertFalse(entry.isReadyForReview)
+    }
+
     @MainActor
     func testCooldownRemainingTimeUsesSavedDateAndCurrentSettings() {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!

@@ -231,3 +231,9 @@ Phrase cards display remaining cooldown as a render-time snapshot in days/hours/
 ## Manual phrase audio ranges take precedence
 
 Store optional manualAudioStart/manualAudioEnd as a paired absolute range in track-local seconds on each dictionary entry, separately from automatic audioStart/audioEnd. Playback uses a valid manual range before resolving word timings; invalid overrides fail closed. Word-timing updates may refine automatic bounds but never overwrite manual bounds. Reset clears the pair after Save. Editing is a draft with preview and cancellation, supports fractional earlier/later shifts on either boundary, and rejects nonfinite, inverted, negative or out-of-track ranges. Dictionary backups carry the optional pair; old backups omit it. Restore snapshots include both fields. The shared editor is available from both dictionary and learning cards.
+
+## Dictionary review readiness and round results
+
+Dictionary readiness counts, the Ready to repeat filter, and Quick start require both learning eligibility (including a saved ready Russian translation and a level below 4) and an expired cooldown. The filter combines with the selected level; Quick start uses up to 10 ready phrases across all levels, lower levels first, and opens the existing preview. Like Start round, it replaces an unfinished checkpoint. Dictionary readiness refreshes every 30 seconds.
+
+Capture starting levels before preview and retain them in the round checkpoint so completion cards show the net starting → current level, including preview changes and retries. Undo restores the round and entry together. Old checkpoints omit the transition rather than guessing. Completion retains access to all learnt phrases alongside this round's cards.

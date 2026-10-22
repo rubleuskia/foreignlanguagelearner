@@ -2,6 +2,9 @@ import SwiftData
 import SwiftUI
 
 struct LearningSessionView: View {
+    var quickStart = false
+    @State private var didQuickStart = false
+    @State private var initialLevels: [UUID: Int] = [:]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(\.contextAnalysisService) private var contextAnalysisService
@@ -92,6 +95,10 @@ struct LearningSessionView: View {
         .task {
             do { try LearningCooldown.backfill(allEntries, save: { try context.save() }) }
             catch { errorMessage = error.localizedDescription }
+            if quickStart && !didQuickStart {
+                didQuickStart = true
+                if !eligibleEntries.isEmpty { startRound() }
+            }
         }
         .interactiveDismissDisabled()
         .alert("Close training?", isPresented: $confirmingClose) {
@@ -381,8 +388,11 @@ struct LearningSessionView: View {
                 }
 
                 Divider().padding(.vertical, 4)
-                Text("All learnt phrases").font(.title2.bold())
-                let learnt = LearningCompletion.learntEntries(from: allEntries)
+                Text("Round results and learnt phrases").font(.title2.bold())
+                let levels = round.initialLevels ?? [:]
+                let resultIDs = Set(round.selectedIDs).union(levels.keys)
+                let learnt = allEntries.filter { resultIDs.contains($0.id) }
+                    + LearningCompletion.learntEntries(from: allEntries).filter { !resultIDs.contains($0.id) }
                 if learnt.isEmpty {
                     Text("No phrases at level 4 yet").foregroundStyle(.secondary)
                 } else {
@@ -393,6 +403,15 @@ struct LearningSessionView: View {
                                 detailEntry = entry
                             } label: {
                                 VStack(alignment: .leading, spacing: 8) {
+                                if let previous = levels[entry.id] {
+                                    Text("\(previous) → \(entry.learningLevel)")
+                                        .font(.headline.monospacedDigit())
+                                        .foregroundStyle(previous == entry.learningLevel ? Color.secondary : entry.learningLevel > previous ? Color.green : Color.orange)
+                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                        .background(.quaternary, in: Capsule())
+                                        .accessibilityLabel("Level \(previous) to \(entry.learningLevel)")
+                                        .accessibilityIdentifier("learn.completion.level-transition")
+                                }
                                 Text(entry.text)
                                     .foregroundStyle(.primary)
                                     .accessibilityIdentifier("learn.completion.original")
@@ -469,7 +488,9 @@ struct LearningSessionView: View {
         savedRound = nil
         closeAudio()
         pendingUndo = nil
-        let snapshot = roundPool.map(\.id)
+        let pool = roundPool
+        initialLevels = Dictionary(uniqueKeysWithValues: pool.map { ($0.id, $0.learningLevel) })
+        let snapshot = pool.map(\.id)
         round = nil
         updatePreview(LearningPreviewState(selection: selection,
                                            selectedIDs: snapshot))
@@ -500,6 +521,7 @@ struct LearningSessionView: View {
         revealed = false
         if updated.isComplete {
             round = LearningRoundState(selection: updated.selection, selectedIDs: updated.learningIDs)
+            round?.initialLevels = initialLevels
             previewRound = nil
         } else {
             previewRound = updated

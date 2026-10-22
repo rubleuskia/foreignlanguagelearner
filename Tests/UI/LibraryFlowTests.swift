@@ -2,6 +2,26 @@ import XCTest
 
 final class LibraryFlowTests: XCTestCase {
     @MainActor
+    func testQuickStartAndReadyFilter() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "1 (1 to repeat)")
+        XCTAssertFalse(app.staticTexts["Translation available"].exists)
+        app.switches["dictionary.filter.ready"].coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertEqual(app.switches["dictionary.filter.ready"].value as? String, "1")
+        XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
+        XCTAssertFalse(app.buttons["dictionary.entry.do widzenia"].exists)
+        app.buttons["dictionary.filter.level.2"].tap()
+        XCTAssertTrue(app.staticTexts["No phrases ready to repeat"].exists)
+        app.buttons["dictionary.quick-start"].tap()
+        XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["learn.start"].exists)
+    }
+
+    @MainActor
     func testGlobalCooldownSettingsRequireSave() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -98,12 +118,12 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["learn.right"].tap()
 
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["All learnt phrases"].exists)
+        XCTAssertTrue(app.staticTexts["Round results and learnt phrases"].exists)
         let learntOriginals = app.staticTexts.matching(identifier: "learn.completion.original")
-        XCTAssertEqual(learntOriginals.count, 1,
-                       "Only valid global level-4 entries belong in the completion list")
-        XCTAssertEqual(learntOriginals.firstMatch.label, "do widzenia",
-                       "The global list includes entries learned before this round")
+        XCTAssertEqual(learntOriginals.count, 2,
+                       "Round entries and global learnt entries belong in the completion list")
+        XCTAssertTrue(learntOriginals.allElementsBoundByIndex.contains { $0.label == "do widzenia" })
+        XCTAssertEqual(app.staticTexts["learn.completion.level-transition"].label, "Level 1 to 2")
     }
     @MainActor
     func testPreviewSkipLeavesWordAtSameLevelForAnotherRound() {
@@ -113,13 +133,14 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-skip"].tap()
         XCTAssertTrue(app.staticTexts["Preview complete"].waitForExistence(timeout: 5))
         app.buttons["Repeat"].tap()
         XCTAssertTrue(app.buttons["learn.preview-skip"].waitForExistence(timeout: 5))
         app.buttons["Close"].tap()
-        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "1")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label.components(separatedBy: " ").first, "1")
     }
 
     @MainActor
@@ -130,6 +151,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
         let translation = app.staticTexts["learn.translation"]
@@ -190,7 +212,7 @@ final class LibraryFlowTests: XCTestCase {
         for (level, expected) in [(1, "1"), (2, "0"), (3, "0"), (4, "1")] {
             let count = app.staticTexts["dictionary.stats.level.\(level)"]
             XCTAssertTrue(count.waitForExistence(timeout: 5))
-            XCTAssertEqual(count.label, expected)
+            XCTAssertEqual(count.label.components(separatedBy: " ").first, expected)
         }
         XCTAssertTrue(app.staticTexts["In progress"].exists)
         XCTAssertTrue(app.staticTexts["Learnt phrases"].exists)
@@ -202,7 +224,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
         XCTAssertTrue(app.staticTexts["No learnt phrases yet"].exists)
         app.swipeDown()
-        XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label, "0")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label.components(separatedBy: " ").first, "0")
     }
 
     @MainActor
@@ -222,8 +244,8 @@ final class LibraryFlowTests: XCTestCase {
             app.buttons[action].tap()
             XCTAssertTrue(app.staticTexts["Preview complete"].waitForExistence(timeout: 5))
             app.buttons["Close"].tap()
-            XCTAssertEqual(app.staticTexts["dictionary.stats.level.\(level)"].label, count)
-            XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "0")
+            XCTAssertEqual(app.staticTexts["dictionary.stats.level.\(level)"].label.components(separatedBy: " ").first, count)
+            XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label.components(separatedBy: " ").first, "0")
             app.terminate()
         }
     }
@@ -241,6 +263,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["dictionary.filter.reset"].tap()
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
         app.buttons["dictionary.learn"].tap()
+        app.descendants(matching: .any)["learn.ignore-cooldown"].firstMatch.tap()
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-next-level"].tap()
@@ -287,7 +310,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
         app.buttons["Close"].tap()
         XCTAssertFalse(app.buttons["dictionary.resume"].exists)
-        XCTAssertEqual(app.staticTexts["dictionary.stats.level.2"].label, "1")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.2"].label.components(separatedBy: " ").first, "1")
     }
 
     @MainActor
