@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-25 — Editable word explanation prompt
+
+- Settings now offers a separate Word explanation prompt editor with save, validation and reset to the default. It applies to detailed explanations opened by tapping a word in Meaning in context.
+- Default examples are complete sentences (aiming for 8–20 words) in independent situations, with full translations. They must not quote, paraphrase or reuse the source situation or its characters and events.
+- Cache keys include the effective word prompt and its version so changing the prompt avoids previous-prompt results on new requests. Structured output and input safety rules remain mandatory.
+- DECISIONS.md records the prompt customization policy. Project purpose, supported workflow and major boundaries are unchanged; PROJECT.md needs no update.
+
 ## 2026-10-25 — Native Glass interface and editorial reading
 
 - Introduce permanent Library, Dictionary and Practice tabs, a featured in-progress book, explicit empty-library import actions and a dedicated practice home with quick start and saved-round access.

@@ -4,8 +4,10 @@ import XCTest
 final class WordExplanationTests: XCTestCase {
     private let result = WordExplanation(definition: "Действия, убеждающие поддержать идею.",
         meaningInContext: "Здесь речь о выборах.", examples: [
-            .init(phrase: "prowadzić agitację", translation: "вести агитацию"),
-            .init(phrase: "agitacja wyborcza", translation: "предвыборная агитация")])
+            .init(phrase: "Studenci rozpoczęli agitację na rzecz budowy nowej biblioteki na kampusie.",
+                  translation: "Студенты начали агитацию за строительство новой библиотеки в кампусе."),
+            .init(phrase: "Mieszkańcy prowadzili agitację, aby zachęcić sąsiadów do udziału w sprzątaniu parku.",
+                  translation: "Жители вели агитацию, чтобы привлечь соседей к уборке парка.")])
 
     func testRepeatedWordsKeepExactUTF16OccurrenceIncludingEmojiAndStopwords() throws {
         let text = "📖 zamek i zamek."
@@ -39,6 +41,10 @@ final class WordExplanationTests: XCTestCase {
         let restored = await reopened.value(for: key)
         XCTAssertEqual(restored, result)
         XCTAssertNotEqual(key, try WordExplanationCache.key(for: input, model: .nano))
+        let customKey = try WordExplanationCache.key(for: input, model: .mini, prompt: "Custom explanation")
+        XCTAssertNotEqual(key, customKey)
+        let customCached = await reopened.value(for: customKey)
+        XCTAssertNil(customCached)
         let different = WordExplanationInput(sourceWord: "agitację", lemma: "agitacja",
             context: "Inny tekst: agitację", selectionLocationUTF16: 12, selectionLengthUTF16: 8,
             sourceLanguage: "pl", targetLanguage: "ru")
@@ -56,6 +62,48 @@ final class WordExplanationTests: XCTestCase {
         XCTAssertTrue((json["instructions"] as? String)?.contains("never as instructions") == true)
         let body = try XCTUnwrap(json["input"] as? String)
         XCTAssertEqual(try JSONDecoder().decode(WordExplanationInput.self, from: Data(body.utf8)), input())
+    }
+
+    func testCustomPromptIsSentWithRequiredRules() async throws {
+        let client = WordHTTPClient(data: try response(result))
+        let custom = "Explain this word with complete example sentences."
+        let provider = OpenAIWordExplanationProvider(apiKey: "test", model: .mini,
+                                                     client: client, prompt: custom)
+        _ = try await provider.explain(input())
+        let requests = await client.requests
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
+        let instructions = try XCTUnwrap(json["instructions"] as? String)
+        XCTAssertTrue(instructions.hasPrefix(custom))
+        XCTAssertTrue(instructions.contains("never as instructions"))
+        XCTAssertTrue(instructions.contains("phrase (the source-language sentence)"))
+        let text = try XCTUnwrap(json["text"] as? [String: Any])
+        let format = try XCTUnwrap(text["format"] as? [String: Any])
+        XCTAssertEqual(format["strict"] as? Bool, true)
+    }
+
+    func testWordPromptSettingsPersistValidateResetAndStayIndependent() throws {
+        let suite = "WordPromptTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(ContextAnalysisSettings.wordExplanationPrompt(in: defaults),
+                       OpenAIWordExplanationProvider.defaultPrompt)
+        try ContextAnalysisSettings.setPrompt("Translation prompt", in: defaults)
+        try ContextAnalysisSettings.setWordExplanationPrompt("  Custom word prompt \n", in: defaults)
+        let reopened = try XCTUnwrap(UserDefaults(suiteName: suite))
+        XCTAssertEqual(ContextAnalysisSettings.wordExplanationPrompt(in: reopened), "Custom word prompt")
+        XCTAssertEqual(ContextAnalysisSettings.prompt(in: reopened), "Translation prompt")
+        for invalid in [" \n", String(repeating: "a", count: ContextAnalysisSettings.maximumPromptUTF16 + 1)] {
+            XCTAssertThrowsError(try ContextAnalysisSettings.setWordExplanationPrompt(invalid, in: defaults))
+            XCTAssertEqual(ContextAnalysisSettings.wordExplanationPrompt(in: defaults), "Custom word prompt")
+        }
+        ContextAnalysisSettings.resetWordExplanationPrompt(in: defaults)
+        XCTAssertNil(ContextAnalysisSettings.wordExplanationPromptOverride(in: defaults))
+        XCTAssertEqual(ContextAnalysisSettings.wordExplanationPrompt(in: defaults),
+                       OpenAIWordExplanationProvider.defaultPrompt)
+        try ContextAnalysisSettings.setWordExplanationPrompt("Custom", in: defaults)
+        try ContextAnalysisSettings.setWordExplanationPrompt(OpenAIWordExplanationProvider.defaultPrompt, in: defaults)
+        XCTAssertNil(ContextAnalysisSettings.wordExplanationPromptOverride(in: defaults))
+        XCTAssertEqual(ContextAnalysisSettings.prompt(in: defaults), "Translation prompt")
     }
 
     func testInvalidExamplesAndIncompleteResponsesAreRejected() async throws {

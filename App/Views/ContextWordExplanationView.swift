@@ -60,7 +60,7 @@ private struct ContextWordDisclosure: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(row.sourceWord), \(row.lemma), \(row.meaning)")
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-            .accessibilityHint("Show or hide a detailed explanation and typical phrases")
+            .accessibilityHint("Show or hide a detailed explanation and example sentences")
             .accessibilityIdentifier("word-explanation.toggle.\(row.id)")
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
@@ -70,7 +70,7 @@ private struct ContextWordDisclosure: View {
                     if let result {
                         block("Простыми словами", text: result.definition)
                         block("Здесь", text: result.meaningInContext)
-                        Text("Типовые фразы").font(.subheadline.weight(.semibold))
+                        Text("Примеры предложений").font(.subheadline.weight(.semibold))
                         ForEach(result.examples.indices, id: \.self) { index in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(result.examples[index].phrase)
