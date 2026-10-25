@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-25 — Practice preview text and audio actions
+
+- Replace the practice card’s phrase-actions menu with a larger icon-only translation edit action at the right of the translation, and a vertically centered copy action at the right of the revealed original. Remove translation copying and context copying from practice cards.
+- Place playback below the original in a dedicated audio panel. Replace the full-width word/phrase segmented control with a compact fragment menu and simplify the playback-speed control. A visible Edit audio action opens the existing validated boundary editor without a long press. Dictionary audio controls remain unchanged.
+- Add UI coverage for text-action alignment, answer hiding, copying, fragment switching and explicit editing of independent word/phrase ranges. DECISIONS.md records the updated practice-card interaction. Project purpose, supported workflows and major boundaries are unchanged; PROJECT.md requires no update.
+
 ## 2026-10-25 — Native Glass interface and editorial reading
 
 - Introduce permanent Library, Dictionary and Practice tabs, a featured in-progress book, explicit empty-library import actions and a dedicated practice home with quick start and saved-round access.

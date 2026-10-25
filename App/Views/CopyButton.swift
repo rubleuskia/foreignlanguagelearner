@@ -60,6 +60,7 @@ struct CopyableContentRow<Content: View>: View {
 
 struct PlaybackRateMenu: View {
     let playback: PlaybackController
+    var compact = false
 
     var body: some View {
         Menu {
@@ -75,25 +76,15 @@ struct PlaybackRateMenu: View {
                 }
             }
         } label: {
-            Label(playback.selectedRate.title, systemImage: "speedometer")
-                .frame(minHeight: 44)
+            if compact {
+                Text(playback.selectedRate.title)
+                    .font(.subheadline.weight(.medium))
+                    .frame(minWidth: 44, minHeight: 44)
+            } else {
+                Label(playback.selectedRate.title, systemImage: "speedometer")
+                    .frame(minHeight: 44)
+            }
         }
         .accessibilityLabel("Playback speed, \(playback.selectedRate.title)")
-    }
-}
-
-/// Menu commands retain visible labels; clipboard confirmation is announced
-/// because the system dismisses the menu immediately after the action.
-struct CopyMenuButton: View {
-    let value: String
-    let label: String
-    let identifier: String
-
-    var body: some View {
-        Button(label, systemImage: "doc.on.doc") {
-            UIPasteboard.general.string = value
-            UIAccessibility.post(notification: .announcement, argument: "Copied")
-        }
-        .accessibilityIdentifier(identifier)
     }
 }

@@ -23,6 +23,27 @@ struct PhraseAudioEditing: ViewModifier {
     }
 }
 
+/// A visible entry point for practice cards, sharing the existing validated editor.
+struct PhraseAudioEditButton: View {
+    let entry: DictionaryEntry
+    let items: [LearningItem]
+    let source: PhraseAudioSource
+    let stopPlayback: () -> Void
+    var mode: PhraseAudioMode = .selection
+    @State private var editing = false
+
+    var body: some View {
+        Button("Edit audio", systemImage: "slider.horizontal.3") {
+            stopPlayback()
+            editing = true
+        }
+        .buttonStyle(.borderless)
+        .sheet(isPresented: $editing) {
+            PhraseAudioBoundaryEditor(entry: entry, items: items, source: source, mode: mode)
+        }
+    }
+}
+
 private struct PhraseAudioBoundaryEditor: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
