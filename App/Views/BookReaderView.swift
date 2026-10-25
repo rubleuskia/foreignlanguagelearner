@@ -10,9 +10,12 @@ struct BookReaderView: View {
     }
 
     @Environment(\.modelContext) private var context
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.scenePhase) private var scenePhase
     let item: LearningItem
     @State private var playback = BookPlaybackController()
+    @State private var manualChapterGeneration = 0
+    @State private var completionTask: Task<Void, Never>?
     @State private var chapterPicker: ChapterPickerSnapshot?
     @State private var mode: ReadingMode = .track
     @State private var following = true
@@ -76,7 +79,11 @@ struct BookReaderView: View {
                 }
             }
         }
-        .onAppear { playback.open(item: item); loadFullText() }
+        .onAppear {
+            playback.open(item: item)
+            playback.didFinishTrack = { id in completeTrack(id) }
+            loadFullText()
+        }
         .onChange(of: playback.activeTrackID) { _, _ in
             scrubbing = false
             scrubPosition = playback.localPosition
@@ -98,6 +105,10 @@ struct BookReaderView: View {
                 guard item.tracks.contains(where: { $0.id == id }) else { return }
                 savePosition()
                 playback.selectTrack(id)
+                mode = .track
+                manualChapterGeneration += 1
+                followGeneration += 1
+                following = true
             }
         }
         .sheet(item: $selectionPreview) { SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen) }
@@ -144,6 +155,7 @@ struct BookReaderView: View {
                         for: selectionRange, in: document, duration: activeTrack?.duration ?? 0)
                 }
             }
+            .id(manualChapterGeneration)
         } else if let transcriptError {
             ContentUnavailableView("Transcript unavailable", systemImage: "exclamationmark.triangle",
                                    description: Text(transcriptError))
@@ -255,6 +267,21 @@ struct BookReaderView: View {
                 message = error.localizedDescription
             }
             updatingWordTimings = false
+        }
+    }
+
+    private func completeTrack(_ id: String) {
+        savePosition()
+        let previous = completionTask
+        completionTask = Task {
+            await previous?.value
+            guard !ReadingVocabularyStore.completed(item, scope: .track(id)) else { return }
+            do {
+                let proposal = try await vocabulary.prepare(item: item, scope: .track(id))
+                try await vocabulary.complete(proposal, context: context)
+            } catch {
+                message = "Could not mark chapter read: \(error.localizedDescription)"
+            }
         }
     }
 

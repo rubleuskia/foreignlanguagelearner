@@ -24,7 +24,7 @@ struct PhraseAudioSource: Equatable, Sendable {
 }
 
 enum PhraseAudioSourceResolver {
-    static func resolve(entry: DictionaryEntry, items: [LearningItem], mode: PhraseAudioMode = .selection, ignoreManualRange: Bool = false,
+    static func resolve(entry: DictionaryEntry, items: [LearningItem], mode: PhraseAudioMode = .selection, ignoreManualRange: Bool = false, includePadding: Bool = true,
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
         if mode == .sentence {
             let manual = !ignoreManualRange && (entry.manualPhraseAudioStart != nil || entry.manualPhraseAudioEnd != nil)
@@ -32,6 +32,7 @@ enum PhraseAudioSourceResolver {
                 audioRange: range(start: manual ? entry.manualPhraseAudioStart : entry.phraseAudioStart,
                                   end: manual ? entry.manualPhraseAudioEnd : entry.phraseAudioEnd),
                 sourceTrackID: entry.sourceTrackID, items: items, fileExists: fileExists)
+            if !manual, includePadding { source = padded(source, items: items) }
             source?.mode = .sentence
             return source
         }
@@ -73,6 +74,7 @@ enum PhraseAudioSourceResolver {
                 audioRange: audioRange,
                 sourceTrackID: entry.sourceTrackID,
                 items: items, fileExists: fileExists)
+        if includePadding { source = padded(source, items: items) }
         source?.usesWordTimings = usesWordTimings
         if entry.phraseAudioStart != nil { source?.mode = .selection }
         return source
@@ -96,7 +98,7 @@ enum PhraseAudioSourceResolver {
                              sourceTrackID: track.id, items: items, fileExists: fileExists)
             source?.usesWordTimings = true
         }
-        return source
+        return padded(source, items: items)
     }
 
     static func resolve(localSourceItemID: UUID?, sourceItemID: UUID,
@@ -130,6 +132,15 @@ enum PhraseAudioSourceResolver {
         return PhraseAudioSource(identity: .init(itemID: item.id, trackID: sourceTrackID,
                                                   url: url, range: audioRange),
                                  itemTitle: sourceDescription)
+    }
+
+    private static func padded(_ source: PhraseAudioSource?, items: [LearningItem]) -> PhraseAudioSource? {
+        guard let source, let item = items.first(where: { $0.id == source.identity.itemID }) else { return nil }
+        let duration = source.identity.trackID.flatMap { id in item.tracks.first { $0.id == id }?.duration } ?? item.duration
+        let range = max(0, source.identity.range.lowerBound - 0.5)...min(duration, source.identity.range.upperBound + 0.5)
+        return PhraseAudioSource(identity: .init(itemID: source.identity.itemID, trackID: source.identity.trackID,
+            url: source.identity.url, range: range), itemTitle: source.itemTitle,
+            usesWordTimings: source.usesWordTimings, mode: source.mode)
     }
 
     private static func range(start: Double?, end: Double?) -> ClosedRange<Double>? {

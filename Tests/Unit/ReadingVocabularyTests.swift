@@ -8,6 +8,50 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class ReadingVocabularyTests: XCTestCase {
+    @MainActor func testPlaybackKeepsScreenAwakeAndReleasesOnPauseInterruptionAndClose() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "idle-timer-\(UUID()).wav")
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16000))
+        buffer.frameLength = buffer.frameCapacity
+        do {
+            let audio = try AVAudioFile(forWriting: url, settings: format.settings)
+            try audio.write(from: buffer)
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let playback = PlaybackController()
+        defer { playback.close() }
+        func waitForAwake(_ awake: Bool, line: UInt = #line) async throws {
+            for _ in 0..<150 {
+                if UIApplication.shared.isIdleTimerDisabled == awake { return }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, awake, line: line)
+        }
+        playback.open(url: url, position: 0)
+        playback.play()
+        try await waitForAwake(true)
+        playback.pause()
+        try await waitForAwake(false)
+        playback.play()
+        try await waitForAwake(true)
+        // AVPlayer pauses itself during an audio-session interruption.
+        playback.player.pause()
+        try await waitForAwake(false)
+        playback.play()
+        try await waitForAwake(true)
+        playback.seek(to: 1.95)
+        for _ in 0..<150 {
+            if !playback.wantsToPlay { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertFalse(playback.wantsToPlay)
+        try await waitForAwake(false)
+        playback.play()
+        try await waitForAwake(true)
+        playback.close()
+        try await waitForAwake(false)
+    }
+
     @MainActor private func container() throws -> ModelContainer {
         try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))

@@ -1,6 +1,48 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testNaturalTransitionMarksPreviousChapterReadAndManualSelectionRestarts() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-end-fixture"]
+        app.launch()
+        let story = app.staticTexts["Reading vocabulary story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10))
+        app.buttons["Play"].tap()
+        let picker = app.buttons["reader.choose-chapter"]
+        expectation(for: NSPredicate(format: "label == %@", "Chapter two"), evaluatedWith: picker)
+        waitForExpectations(timeout: 10)
+        app.buttons["Pause"].tap()
+        picker.tap()
+        app.buttons["reader.chapter.one"].tap()
+        let read = app.buttons["reader.complete-chapter"]
+        expectation(for: NSPredicate(format: "enabled == false"), evaluatedWith: read)
+        waitForExpectations(timeout: 10)
+        XCTAssertEqual(read.label, "Read")
+        XCTAssertTrue(app.staticTexts["vocabulary.statistics"].label.contains("New: 0"))
+        XCTAssertTrue(app.staticTexts["0:00"].exists, "Manual chapter choice restarts at zero")
+        picker.tap()
+        app.buttons["reader.chapter.two"].tap()
+        XCTAssertTrue(app.buttons["reader.complete-chapter"].isEnabled, "Manual selection must not complete the previous chapter")
+    }
+
+    @MainActor func testReselectingCurrentChapterScrollsToBeginning() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
+        app.launch()
+        let story = app.staticTexts["Reading vocabulary story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        let text = app.textViews["reader.transcript"]
+        XCTAssertTrue(text.waitForExistence(timeout: 10))
+        text.swipeUp(velocity: .fast)
+        XCTAssertTrue(app.buttons["Follow audio"].exists)
+        app.buttons["reader.choose-chapter"].tap()
+        app.buttons["reader.chapter.one"].tap()
+        let value = try XCTUnwrap(text.value as? String)
+        let offset = try XCTUnwrap(Int(value.replacingOccurrences(of: "offset:", with: "")))
+        XCTAssertLessThanOrEqual(offset, 5)
+    }
+
     @MainActor func testManualSwipeWhilePausedWithNewWordHighlighting() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]

@@ -175,6 +175,7 @@ struct TranscriptTextView: UIViewRepresentable {
                 (view.layoutManager as? TranscriptLayoutManager)?.clearDecorations()
                 view.text = parent.document.text
                 view.selectedRange = NSRange(location: 0, length: 0)
+                view.setContentOffset(CGPoint(x: 0, y: -view.adjustedContentInset.top), animated: false)
                 isApplyingProgrammaticUpdate = false
                 hadNonemptySelection = false
                 highlighted = nil
