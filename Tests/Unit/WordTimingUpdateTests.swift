@@ -79,10 +79,10 @@ final class WordTimingUpdateTests: XCTestCase {
         XCTAssertEqual(entry.manualAudioStart, 0.45)
         XCTAssertEqual(entry.manualAudioEnd, 1.1)
         XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item])?.identity.range, 0.45...1.1)
-        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], ignoreManualRange: true)?.identity.range, 0.6...0.9)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], ignoreManualRange: true)?.identity.range, (0.6 - 0.5)...1.4)
         entry.manualAudioStart = nil
         entry.manualAudioEnd = nil
-        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item])?.identity.range, 0.6...0.9)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item])?.identity.range, (0.6 - 0.5)...1.4)
     }
 
     func testInvalidManualRangesNeverFallBackToAutomaticPlayback() throws {

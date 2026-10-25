@@ -9,6 +9,7 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var timeline: BookTimeline?
     var wantsToPlay = false
+    var didFinishTrack: ((String) -> Void)?
 
     private var tracks: [LearningTrack] = []
     private var itemID: UUID?
@@ -69,8 +70,8 @@ import Observation
     }
 
     func selectTrack(_ id: String) {
-        guard let track = tracks.first(where: { $0.id == id }) else { return }
-        openTrack(id, position: track.lastPosition, shouldPlay: wantsToPlay)
+        guard tracks.contains(where: { $0.id == id }) else { return }
+        openTrack(id, position: 0, shouldPlay: wantsToPlay)
     }
 
     func snapshot(into item: LearningItem) {
@@ -98,6 +99,7 @@ import Observation
         positionTask?.cancel()
         positionTask = nil
         playback.close()
+        didFinishTrack = nil
         activeTrackID = nil
         wantsToPlay = false
     }
@@ -131,6 +133,8 @@ import Observation
         guard generation == self.generation, activeTrackID == trackID,
               let index = tracks.firstIndex(where: { $0.id == trackID }) else { return }
         localPosition = tracks[index].duration
+        tracks[index].lastPosition = localPosition
+        didFinishTrack?(trackID)
         if index + 1 < tracks.count, wantsToPlay {
             openTrack(tracks[index + 1].id, position: 0, shouldPlay: true)
         } else {

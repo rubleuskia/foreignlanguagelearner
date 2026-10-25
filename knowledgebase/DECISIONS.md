@@ -261,3 +261,12 @@ Recover interrupted Apple translations only when both language models are instal
 For new timed selections only, save the containing sentence's automatic audio bounds separately from the selected range. A selection crossing sentences includes all intersecting sentences. Each mode has independent optional manual bounds, editing, reset, and backup fields. Existing entries have no sentence range and retain their playback behavior; no backfill or migration derives new ranges for them. Exact word timings are preferred; otherwise use actual cue bounds, without guessing word timestamps.
 
 Reading fraction equals completed valid chapter audio duration divided by total valid chapter audio duration, using physical tracks or legacy virtual parts. A whole-book completion is 100%; no chapters/duration yields 0% otherwise. Playback position does not affect this metric.
+
+
+## 2026-10-25 — Natural chapter completion and audio editing
+
+- An audiobook track's natural end reports the completed track before advancing. The reader serializes automatic reading-vocabulary completion through the existing prepare/complete transaction, showing errors rather than silently losing the mark. The final track is included; seeking or choosing another chapter never marks an unfinished chapter read.
+- Explicit chapter choice starts its audio and transcript at the beginning, including reselecting the current chapter; initial book opening continues to restore saved playback position.
+- Automatic selected-word/context and whole-phrase playback adds 0.5 seconds before and after the resolved source range, clamped to the source media. Padding is applied at resolution, leaving stored timestamps and alignment matching exact, avoiding repeated padding after backup or timing updates. Manual overrides are exact and receive no padding.
+- Audio editing has two handles on a shared timeline, snapping dragged boundaries to tenths of a second with at least 0.1 seconds between them. The initial scale covers the phrase plus five seconds on either side; whole-track and zoom controls expose the full legal range. Existing numeric adjustments remain available in a collapsible section so preview and reset are visible alongside the sliders.
+- Active playback holds the iOS idle timer disabled so synchronized text stays visible. A weak registry of players and observed playback state release it on pause, end, interruption or player closure, while respecting another active player.

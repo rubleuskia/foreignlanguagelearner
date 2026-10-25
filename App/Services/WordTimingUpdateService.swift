@@ -87,7 +87,7 @@ enum WordTimingUpdateCommit {
         }
         var updated = 0
         for entry in entries where (entry.localSourceItemID ?? entry.sourceItemID) == item.id {
-            if let source = PhraseAudioSourceResolver.resolve(entry: entry, items: [item], ignoreManualRange: true), source.usesWordTimings {
+            if let source = PhraseAudioSourceResolver.resolve(entry: entry, items: [item], ignoreManualRange: true, includePadding: false), source.usesWordTimings {
                 entry.audioStart = source.identity.range.lowerBound
                 entry.audioEnd = source.identity.range.upperBound
                 updated += 1

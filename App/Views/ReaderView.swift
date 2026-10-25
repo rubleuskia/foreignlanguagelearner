@@ -14,6 +14,7 @@ struct ReaderView: View {
     @State private var message: String?
     @State private var chapterPicker: ChapterPickerSnapshot?
     @State private var selectedPart = 0
+    @State private var manualChapterGeneration = 0
     @State private var sourceLanguages = [SourceLanguage.polish]
     @State private var translationPreview: SelectionTranslationPreview?
     @State private var followGeneration = 0
@@ -67,6 +68,7 @@ struct ReaderView: View {
                         for: selectionRange, in: document, duration: item.duration)
                 }
             }
+            .id(manualChapterGeneration)
             if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
                     followGeneration += 1
@@ -177,6 +179,9 @@ struct ReaderView: View {
         savePosition()
         playback.close()
         selectedPart = index
+        item.parts[index].lastPosition = item.parts[index].start
+        manualChapterGeneration += 1
+        followGeneration += 1
         following = true
         openCurrentPart()
     }

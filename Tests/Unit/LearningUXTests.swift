@@ -699,7 +699,7 @@ final class LearningUXTests: XCTestCase {
                                                        fileExists: { _ in false }))
         XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
                                                          fileExists: { _ in true })?.identity.range,
-                       2...3)
+                       1.5...3.5)
         entry.audioEnd = 11
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
                                                        fileExists: { _ in true }))

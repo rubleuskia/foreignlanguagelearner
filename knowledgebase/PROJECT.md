@@ -50,3 +50,6 @@ The dictionary shows ready-to-repeat counts per level and a readiness filter tha
 
 
 New timed selections offer selected-word and whole-phrase audio modes with independent editable boundaries; legacy entries keep their existing playback. Round results are limited to that round, and four wrong attempts on an entry prevent promotion on its eventual correct answer. Settings supports an explicit API-key/model check. Library and book-reader completion percentages weight completed chapters by audio duration, independently of playback position.
+
+
+Audiobook chapters are marked read automatically at natural playback completion using the same studied-vocabulary update as manual completion. Explicit chapter selection restarts at the beginning and resets transcript scrolling. Automatic dictionary audio includes up to half a second of context on each side; saved manual boundaries remain exact. The boundary editor supports two timeline handles with 0.1-second precision. Active audio playback keeps the screen awake for reading along.

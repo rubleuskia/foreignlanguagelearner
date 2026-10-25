@@ -46,6 +46,39 @@ final class BookFeatureTests: XCTestCase {
         XCTAssertFalse(controller.wantsToPlay)
     }
 
+    @MainActor func testNaturalEndReportsFinishedTrackBeforeAdvancingButManualChoiceDoesNot() {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 40, segments: [], tracks: [
+                .init(id: "one", title: "One", mediaFilename: "one.wav", duration: 20, lastPosition: 8),
+                .init(id: "two", title: "Two", mediaFilename: "two.wav", duration: 20, lastPosition: 12)
+            ])
+        let controller = BookPlaybackController()
+        controller.open(item: item)
+        defer { controller.close() }
+        var finished: [String] = []
+        controller.didFinishTrack = { id in
+            XCTAssertEqual(controller.activeTrackID, id)
+            finished.append(id)
+        }
+        controller.selectTrack("two")
+        XCTAssertEqual(controller.localPosition, 0)
+        XCTAssertTrue(finished.isEmpty)
+        controller.selectTrack("one")
+        let staleEnd = controller.playback.didReachEnd
+        controller.wantsToPlay = true
+        controller.playback.didReachEnd?()
+        XCTAssertEqual(finished, ["one"])
+        XCTAssertEqual(controller.activeTrackID, "two")
+        XCTAssertEqual(controller.localPosition, 0)
+        staleEnd?()
+        XCTAssertEqual(finished, ["one"])
+        controller.playback.didReachEnd?()
+        XCTAssertEqual(finished, ["one", "two"])
+        XCTAssertFalse(controller.wantsToPlay)
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[0].lastPosition, 20)
+    }
+
     func testTimelineUsesHalfOpenBoundariesAndExactTotal() throws {
         let timeline = try BookTimeline(tracks: [("one", 60), ("two", 90), ("three", 30)])
         XCTAssertEqual(try timeline.location(at: 0), .init(index: 0, trackID: "one", localTime: 0))

@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-25 — Chapter completion and audio boundary controls
+
+- Natural audiobook track completion marks the finished chapter read through the reading-vocabulary transaction, including the final chapter. Manual selection does not mark chapters read and opens the selected chapter at the beginning with the transcript scrolled to the top.
+- Automatic dictionary audio gains 0.5 seconds on either side, clamped to its media track. Stored alignment metadata stays exact; manual overrides play exactly as edited and reset restores padded automatic playback.
+- Boundary editing offers two handles on one timeline with 0.1-second adjustments, a phrase-focused scale, whole-track view, preview, and existing numeric shifts in a collapsible section.
+- The screen stays awake while an app player is playing; pause, completion, interruption and closing playback restore normal auto-lock when no other player is playing.
+- DECISIONS.md records these policies; PROJECT.md updates the supported workflow. Project purpose and major boundaries are unchanged.
+
 ## 2026-10-25 — Remove unreachable translation and definition services
 
 - Remove the old Apple word-by-word branch from contextual translation and the unreachable Polish Wiktionary lookup/parser/coordinator. Contextual explanation continues through the existing OpenAI service.

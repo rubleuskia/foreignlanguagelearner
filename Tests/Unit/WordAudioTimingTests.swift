@@ -37,8 +37,26 @@ final class WordAudioTimingTests: XCTestCase {
         entry.manualPhraseAudioEnd = 9
         XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], fileExists: { _ in true })?.identity.range, 2.5...4.5)
         XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, fileExists: { _ in true })?.identity.range, 0.5...9)
-        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, ignoreManualRange: true, fileExists: { _ in true })?.identity.range, 1...8)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, ignoreManualRange: true, fileExists: { _ in true })?.identity.range, 0.5...8.5)
         XCTAssertEqual(entry.manualAudioStart, 2.5)
+    }
+
+    @MainActor func testAutomaticPaddingClampsToMediaAndManualRangesStayExact() {
+        let item = LearningItem(id: UUID(), title: "Short", mediaKind: "audio", mediaFilename: "a.wav",
+            transcriptFilename: "a.srt", duration: 2, segments: [])
+        let entry = DictionaryEntry(text: "word", item: item, segmentIndex: nil, audioStart: 0.2, audioEnd: 1.8)
+        entry.phraseAudioStart = 0
+        entry.phraseAudioEnd = 2
+        for mode in PhraseAudioMode.allCases {
+            XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: mode,
+                fileExists: { _ in true })?.identity.range, 0...2)
+        }
+        entry.manualAudioStart = 0.3
+        entry.manualAudioEnd = 1.7
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
+            fileExists: { _ in true })?.identity.range, 0.3...1.7)
+        XCTAssertEqual(entry.audioStart, 0.2)
+        XCTAssertEqual(entry.audioEnd, 1.8)
     }
 
     func testSelectedWordsExcludeFivePrecedingAndTwoFollowingWords() throws {
@@ -113,12 +131,12 @@ final class WordAudioTimingTests: XCTestCase {
         try JSONEncoder().encode(file).write(to: directory.appending(path: "008.json"))
         let entry = DictionaryEntry(text: "owrzodzona noga", item: item, segmentIndex: 0, audioStart: 22, audioEnd: 26.56, sourceTrackID: "008")
         let source = PhraseAudioSourceResolver.resolve(entry: entry, items: [item], fileExists: { _ in true })
-        XCTAssertEqual(source?.identity.range, 24.5...25.4)
+        XCTAssertEqual(source?.identity.range, 24...25.9)
         XCTAssertEqual(source?.playLabel, "Play phrase")
         XCTAssertEqual(entry.audioStart, 22, "Old backup metadata is retained; the local word range is resolved at playback.")
         let preview = SelectionTranslationPreview(selectedText: entry.text, sourceLanguageCode: "pl", context: nil,
             sourceItemID: item.id, sourceTitle: item.title, audioRange: 24.5...25.4, sourceTrackID: "008", segmentIndex: 0)
-        XCTAssertEqual(PhraseAudioSourceResolver.resolve(preview: preview, items: [item], fileExists: { _ in true })?.identity.range, 24.5...25.4)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(preview: preview, items: [item], fileExists: { _ in true })?.identity.range, 24...25.9)
         entry.sourceTrackID = "other"
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], fileExists: { _ in true }))
     }

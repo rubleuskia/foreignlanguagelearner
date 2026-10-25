@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import UIKit
 
 enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     case half = 0.5
@@ -20,6 +21,26 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     private(set) var selectedRate: PlaybackRate = .normal
     var errorMessage: String?
     var didReachEnd: (() -> Void)?
+
+    private static let activeControllers = NSHashTable<PlaybackController>.weakObjects()
+    private var statusObserver: NSKeyValueObservation?
+
+    init() {
+        Self.activeControllers.add(self)
+        statusObserver = player.observe(\.timeControlStatus, options: [.new]) { _, _ in
+            Task { @MainActor in Self.updateScreenAwake() }
+        }
+    }
+
+    deinit {
+        Task { @MainActor in Self.updateScreenAwake() }
+    }
+
+    private static func updateScreenAwake() {
+        UIApplication.shared.isIdleTimerDisabled = activeControllers.allObjects.contains {
+            $0.wantsToPlay && $0.player.timeControlStatus == .playing
+        }
+    }
 
     private var observer: Any?
     private var endObserver: NSObjectProtocol?
@@ -104,6 +125,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         wantsToPlay = false
         isPlaying = false
         player.pause()
+        Self.updateScreenAwake()
     }
 
     func toggle() {
@@ -149,6 +171,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         wantsToPlay = false
         isPlaying = false
         player.pause()
+        Self.updateScreenAwake()
         if let observer { player.removeTimeObserver(observer) }
         observer = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
@@ -170,6 +193,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     private func finishPlayback(item: AVPlayerItem, generation: Int) {
         guard observationGeneration == generation, player.currentItem === item else { return }
         player.pause()
+        Self.updateScreenAwake()
         wantsToPlay = false
         isPlaying = false
         reachedEnd = true
