@@ -59,7 +59,9 @@ struct DictionaryView: View {
                                 LearningLevelBadge(level: level)
                                 Spacer()
                                 if selectedLevel == level { Image(systemName: "checkmark") }
-                                Text("\(entries.count(where: { $0.learningLevel == level })) (\(entries.count(where: { $0.learningLevel == level && $0.isReadyForReview })) to repeat)")
+                                Text(level == 1 || level == 4
+                                     ? "\(entries.count(where: { $0.learningLevel == level }))"
+                                     : "\(entries.count(where: { $0.learningLevel == level })) (\(entries.count(where: { $0.learningLevel == level && $0.isReadyForReview })))")
                                     .font(.headline.monospacedDigit())
                                     .accessibilityIdentifier("dictionary.stats.level.\(level)")
                             }
@@ -230,6 +232,7 @@ struct DictionaryEntryDetailView: View {
     @State private var hasAutoStarted = false
     @State private var senseDraft = ""
     @State private var noteDraft = ""
+    @State private var audioMode: PhraseAudioMode = .selection
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
     let autoStartContext: Bool
 
@@ -242,6 +245,14 @@ struct DictionaryEntryDetailView: View {
         NavigationStack {
             Form {
                 Section("Source phrase") {
+                    if entry.phraseAudioStart != nil {
+                        Picker("Audio", selection: $audioMode) {
+                            ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: audioMode) { _, _ in playback.close(); openedAudioIdentity = nil }
+                    }
+
                     HStack(alignment: .top, spacing: 12) {
                         Text(entry.text)
                             .textSelection(.enabled)
@@ -258,7 +269,7 @@ struct DictionaryEntryDetailView: View {
                             }
                             .buttonStyle(.borderless)
                             .accessibilityIdentifier("dictionary.play-audio")
-                            .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }))
+                            .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
                         }
                         CopyButton(value: entry.text, label: "Copy original",
                                    identifier: "dictionary.copy-original")
@@ -444,7 +455,7 @@ struct DictionaryEntryDetailView: View {
     }
 
     private var audioSource: PhraseAudioSource? {
-        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems)
+        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: entry.phraseAudioStart == nil ? .selection : audioMode)
     }
 
     private func toggleAudio(_ source: PhraseAudioSource) {

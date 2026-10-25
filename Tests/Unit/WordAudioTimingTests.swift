@@ -16,6 +16,31 @@ final class WordAudioTimingTests: XCTestCase {
         return try file.applying(to: document, trackID: "008", duration: 30)
     }
 
+    func testWholeSentenceIncludesSurroundingWordsButNotNextSentence() throws {
+        let doc = try document("To jest noga. Potem idziemy dalej.")
+        let selected = (doc.text as NSString).range(of: "noga")
+        XCTAssertEqual(PhraseAudioTiming.range(for: selected, in: doc, duration: 30), 23...23.4)
+        XCTAssertEqual(PhraseAudioTiming.sentenceRange(for: selected, in: doc, duration: 30), 22...23.4)
+    }
+
+    @MainActor
+    func testAudioModesHaveIndependentOverridesAndLegacyHasNoSentence() {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio", mediaFilename: "a.m4a",
+            transcriptFilename: "a.srt", duration: 20, segments: [])
+        let entry = DictionaryEntry(text: "word", item: item, segmentIndex: nil, audioStart: 3, audioEnd: 4)
+        XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, fileExists: { _ in true }))
+        entry.phraseAudioStart = 1
+        entry.phraseAudioEnd = 8
+        entry.manualAudioStart = 2.5
+        entry.manualAudioEnd = 4.5
+        entry.manualPhraseAudioStart = 0.5
+        entry.manualPhraseAudioEnd = 9
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], fileExists: { _ in true })?.identity.range, 2.5...4.5)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, fileExists: { _ in true })?.identity.range, 0.5...9)
+        XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item], mode: .sentence, ignoreManualRange: true, fileExists: { _ in true })?.identity.range, 1...8)
+        XCTAssertEqual(entry.manualAudioStart, 2.5)
+    }
+
     func testSelectedWordsExcludeFivePrecedingAndTwoFollowingWords() throws {
         let doc = try document()
         let selection = (doc.text as NSString).range(of: "owrzodzona noga")

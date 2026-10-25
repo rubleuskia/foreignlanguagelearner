@@ -4,6 +4,25 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class BookFeatureTests: XCTestCase {
+    @MainActor
+    func testReadingProgressWeightsCompletedChaptersByDuration() {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 100, segments: [], tracks: [
+                .init(id: "1", title: "Short", mediaFilename: "1.m4a", duration: 10, isCompleted: true),
+                .init(id: "2", title: "Long", mediaFilename: "2.m4a", duration: 90)
+            ])
+        XCTAssertEqual(item.readingProgress, 0.1, accuracy: 0.0001)
+        item.tracks[1].isCompleted = true
+        XCTAssertEqual(item.readingProgress, 1)
+        item.tracks = []
+        item.parts = [.init(start: 0, end: 25, isCompleted: true), .init(start: 25, end: 100)]
+        XCTAssertEqual(item.readingProgress, 0.25)
+        item.parts = []
+        XCTAssertEqual(item.readingProgress, 0)
+        item.isBookCompleted = true
+        XCTAssertEqual(item.readingProgress, 1)
+    }
+
     @MainActor func testLocalSeekStaysInsideActiveTrackInLongBook() {
         let item = LearningItem(id: UUID(), title: "Long book", mediaKind: "audio", mediaFilename: "",
                                 transcriptFilename: "transcript.txt", duration: 36000, segments: [],

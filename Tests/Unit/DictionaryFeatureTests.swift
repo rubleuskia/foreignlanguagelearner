@@ -304,6 +304,10 @@ extension DictionaryFeatureTests {
 
     @MainActor func testCompleteBackupRestoresAfterPersistentReopenAndKeepsAudioIdentity() throws {
         let (item, original) = backupFixture()
+        original.phraseAudioStart = 1
+        original.phraseAudioEnd = 5
+        original.manualPhraseAudioStart = 0.5
+        original.manualPhraseAudioEnd = 5.5
         original.manualAudioStart = 1.85
         original.manualAudioEnd = 3.2
         original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)
@@ -351,6 +355,10 @@ extension DictionaryFeatureTests {
         XCTAssertEqual(restored.audioEnd, 3)
         XCTAssertEqual(restored.manualAudioStart, 1.85)
         XCTAssertEqual(restored.manualAudioEnd, 3.2)
+        XCTAssertEqual(restored.phraseAudioStart, 1)
+        XCTAssertEqual(restored.phraseAudioEnd, 5)
+        XCTAssertEqual(restored.manualPhraseAudioStart, 0.5)
+        XCTAssertEqual(restored.manualPhraseAudioEnd, 5.5)
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: restored, items: [], fileExists: { _ in true }))
         context.insert(item)
         try context.save()
@@ -398,6 +406,10 @@ extension DictionaryFeatureTests {
 
     @MainActor func testLegacyBackupStillRestoresAndPreservesTranslationOrigin() throws {
         let (_, original) = backupFixture()
+        original.phraseAudioStart = 1
+        original.phraseAudioEnd = 5
+        original.manualPhraseAudioStart = 0.5
+        original.manualPhraseAudioEnd = 5.5
         original.manualAudioStart = 1.85
         original.manualAudioEnd = 3.2
         original.levelChangedAt = Date(timeIntervalSince1970: 1_700_000_000)

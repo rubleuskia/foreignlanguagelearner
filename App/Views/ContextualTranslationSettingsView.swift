@@ -8,6 +8,9 @@ struct ContextualTranslationSettingsView: View {
     @State private var apiKey = ""
     @State private var hasSavedAPIKey = false
     @State private var keyMessage: String?
+    @State private var checkingKey = false
+    @State private var keyCheckMessage: String?
+    @State private var keyCheckFailed = false
     @State private var prompt = OpenAIContextAnalysisProvider.defaultPrompt
     @State private var hasCustomPrompt = false
     @State private var promptMessage: String?
@@ -61,18 +64,33 @@ struct ContextualTranslationSettingsView: View {
                         Text(model.displayName).tag(model)
                     }
                 }
+                .disabled(checkingKey)
+                .onChange(of: selectedModelRawValue) { _, _ in keyCheckMessage = nil }
                 LabeledContent("Configuration") {
                     Text(hasSavedAPIKey ? "API key saved" : "API key required")
                         .foregroundStyle(hasSavedAPIKey ? Color.secondary : Color.orange)
                 }
                 SecureField("OpenAI API key", text: $apiKey)
+                    .disabled(checkingKey)
+                    .onChange(of: apiKey) { _, _ in keyCheckMessage = nil }
                     .textContentType(.password)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button(hasSavedAPIKey ? "Replace API Key" : "Save API Key") { saveAPIKey() }
                     .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(checkingKey ? "Checking…" : "Check API Key") {
+                    Task { await checkAPIKey() }
+                }
+                .disabled(checkingKey || (!hasSavedAPIKey && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .accessibilityIdentifier("settings.check-api-key")
+                if let keyCheckMessage {
+                    Text(keyCheckMessage).font(.caption)
+                        .foregroundStyle(keyCheckFailed ? Color.red : Color.green)
+                }
+                Text("Checks the entered key, or the saved key if the field is empty, with a small API request using the selected model.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if hasSavedAPIKey {
-                    Button("Delete API Key", role: .destructive) { deleteAPIKey() }
+                    Button("Delete API Key", role: .destructive) { deleteAPIKey() }.disabled(checkingKey)
                 }
                 if let keyMessage {
                     Text(keyMessage).font(.caption).foregroundStyle(.red)
@@ -132,6 +150,25 @@ struct ContextualTranslationSettingsView: View {
         return !trimmed.isEmpty && trimmed.utf16.count <= ContextAnalysisSettings.maximumPromptUTF16
     }
 
+    @MainActor private func checkAPIKey() async {
+        checkingKey = true
+        keyCheckMessage = nil
+        defer { checkingKey = false }
+        do {
+            let draft = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = try draft.isEmpty ? OpenAIAPIKeyStore.load() : draft
+            guard let key else { throw ContextAnalysisError.missingConfiguration }
+            let provider = OpenAIContextAnalysisProvider(apiKey: key,
+                model: OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini)
+            try await provider.validateAPIKey()
+            keyCheckFailed = false
+            keyCheckMessage = "OK — API key and selected model are available."
+        } catch {
+            keyCheckFailed = true
+            keyCheckMessage = (error as? ContextAnalysisError)?.userMessage ?? error.localizedDescription
+        }
+    }
+
     private func saveAPIKey() {
         do {
             try OpenAIAPIKeyStore.save(apiKey)
@@ -144,6 +181,7 @@ struct ContextualTranslationSettingsView: View {
     }
 
     private func deleteAPIKey() {
+        keyCheckMessage = nil
         do {
             try OpenAIAPIKeyStore.delete()
             apiKey = ""

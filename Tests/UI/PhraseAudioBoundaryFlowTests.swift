@@ -1,6 +1,31 @@
 import XCTest
 
 final class PhraseAudioBoundaryFlowTests: XCTestCase {
+    @MainActor func testNewEntryAudioModesEditIndependently() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--audio-boundary-fixture", "--dual-audio-fixture"]
+        app.launch()
+        app.buttons["Dictionary"].tap()
+        app.buttons["dictionary.entry.Kot"].tap()
+        XCTAssertTrue(app.buttons["Whole phrase"].waitForExistence(timeout: 5))
+        app.buttons["Whole phrase"].tap()
+        app.buttons["dictionary.play-audio"].press(forDuration: 1)
+        app.buttons["Edit audio boundaries"].tap()
+        XCTAssertTrue(app.staticTexts["audio-editor.range"].label.replacingOccurrences(of: ",", with: ".").contains("1.00"))
+        app.buttons["audio-editor.apply"].tap()
+        app.buttons["audio-editor.save"].tap()
+        app.buttons["Selected word"].tap()
+        app.buttons["dictionary.play-audio"].press(forDuration: 1)
+        app.buttons["Edit audio boundaries"].tap()
+        XCTAssertTrue(app.staticTexts["audio-editor.range"].label.replacingOccurrences(of: ",", with: ".").contains("2.00"))
+        app.buttons["Cancel"].tap()
+        app.buttons["Whole phrase"].tap()
+        app.buttons["dictionary.play-audio"].press(forDuration: 1)
+        app.buttons["Edit audio boundaries"].tap()
+        XCTAssertTrue(app.staticTexts["audio-editor.range"].label.replacingOccurrences(of: ",", with: ".").contains("0.90"))
+    }
+
     @MainActor func testEditCancelSaveResetAndLearningMenu() {
         continueAfterFailure = false
         let app = XCUIApplication()

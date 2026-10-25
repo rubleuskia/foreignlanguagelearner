@@ -139,6 +139,10 @@ struct BookReaderView: View {
                     segmentIndex: mode == .track ? segment : nil,
                     saveOnOpen: action == .addToDictionary
                 )
+                if audio != nil {
+                    selectionPreview?.phraseAudioRange = PhraseAudioTiming.sentenceRange(
+                        for: selectionRange, in: document, duration: activeTrack?.duration ?? 0)
+                }
             }
         } else if let transcriptError {
             ContentUnavailableView("Transcript unavailable", systemImage: "exclamationmark.triangle",
@@ -150,6 +154,8 @@ struct BookReaderView: View {
 
     private var playerBar: some View {
         VStack(spacing: 8) {
+            Text("Read: \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
+                .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button(activeTrack?.title ?? "Track") {
                     chapterPicker = .init(chapters: item.tracks.map {

@@ -48,3 +48,6 @@ Practice rounds respect configurable phrase cooldowns after level changes (defau
 Saved phrase audio boundaries can be adjusted locally from dictionary and learning cards through the audio button's context menu, previewed, saved, or reset to automatic timing. Manual ranges survive alignment updates and dictionary backup/restore.
 
 The dictionary shows ready-to-repeat counts per level and a readiness filter that combines with level selection. Quick start opens a preview of up to 10 ready phrases without setup. Round results highlight each phrase’s starting → current learning level alongside the existing learnt-phrase review.
+
+
+New timed selections offer selected-word and whole-phrase audio modes with independent editable boundaries; legacy entries keep their existing playback. Round results are limited to that round, and four wrong attempts on an entry prevent promotion on its eventual correct answer. Settings supports an explicit API-key/model check. Library and book-reader completion percentages weight completed chapters by audio duration, independently of playback position.

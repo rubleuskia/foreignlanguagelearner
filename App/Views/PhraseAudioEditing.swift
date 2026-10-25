@@ -6,6 +6,7 @@ struct PhraseAudioEditing: ViewModifier {
     let items: [LearningItem]
     let source: PhraseAudioSource
     let stopPlayback: () -> Void
+    var mode: PhraseAudioMode = .selection
     @State private var editing = false
 
     func body(content: Content) -> some View {
@@ -17,7 +18,7 @@ struct PhraseAudioEditing: ViewModifier {
                 }
             }
             .sheet(isPresented: $editing) {
-                PhraseAudioBoundaryEditor(entry: entry, items: items, source: source)
+                PhraseAudioBoundaryEditor(entry: entry, items: items, source: source, mode: mode)
             }
     }
 }
@@ -28,6 +29,7 @@ private struct PhraseAudioBoundaryEditor: View {
     let entry: DictionaryEntry
     let items: [LearningItem]
     let source: PhraseAudioSource
+    let mode: PhraseAudioMode
     @State private var start: Double
     @State private var end: Double
     @State private var editingEnd = false
@@ -37,7 +39,8 @@ private struct PhraseAudioBoundaryEditor: View {
     @State private var error: String?
     @State private var playback = PlaybackController()
 
-    init(entry: DictionaryEntry, items: [LearningItem], source: PhraseAudioSource) {
+    init(entry: DictionaryEntry, items: [LearningItem], source: PhraseAudioSource, mode: PhraseAudioMode) {
+        self.mode = mode
         self.entry = entry
         self.items = items
         self.source = source
@@ -109,18 +112,18 @@ private struct PhraseAudioBoundaryEditor: View {
                     }
                     .disabled(resolved(start: start, end: end) == nil)
                     Button("Reset to automatic boundaries") {
-                        guard let automatic = PhraseAudioSourceResolver.resolve(entry: entry, items: items, ignoreManualRange: true) else { return }
+                        guard let automatic = PhraseAudioSourceResolver.resolve(entry: entry, items: items, mode: mode, ignoreManualRange: true) else { return }
                         playback.close()
                         start = automatic.identity.range.lowerBound
                         end = automatic.identity.range.upperBound
                         resetToAutomatic = true
                     }
-                    .disabled(PhraseAudioSourceResolver.resolve(entry: entry, items: items, ignoreManualRange: true) == nil)
+                    .disabled(PhraseAudioSourceResolver.resolve(entry: entry, items: items, mode: mode, ignoreManualRange: true) == nil)
                     if resetToAutomatic { Text("Automatic boundaries will be restored when you save.").font(.caption) }
                     if let message = error ?? playback.errorMessage { Text(message).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Audio boundaries")
+            .navigationTitle(mode == .sentence ? "Phrase boundaries" : "Audio boundaries")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -136,15 +139,23 @@ private struct PhraseAudioBoundaryEditor: View {
 
     private func save() {
         guard resolved(start: start, end: end) != nil else { return }
-        let previous = (entry.manualAudioStart, entry.manualAudioEnd)
-        entry.manualAudioStart = resetToAutomatic ? nil : start
-        entry.manualAudioEnd = resetToAutomatic ? nil : end
+        let previous = (entry.manualAudioStart, entry.manualAudioEnd,
+                        entry.manualPhraseAudioStart, entry.manualPhraseAudioEnd)
+        if mode == .sentence {
+            entry.manualPhraseAudioStart = resetToAutomatic ? nil : start
+            entry.manualPhraseAudioEnd = resetToAutomatic ? nil : end
+        } else {
+            entry.manualAudioStart = resetToAutomatic ? nil : start
+            entry.manualAudioEnd = resetToAutomatic ? nil : end
+        }
         do {
             try modelContext.save()
             dismiss()
         } catch {
             entry.manualAudioStart = previous.0
             entry.manualAudioEnd = previous.1
+            entry.manualPhraseAudioStart = previous.2
+            entry.manualPhraseAudioEnd = previous.3
             self.error = "Could not save audio boundaries. Please try again."
         }
     }

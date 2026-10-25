@@ -1,5 +1,11 @@
 import Foundation
 
+enum PhraseAudioMode: String, CaseIterable, Identifiable {
+    case selection, sentence
+    var id: Self { self }
+    var title: String { self == .selection ? "Selected word" : "Whole phrase" }
+}
+
 struct PhraseAudioSource: Equatable, Sendable {
     struct Identity: Equatable, Sendable {
         let itemID: UUID
@@ -11,18 +17,30 @@ struct PhraseAudioSource: Equatable, Sendable {
     let identity: Identity
     let itemTitle: String
     var usesWordTimings = false
+    var mode: PhraseAudioMode? = nil
 
-    var playLabel: String { usesWordTimings ? "Play phrase" : "Play context" }
-    var pauseLabel: String { usesWordTimings ? "Pause phrase" : "Pause context" }
+    var playLabel: String { mode.map { "Play " + ($0 == .selection ? "selected word" : "whole phrase") } ?? (usesWordTimings ? "Play phrase" : "Play context") }
+    var pauseLabel: String { mode.map { "Pause " + ($0 == .selection ? "selected word" : "whole phrase") } ?? (usesWordTimings ? "Pause phrase" : "Pause context") }
 }
 
 enum PhraseAudioSourceResolver {
-    static func resolve(entry: DictionaryEntry, items: [LearningItem], ignoreManualRange: Bool = false,
+    static func resolve(entry: DictionaryEntry, items: [LearningItem], mode: PhraseAudioMode = .selection, ignoreManualRange: Bool = false,
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
+        if mode == .sentence {
+            let manual = !ignoreManualRange && (entry.manualPhraseAudioStart != nil || entry.manualPhraseAudioEnd != nil)
+            var source = resolve(localSourceItemID: entry.localSourceItemID, sourceItemID: entry.sourceItemID,
+                audioRange: range(start: manual ? entry.manualPhraseAudioStart : entry.phraseAudioStart,
+                                  end: manual ? entry.manualPhraseAudioEnd : entry.phraseAudioEnd),
+                sourceTrackID: entry.sourceTrackID, items: items, fileExists: fileExists)
+            source?.mode = .sentence
+            return source
+        }
         if !ignoreManualRange, entry.manualAudioStart != nil || entry.manualAudioEnd != nil {
-            return resolve(localSourceItemID: entry.localSourceItemID, sourceItemID: entry.sourceItemID,
+            var source = resolve(localSourceItemID: entry.localSourceItemID, sourceItemID: entry.sourceItemID,
                            audioRange: range(start: entry.manualAudioStart, end: entry.manualAudioEnd),
                            sourceTrackID: entry.sourceTrackID, items: items, fileExists: fileExists)
+            if entry.phraseAudioStart != nil { source?.mode = .selection }
+            return source
         }
         let storedRange = range(start: entry.audioStart, end: entry.audioEnd)
         let item = items.first { $0.id == (entry.localSourceItemID ?? entry.sourceItemID) }
@@ -56,6 +74,7 @@ enum PhraseAudioSourceResolver {
                 sourceTrackID: entry.sourceTrackID,
                 items: items, fileExists: fileExists)
         source?.usesWordTimings = usesWordTimings
+        if entry.phraseAudioStart != nil { source?.mode = .selection }
         return source
     }
 
@@ -122,6 +141,21 @@ enum PhraseAudioSourceResolver {
 
 /// Prefers aligned word boundaries, falling back to subtitle cues without estimating speech speed.
 enum PhraseAudioTiming {
+    static func sentenceRange(for selection: NSRange, in document: TranscriptDocument,
+                              duration: Double) -> ClosedRange<Double>? {
+        guard selection.length > 0, Range(selection, in: document.text) != nil else { return nil }
+        var sentenceSelection: NSRange?
+        document.text.enumerateSubstrings(in: document.text.startIndex..<document.text.endIndex,
+                                          options: [.bySentences, .substringNotRequired]) { _, range, _, _ in
+            let candidate = NSRange(range, in: document.text)
+            if NSIntersectionRange(candidate, selection).length > 0 {
+                sentenceSelection = sentenceSelection.map { NSUnionRange($0, candidate) } ?? candidate
+            }
+        }
+        guard let sentenceSelection else { return nil }
+        return range(for: sentenceSelection, in: document, duration: duration)
+    }
+
     static func range(for selection: NSRange, in document: TranscriptDocument,
                       duration: Double) -> ClosedRange<Double>? {
         guard selection.location != NSNotFound, selection.length > 0,

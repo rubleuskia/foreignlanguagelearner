@@ -27,6 +27,8 @@ struct ContentView: View {
                                 VStack(alignment: .leading) {
                                     Text(item.title)
                                     BookVocabularyBadge(item: item)
+                                    Text("Read: \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
+                                        .font(.caption).foregroundStyle(.secondary)
                                     Text(summary(for: item))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
@@ -68,7 +70,7 @@ struct ContentView: View {
                 do { try ReadingVocabularyUIFixture.seed(context: context) }
                 catch { errorMessage = error.localizedDescription }
                 #endif
-                translationCoordinator.recover(context: context)
+                await translationCoordinator.recover(context: context)
                 do {
                     try LibraryRecoveryService.recover(context: context)
                     await vocabulary.start(context: context)
