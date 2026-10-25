@@ -2,7 +2,6 @@ import Foundation
 import NaturalLanguage
 import Observation
 import SwiftData
-import Translation
 
 struct ContextSentence: Equatable, Sendable {
     let text: String
@@ -69,78 +68,19 @@ enum ContextSentenceExtractor {
     }
 }
 
-struct BreakdownToken: Equatable, Sendable {
-    let text: String
-    let isGrammarWord: Bool
-}
-
-enum WordBreakdownBuilder {
-    static func tokens(in sentence: String, selectedText: String, languageCode: String) -> [BreakdownToken] {
-        let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = sentence
-        tokenizer.setLanguage(NLLanguage(rawValue: languageCode))
-        let selected = Set(words(in: selectedText, languageCode: languageCode).map(normalized))
-        let stopwords = stopwordsByLanguage[languageCode] ?? []
-        var result: [BreakdownToken] = []
-        tokenizer.enumerateTokens(in: sentence.startIndex..<sentence.endIndex) { range, _ in
-            let word = String(sentence[range])
-            let key = normalized(word)
-            guard key.contains(where: { $0.isLetter }) else { return true }
-            result.append(.init(text: word,
-                                isGrammarWord: !selected.contains(key) && stopwords.contains(key)))
-            return true
-        }
-        return result
-    }
-
-    private static func words(in text: String, languageCode: String) -> [String] {
-        let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = text
-        tokenizer.setLanguage(NLLanguage(rawValue: languageCode))
-        var result: [String] = []
-        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
-            result.append(String(text[range]))
-            return true
-        }
-        return result
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-    }
-
-    private static let stopwordsByLanguage: [String: Set<String>] = [
-        "pl": ["a", "aby", "ale", "bo", "by", "czy", "do", "i", "jak", "na", "nie", "o", "od", "oraz", "po", "się", "to", "u", "w", "za", "z", "że"],
-        "en": ["a", "an", "and", "as", "at", "but", "by", "for", "if", "in", "of", "on", "or", "the", "to", "with"],
-        "de": ["aber", "als", "am", "an", "auf", "das", "der", "die", "ein", "eine", "für", "im", "in", "mit", "oder", "und", "von", "zu"],
-        "fr": ["à", "au", "aux", "de", "des", "du", "et", "la", "le", "les", "ou", "pour", "un", "une"],
-        "es": ["a", "al", "de", "del", "el", "en", "la", "las", "los", "o", "para", "por", "un", "una", "y"]
-    ]
-}
-
 enum ContextualTranslationStatus: Equatable {
     case idle
-    case needsDownload
     case translatingContext
-    case translatingWords
     case failed(String)
 }
 
 @MainActor @Observable
 final class ContextualTranslationCoordinator {
-    private enum Mode: Equatable { case context, words }
     private struct Request {
         let entryID: UUID
         let revision: Int
-        let selectedText: String
-        let sentence: ContextSentence
-        let source: String
-        let target: String
-        let mode: Mode
-        let tokens: [BreakdownToken]
     }
 
-    private(set) var configuration: TranslationSession.Configuration?
     private(set) var status: ContextualTranslationStatus = .idle
     private var request: Request?
     private var modelContext: ModelContext?
@@ -162,10 +102,7 @@ final class ContextualTranslationCoordinator {
         modelContext = context
         entry.contextAnalysisRevision += 1
         try? context.save()
-        let snapshot = Request(entryID: entry.id, revision: entry.contextAnalysisRevision,
-                               selectedText: entry.text, sentence: sentence,
-                               source: entry.sourceLanguageCode, target: entry.targetLanguageCode,
-                               mode: .context, tokens: [])
+        let snapshot = Request(entryID: entry.id, revision: entry.contextAnalysisRevision)
         let analysisRequest: ContextAnalysisRequest
         do {
             analysisRequest = try ContextAnalysisRequestBuilder.build(.init(
@@ -202,73 +139,6 @@ final class ContextualTranslationCoordinator {
         }
     }
 
-    func translateWords(for entry: DictionaryEntry, context: ModelContext) {
-        contextTask?.cancel()
-        contextTask = nil
-        guard let sentence = ContextSentenceExtractor.sentence(for: entry) else {
-            status = .failed("No surrounding sentence is available for this entry.")
-            return
-        }
-        let tokens = WordBreakdownBuilder.tokens(in: sentence.text, selectedText: entry.text,
-                                                 languageCode: entry.sourceLanguageCode)
-        guard !tokens.isEmpty else {
-            status = .failed("No words were found in the surrounding sentence.")
-            return
-        }
-        begin(entry: entry, sentence: sentence, mode: .words, tokens: tokens, context: context)
-    }
-
-    nonisolated func perform(session: TranslationSession) async {
-        guard let request = await currentRequest() else { return }
-        do {
-            let source = Locale.Language(identifier: request.source)
-            let target = Locale.Language(identifier: request.target)
-            switch await LanguageAvailability().status(from: source, to: target) {
-            case .unsupported:
-                await fail(request, message: "This language pair is not supported.")
-                return
-            case .supported:
-                await setStatus(.needsDownload, for: request)
-                try await session.prepareTranslation()
-            case .installed:
-                break
-            @unknown default:
-                await fail(request, message: "Translation availability could not be determined.")
-                return
-            }
-
-            switch request.mode {
-            case .context:
-                return
-            case .words:
-                await setStatus(.translatingWords, for: request)
-                var unique: [String] = []
-                for token in request.tokens where !unique.contains(token.text) { unique.append(token.text) }
-                let batch = unique.enumerated().map {
-                    TranslationSession.Request(sourceText: $0.element, clientIdentifier: String($0.offset))
-                }
-                let responses = try await session.translations(from: batch)
-                var translated: [String: String] = [:]
-                for response in responses {
-                    guard let identifier = response.clientIdentifier, let index = Int(identifier),
-                          unique.indices.contains(index) else { continue }
-                    translated[unique[index]] = response.targetText.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                let items = request.tokens.compactMap { token -> WordHelpItem? in
-                    guard let value = translated[token.text], !value.isEmpty else { return nil }
-                    return WordHelpItem(sourceText: token.text, translationText: value,
-                                        isGrammarWord: token.isGrammarWord)
-                }
-                guard !items.isEmpty else { throw ContextualTranslationError.emptyResult }
-                await completeWords(request, items: items)
-            }
-        } catch is CancellationError {
-            await cancel(request)
-        } catch {
-            await fail(request, message: error.localizedDescription)
-        }
-    }
-
     func clearError() {
         if case .failed = status { status = .idle }
     }
@@ -278,27 +148,6 @@ final class ContextualTranslationCoordinator {
         contextTask = nil
         request = nil
         status = .idle
-    }
-
-    private func begin(entry: DictionaryEntry, sentence: ContextSentence, mode: Mode,
-                       tokens: [BreakdownToken], context: ModelContext) {
-        modelContext = context
-        entry.contextAnalysisRevision += 1
-        try? context.save()
-        request = Request(entryID: entry.id, revision: entry.contextAnalysisRevision,
-                          selectedText: entry.text, sentence: sentence,
-                          source: entry.sourceLanguageCode, target: entry.targetLanguageCode,
-                          mode: mode, tokens: tokens)
-        configuration = QualityTranslationConfiguration.next(previous: configuration,
-                                                             source: entry.sourceLanguageCode,
-                                                             target: entry.targetLanguageCode)
-    }
-
-    private func currentRequest() -> Request? { request }
-
-    private func setStatus(_ value: ContextualTranslationStatus, for request: Request) {
-        guard self.request?.revision == request.revision else { return }
-        status = value
     }
 
     private func completeContext(_ request: Request, selected: String, explanation: String) {
@@ -330,23 +179,6 @@ final class ContextualTranslationCoordinator {
         }
     }
 
-    private func completeWords(_ request: Request, items: [WordHelpItem]) {
-        guard let entry = currentEntry(for: request) else { return }
-        var cachedDefinitions: [String: PolishDictionaryResult] = [:]
-        for item in entry.wordHelpItems {
-            if let result = item.polishDictionaryResult {
-                cachedDefinitions[item.sourceText.lowercased()] = result
-            }
-        }
-        entry.wordHelpItems = items.map { item in
-            var item = item
-            item.polishDictionaryResult = cachedDefinitions[item.sourceText.lowercased()]
-            return item
-        }
-        entry.wordHelpUpdatedAt = .now
-        finish(request)
-    }
-
     private func fail(_ request: Request, message: String) {
         guard self.request?.revision == request.revision else { return }
         contextTask = nil
@@ -361,14 +193,6 @@ final class ContextualTranslationCoordinator {
         self.request = nil
     }
 
-    private func finish(_ request: Request) {
-        guard self.request?.revision == request.revision else { return }
-        contextTask = nil
-        try? modelContext?.save()
-        status = .idle
-        self.request = nil
-    }
-
     private func currentEntry(for request: Request) -> DictionaryEntry? {
         guard let context = modelContext else { return nil }
         let id = request.entryID
@@ -378,26 +202,4 @@ final class ContextualTranslationCoordinator {
               entry.contextAnalysisRevision == request.revision else { return nil }
         return entry
     }
-}
-
-enum QualityTranslationConfiguration {
-    static func next(previous: TranslationSession.Configuration?, source: String,
-                     target: String) -> TranslationSession.Configuration {
-        let sourceLanguage = Locale.Language(identifier: source)
-        let targetLanguage = Locale.Language(identifier: target)
-        if var previous, previous.source == sourceLanguage, previous.target == targetLanguage {
-            previous.invalidate()
-            return previous
-        }
-        if #available(iOS 26.4, *) {
-            return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage,
-                                                    preferredStrategy: .highFidelity)
-        }
-        return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
-    }
-}
-
-private enum ContextualTranslationError: LocalizedError {
-    case emptyResult
-    var errorDescription: String? { "Translation returned no usable text." }
 }
