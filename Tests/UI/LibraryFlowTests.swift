@@ -8,7 +8,9 @@ final class LibraryFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
         app.launch()
         app.buttons["Dictionary"].tap()
-        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "1 (1 to repeat)")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "1")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label, "1")
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.2"].label, "0 (0)")
         XCTAssertFalse(app.staticTexts["Translation available"].exists)
         app.switches["dictionary.filter.ready"].coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         XCTAssertEqual(app.switches["dictionary.filter.ready"].value as? String, "1")
@@ -87,7 +89,7 @@ final class LibraryFlowTests: XCTestCase {
     }
 
     @MainActor
-    func testLearningRoundHidesAnswerThenShowsGlobalLearntList() {
+    func testLearningRoundHidesAnswerThenShowsOnlyRoundResults() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
@@ -118,11 +120,11 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["learn.right"].tap()
 
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Round results and learnt phrases"].exists)
+        XCTAssertTrue(app.staticTexts["Round results"].exists)
         let learntOriginals = app.staticTexts.matching(identifier: "learn.completion.original")
-        XCTAssertEqual(learntOriginals.count, 2,
-                       "Round entries and global learnt entries belong in the completion list")
-        XCTAssertTrue(learntOriginals.allElementsBoundByIndex.contains { $0.label == "do widzenia" })
+        XCTAssertEqual(learntOriginals.count, 1,
+                       "Only entries from this round belong in the completion list")
+        XCTAssertFalse(learntOriginals.allElementsBoundByIndex.contains { $0.label == "do widzenia" })
         XCTAssertEqual(app.staticTexts["learn.completion.level-transition"].label, "Level 1 to 2")
     }
     @MainActor

@@ -236,4 +236,15 @@ Store optional manualAudioStart/manualAudioEnd as a paired absolute range in tra
 
 Dictionary readiness counts, the Ready to repeat filter, and Quick start require both learning eligibility (including a saved ready Russian translation and a level below 4) and an expired cooldown. The filter combines with the selected level; Quick start uses up to 10 ready phrases across all levels, lower levels first, and opens the existing preview. Like Start round, it replaces an unfinished checkpoint. Dictionary readiness refreshes every 30 seconds.
 
-Capture starting levels before preview and retain them in the round checkpoint so completion cards show the net starting → current level, including preview changes and retries. Undo restores the round and entry together. Old checkpoints omit the transition rather than guessing. Completion retains access to all learnt phrases alongside this round's cards.
+Capture starting levels before preview and retain them in the round checkpoint so completion cards show the net starting → current level, including preview changes and retries. Undo restores the round and entry together. Old checkpoints omit the transition rather than guessing. Completion shows only this round's cards, including its preview; other learnt phrases remain accessible in the dictionary.
+
+
+## Per-round retry limit, explicit key checks and duration-weighted reading (2026-10-25)
+
+Count wrong answers per entry within a round. At four errors, a later correct answer completes the entry without increasing its current level; wrong answers still follow the existing demotion rule. Counters are optional checkpoint fields for backwards compatibility, survive resume, and roll back with Undo. A new round starts fresh counters.
+
+Recover interrupted Apple translations only when both language models are installed. Missing downloads become needsDownload and require an explicit retry; recovery never requests preparation UI. Settings key validation sends a small, non-stored Responses request with no reader content and the selected model, checking authentication, model access and quota. It does not save a draft key or enable cloud translation.
+
+For new timed selections only, save the containing sentence's automatic audio bounds separately from the selected range. A selection crossing sentences includes all intersecting sentences. Each mode has independent optional manual bounds, editing, reset, and backup fields. Existing entries have no sentence range and retain their playback behavior; no backfill or migration derives new ranges for them. Exact word timings are preferred; otherwise use actual cue bounds, without guessing word timestamps.
+
+Reading fraction equals completed valid chapter audio duration divided by total valid chapter audio duration, using physical tracks or legacy virtual parts. A whole-book completion is 100%; no chapters/duration yields 0% otherwise. Playback position does not affect this metric.

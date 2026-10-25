@@ -44,6 +44,10 @@ import SwiftData
         if ProcessInfo.processInfo.arguments.contains("--audio-boundary-fixture") {
             let entry = DictionaryEntry(text: "Kot", item: item, segmentIndex: 0,
                                         audioStart: 2, audioEnd: 3, sourceTrackID: "one")
+            if ProcessInfo.processInfo.arguments.contains("--dual-audio-fixture") {
+                entry.phraseAudioStart = 1
+                entry.phraseAudioEnd = 5
+            }
             entry.translationText = "Кот"
             entry.translationStatus = .ready
             context.insert(entry)

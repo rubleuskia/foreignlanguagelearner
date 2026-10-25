@@ -24,6 +24,45 @@ final class LearningUXTests: XCTestCase {
         return entry
     }
 
+    @MainActor
+    func testFourFailuresBlockPromotionUntilNextRoundAndSurviveCheckpoint() throws {
+        let entry = trainingEntry(level: 1)
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        for _ in 0..<4 {
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: round.currentPresentationID,
+                right: false, save: {}))
+            XCTAssertEqual(round.currentID, entry.id)
+        }
+        round = try JSONDecoder().decode(LearningRoundState.self, from: JSONEncoder().encode(round))
+        XCTAssertEqual(round.wrongAttemptsByEntry?[entry.id], 4)
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: true, save: {}))
+        XCTAssertTrue(round.isComplete)
+        XCTAssertEqual(entry.learningLevel, 1)
+        var next = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &next,
+            expectedEntryID: entry.id, presentationID: next.currentPresentationID, right: true, save: {}))
+        XCTAssertEqual(entry.learningLevel, 2)
+    }
+
+    @MainActor
+    func testThreeFailuresStillAllowPromotionAndFailedSaveDoesNotCount() throws {
+        let entry = trainingEntry(level: 1)
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        for _ in 0..<3 {
+            _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: false, save: {})
+        }
+        XCTAssertThrowsError(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: false,
+            save: { throw CocoaError(.fileWriteUnknown) }))
+        XCTAssertEqual(round.wrongAttemptsByEntry?[entry.id], 3)
+        _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: true, save: {})
+        XCTAssertEqual(entry.learningLevel, 2)
+    }
+
     func testRoundLevelsSurviveCheckpointAndLegacyDecoding() throws {
         let first = UUID(), second = UUID()
         var round = LearningRoundState(selection: .five, selectedIDs: [first, second])
@@ -36,6 +75,7 @@ final class LearningUXTests: XCTestCase {
         let data = try JSONEncoder().encode(round)
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         legacy.removeValue(forKey: "initialLevels")
+        legacy.removeValue(forKey: "wrongAttemptsByEntry")
         let restored = try JSONDecoder().decode(LearningRoundState.self,
             from: JSONSerialization.data(withJSONObject: legacy))
         XCTAssertNil(restored.initialLevels)

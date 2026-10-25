@@ -25,6 +25,7 @@ struct LearningSessionView: View {
     @State private var detailEntry: DictionaryEntry?
     @State private var translationDraft = ""
     @State private var playback = PlaybackController()
+    @State private var audioMode: PhraseAudioMode = .selection
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
 
     private var eligibleEntries: [DictionaryEntry] { allEntries.filter { $0.isLearningEligible && (ignoreCooldown || LearningCooldown.isReady($0)) } }
@@ -388,13 +389,12 @@ struct LearningSessionView: View {
                 }
 
                 Divider().padding(.vertical, 4)
-                Text("Round results and learnt phrases").font(.title2.bold())
+                Text("Round results").font(.title2.bold())
                 let levels = round.initialLevels ?? [:]
                 let resultIDs = Set(round.selectedIDs).union(levels.keys)
                 let learnt = allEntries.filter { resultIDs.contains($0.id) }
-                    + LearningCompletion.learntEntries(from: allEntries).filter { !resultIDs.contains($0.id) }
                 if learnt.isEmpty {
-                    Text("No phrases at level 4 yet").foregroundStyle(.secondary)
+                    Text("No phrases in this round").foregroundStyle(.secondary)
                 } else {
                     ForEach(learnt) { entry in
                         VStack(alignment: .leading, spacing: 8) {
@@ -442,7 +442,15 @@ struct LearningSessionView: View {
     }
 
     @ViewBuilder private func phraseAudio(for entry: DictionaryEntry) -> some View {
-        if let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems) {
+        if entry.phraseAudioStart != nil {
+            Picker("Audio", selection: $audioMode) {
+                ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: audioMode) { _, _ in closeAudio() }
+        }
+
+        if let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: entry.phraseAudioStart == nil ? .selection : audioMode) {
             HStack {
                 Button {
                     toggleAudio(source)
@@ -451,7 +459,7 @@ struct LearningSessionView: View {
                           systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                 }
                 .accessibilityIdentifier("learn.play-audio")
-                .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }))
+                .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
                 PlaybackRateMenu(playback: playback)
             }
         } else {

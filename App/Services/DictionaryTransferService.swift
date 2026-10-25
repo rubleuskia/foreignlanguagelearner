@@ -54,6 +54,10 @@ struct DictionaryTransferDocument: Codable {
         var sourceTrackID: String?
         var audioStart: Double?
         var audioEnd: Double?
+        var phraseAudioStart: Double? = nil
+        var phraseAudioEnd: Double? = nil
+        var manualPhraseAudioStart: Double? = nil
+        var manualPhraseAudioEnd: Double? = nil
         var manualAudioStart: Double? = nil
         var manualAudioEnd: Double? = nil
         var translationStatus: TranslationStatus
@@ -181,6 +185,10 @@ enum DictionaryTransferService {
                     selectedSenseText: entry.selectedSenseText, userNote: entry.userNote,
                     localSourceItemID: entry.localSourceItemID, segmentIndex: entry.segmentIndex,
                     sourceTrackID: entry.sourceTrackID, audioStart: entry.audioStart, audioEnd: entry.audioEnd,
+                    phraseAudioStart: entry.phraseAudioStart,
+                    phraseAudioEnd: entry.phraseAudioEnd,
+                    manualPhraseAudioStart: entry.manualPhraseAudioStart,
+                    manualPhraseAudioEnd: entry.manualPhraseAudioEnd,
                     manualAudioStart: entry.manualAudioStart, manualAudioEnd: entry.manualAudioEnd,
                     translationStatus: entry.translationStatus, translationErrorCode: entry.translationErrorCode),
                 levelChangedAt: entry.levelChangedAt
@@ -400,11 +408,19 @@ enum DictionaryTransferService {
             entry.sourceTrackID = details.sourceTrackID
             entry.audioStart = details.audioStart
             entry.audioEnd = details.audioEnd
+            entry.phraseAudioStart = details.phraseAudioStart
+            entry.phraseAudioEnd = details.phraseAudioEnd
+            entry.manualPhraseAudioStart = details.manualPhraseAudioStart
+            entry.manualPhraseAudioEnd = details.manualPhraseAudioEnd
             entry.manualAudioStart = details.manualAudioStart
             entry.manualAudioEnd = details.manualAudioEnd
             entry.translationStatus = details.translationStatus
             entry.translationErrorCode = details.translationErrorCode
         } else {
+            entry.phraseAudioStart = nil
+            entry.phraseAudioEnd = nil
+            entry.manualPhraseAudioStart = nil
+            entry.manualPhraseAudioEnd = nil
             entry.manualAudioStart = nil
             entry.manualAudioEnd = nil
             entry.translationStatus = entry.hasTranslation ? .ready : .pending
@@ -455,6 +471,14 @@ enum DictionaryTransferService {
                   details.segmentIndex.map({ $0 >= 0 }) ?? true,
                   details.sourceTrackID.map({ !$0.isEmpty && $0.utf8.count <= 500 }) ?? true else {
                 throw DictionaryTransferError.invalidEntry("\(entry.id): invalid backup details")
+            }
+            for (start, end) in [(details.phraseAudioStart, details.phraseAudioEnd),
+                                 (details.manualPhraseAudioStart, details.manualPhraseAudioEnd)] {
+                switch (start, end) {
+                case (nil, nil): break
+                case let (start?, end?) where start.isFinite && end.isFinite && start >= 0 && end > start: break
+                default: throw DictionaryTransferError.invalidEntry("\(entry.id): invalid phrase audio range")
+                }
             }
             switch (details.manualAudioStart, details.manualAudioEnd) {
             case (nil, nil): break

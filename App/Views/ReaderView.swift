@@ -62,6 +62,10 @@ struct ReaderView: View {
                     audioRange: audio, segmentIndex: absoluteSegment,
                     saveOnOpen: action == .addToDictionary
                 )
+                if audio != nil {
+                    translationPreview?.phraseAudioRange = PhraseAudioTiming.sentenceRange(
+                        for: selectionRange, in: document, duration: item.duration)
+                }
             }
             if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {

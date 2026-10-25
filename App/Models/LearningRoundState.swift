@@ -29,6 +29,7 @@ enum LearningRoundSelection: String, CaseIterable, Identifiable, Codable, Sendab
 
 struct LearningRoundState: Codable, Equatable, Sendable {
     var initialLevels: [UUID: Int]? = nil
+    private(set) var wrongAttemptsByEntry: [UUID: Int]? = nil
     let selection: LearningRoundSelection
     let selectedIDs: [UUID]
     private(set) var pendingIDs: [UUID]
@@ -67,6 +68,9 @@ struct LearningRoundState: Codable, Equatable, Sendable {
             completedIDs.append(entryID)
         } else {
             wrongAttemptCount += 1
+            var attempts = wrongAttemptsByEntry ?? [:]
+            attempts[entryID, default: 0] += 1
+            wrongAttemptsByEntry = attempts
             pendingIDs.append(entryID)
         }
         currentPresentationID = nextPresentationID
@@ -115,7 +119,8 @@ enum LearningAnswerTransaction {
               entry.isLearningEligible else { return false }
         let previousLevel = entry.learningLevel
         let previousDate = entry.levelChangedAt
-        entry.learningLevel = LearningLevel.adjusted(previousLevel, correct: right)
+        let promotionBlocked = right && (round.wrongAttemptsByEntry?[entry.id] ?? 0) >= 4
+        entry.learningLevel = promotionBlocked ? previousLevel : LearningLevel.adjusted(previousLevel, correct: right)
         if entry.learningLevel != previousLevel { entry.levelChangedAt = .now }
         do {
             try save()

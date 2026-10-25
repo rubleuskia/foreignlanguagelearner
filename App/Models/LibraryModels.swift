@@ -148,6 +148,17 @@ struct TranscriptDocument: Sendable {
     var isBookCompleted: Bool = false
     var readingVocabularyMigrationVersion: Int = 0
 
+    var readingProgress: Double {
+        if isBookCompleted { return 1 }
+        let chapters: [(Double, Bool)] = tracks.isEmpty
+            ? parts.map { ($0.end - $0.start, $0.isCompleted) }
+            : tracks.map { ($0.duration, $0.isCompleted) }
+        let valid = chapters.filter { $0.0.isFinite && $0.0 > 0 }
+        let total = valid.reduce(0) { $0 + $1.0 }
+        guard total > 0 else { return 0 }
+        return valid.filter { $0.1 }.reduce(0) { $0 + $1.0 } / total
+    }
+
     var hasReadingCompletion: Bool { isBookCompleted || tracks.contains(where: \.isCompleted) || parts.contains(where: \.isCompleted) }
     @Attribute(.unique) var id: UUID
     var title: String
@@ -206,6 +217,10 @@ struct TranscriptDocument: Sendable {
     var localSourceItemID: UUID?
     var audioStart: Double?
     var audioEnd: Double?
+    var phraseAudioStart: Double? = nil
+    var phraseAudioEnd: Double? = nil
+    var manualPhraseAudioStart: Double? = nil
+    var manualPhraseAudioEnd: Double? = nil
     var manualAudioStart: Double? = nil
     var manualAudioEnd: Double? = nil
     var sourceTrackID: String? = nil

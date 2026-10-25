@@ -55,6 +55,8 @@ final class SelectionTranslationCoordinator {
                                         audioStart: preview.audioRange?.lowerBound,
                                         audioEnd: preview.audioRange?.upperBound,
                                         sourceTrackID: preview.sourceTrackID)
+            entry.phraseAudioStart = preview.phraseAudioRange?.lowerBound
+            entry.phraseAudioEnd = preview.phraseAudioRange?.upperBound
             entry.sourceLanguageCode = preview.sourceLanguageCode
             entry.targetLanguageCode = preview.targetLanguageCode
             entry.translationText = selectedTranslation
