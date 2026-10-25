@@ -81,3 +81,19 @@ struct PlaybackRateMenu: View {
         .accessibilityLabel("Playback speed, \(playback.selectedRate.title)")
     }
 }
+
+/// Menu commands retain visible labels; clipboard confirmation is announced
+/// because the system dismisses the menu immediately after the action.
+struct CopyMenuButton: View {
+    let value: String
+    let label: String
+    let identifier: String
+
+    var body: some View {
+        Button(label, systemImage: "doc.on.doc") {
+            UIPasteboard.general.string = value
+            UIAccessibility.post(notification: .announcement, argument: "Copied")
+        }
+        .accessibilityIdentifier(identifier)
+    }
+}

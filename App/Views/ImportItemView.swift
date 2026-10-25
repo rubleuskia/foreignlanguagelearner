@@ -61,11 +61,13 @@ struct ImportItemView: View {
                 if importing { ProgressView("Importing…") }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             }
-            .navigationTitle("Upload item")
+            .nativeForm()
+            .navigationTitle("Add material")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(importing) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Import") { Task { await importItem() } }
+                        .nativePrimaryAction()
                         .disabled(media == nil || transcript == nil || importing || !vocabulary.ready || wordPreviewKey != previewKey || wordPreview == nil)
                 }
             }

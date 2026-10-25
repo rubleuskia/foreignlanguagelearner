@@ -44,6 +44,7 @@ struct ContextualTranslationSettingsView: View {
                     }
                     cooldownMessage = "Cooldown settings saved."
                 }
+                .nativeSecondaryAction()
                 .disabled(cooldownValues == nil)
                 .accessibilityIdentifier("settings.cooldown.save")
                 if cooldownValues == nil {
@@ -99,37 +100,40 @@ struct ContextualTranslationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Diagnostics") { ExportLogsButton() }
-            Section("Translation prompt") {
-                TextEditor(text: $prompt)
-                    .font(.footnote.monospaced())
-                    .frame(minHeight: 260)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                HStack {
-                    Text("\(prompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
-                        .font(.caption)
-                        .foregroundStyle(promptIsValid ? Color.secondary : Color.red)
-                    Spacer()
-                    if hasCustomPrompt {
-                        Text("Customized").font(.caption).foregroundStyle(.secondary)
+            Section { DisclosureGroup("Diagnostics") { ExportLogsButton() } }
+            Section {
+                DisclosureGroup("Translation prompt") {
+                    TextEditor(text: $prompt)
+                        .font(.footnote.monospaced())
+                        .frame(minHeight: 260)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    HStack {
+                        Text("\(prompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
+                            .font(.caption)
+                            .foregroundStyle(promptIsValid ? Color.secondary : Color.red)
+                        Spacer()
+                        if hasCustomPrompt {
+                            Text("Customized").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                }
-                Button("Save Prompt", systemImage: "checkmark") { savePrompt() }
-                    .disabled(!promptIsValid)
-                Button("Reset to Default", systemImage: "arrow.counterclockwise") {
-                    resetPrompt()
-                }
-                if let promptMessage {
-                    Text(promptMessage)
+                    Button("Save Prompt", systemImage: "checkmark") { savePrompt() }
+                        .disabled(!promptIsValid)
+                    Button("Reset to Default", systemImage: "arrow.counterclockwise") {
+                        resetPrompt()
+                    }
+                    if let promptMessage {
+                        Text(promptMessage)
+                            .font(.caption)
+                            .foregroundStyle(promptMessageIsError ? Color.red : Color.secondary)
+                    }
+                    Text("Changes apply to new requests. The structured-output and prompt-injection safety rules remain enforced by the app.")
                         .font(.caption)
-                        .foregroundStyle(promptMessageIsError ? Color.red : Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                Text("Changes apply to new requests. The structured-output and prompt-injection safety rules remain enforced by the app.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
+        .nativeForm()
         .navigationTitle("Settings")
         .task {
             cooldownDrafts = (1...3).map { String(LearningCooldown.hours(level: $0)) }

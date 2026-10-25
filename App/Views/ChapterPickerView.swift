@@ -25,16 +25,21 @@ struct ChapterPickerView: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Text(chapter.title).foregroundStyle(.primary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(chapter.title).font(.headline).foregroundStyle(.primary)
+                            Text(chapter.id == snapshot.selectedID ? "Current chapter" : chapter.completed ? "Read" : "Not read yet")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Spacer()
                         if chapter.completed { Image(systemName: "checkmark.circle").accessibilityLabel("Read") }
                         if chapter.id == snapshot.selectedID { Image(systemName: "speaker.wave.2.fill").accessibilityLabel("Current chapter") }
                     }
-                    .frame(minHeight: 32)
+                    .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("reader.chapter.\(chapter.id)")
             }
             .accessibilityIdentifier("reader.chapters-list")
+            .nativeForm()
             .navigationTitle("Chapters")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }

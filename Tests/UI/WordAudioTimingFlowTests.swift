@@ -6,7 +6,7 @@ final class WordAudioTimingFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10))
         story.tap()
         let update = app.buttons["reader.update-phrase-audio"]

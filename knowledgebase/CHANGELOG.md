@@ -1,9 +1,20 @@
 # Project changelog
 
+<<<<<<< HEAD
 ## 2026-10-25 — Onboarding implementation plan (documentation only)
 
 - Add `docs/ONBOARDING_IMPLEMENTATION_PLAN.md` with the proposed import wizard, partial-book states, safe resource updates, contextual onboarding, implementation sequence and acceptance checks.
 - This is a future implementation plan, not a shipped feature. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md remain unchanged. Implementation PRs must record the decisions and supported workflows they actually introduce.
+=======
+## 2026-10-25 — Native Glass interface and editorial reading
+
+- Introduce permanent Library, Dictionary and Practice tabs, a featured in-progress book, explicit empty-library import actions and a dedicated practice home with quick start and saved-round access.
+- Unify primary and secondary actions, grouped form surfaces and chapter states. Use system Liquid Glass controls and floating playback panels on iOS 26, retaining native iOS 18 fallbacks.
+- Give both readers serif typography, Dynamic Type-scaled line/paragraph spacing and a comfortable iPad text measure. Preserve transcript text, UTF-16 selection ranges, paint-only word/cue highlighting and follow-audio behavior.
+- Move learning copy/edit commands into a phrase menu; source copying is available only while the original is visible. At accessibility text sizes, preview actions scroll with content instead of covering the phrase.
+- Move reading completion into the reading-actions menu, reading vocabulary into a disclosure, and advanced prompt/diagnostic tools into disclosures. Keep explicit confirmations, translation settings, audio-boundary precision and learning rules.
+- DECISIONS.md records the visual system and navigation; PROJECT.md updates the supported navigation and reading workflow. Project purpose and major data/service boundaries are unchanged.
+>>>>>>> origin/main
 
 ## 2026-10-25 — Chapter completion and audio boundary controls
 
