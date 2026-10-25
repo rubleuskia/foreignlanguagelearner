@@ -20,11 +20,7 @@ targets:
   ForeignLanguageLearner:
     type: application
     platform: iOS
-    sources:
-      - path: App
-        excludes: [Resources]
-      - path: App/Resources
-        buildPhase: resources
+    sources: [App]
     info:
       path: App/Info.plist
       properties:

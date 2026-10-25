@@ -8,6 +8,13 @@
 - The screen stays awake while an app player is playing; pause, completion, interruption and closing playback restore normal auto-lock when no other player is playing.
 - DECISIONS.md records these policies; PROJECT.md updates the supported workflow. Project purpose and major boundaries are unchanged.
 
+## 2026-10-25 — Remove unreachable translation and definition services
+
+- Remove the old Apple word-by-word branch from contextual translation and the unreachable Polish Wiktionary lookup/parser/coordinator. Contextual explanation continues through the existing OpenAI service.
+- Remove the SGJP resolver, its exclusive pack builder and the unused 36,861,590-byte compressed bundle resource (about 35 MiB). Reading-vocabulary indexing and contextual lemmas do not use this database; existing installed files are left untouched.
+- Preserve the reachable ordinary Apple Translation actions, pending-record recovery, untranslated JSON imports and source-language changes. Preserve SwiftData/JSON word-help and cached definition models, optional lemma fields, historical diagnostics and all backup versions.
+- Add legacy JSON/diagnostic compatibility and cloud-context refresh regression checks; extend persistent backup/restore coverage to optional lemma references. DECISIONS.md records the retired/retained boundaries; PROJECT.md and README reflect the current workflow. Project purpose is unchanged.
+
 ## 2026-10-25 — Training, audio modes and reading progress
 
 - New/Learnt show their totals without a parenthesized review count; Learning/Practising retain the count without “to repeat”.

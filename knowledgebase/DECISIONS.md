@@ -73,8 +73,11 @@ Dictionary detail prioritizes the source phrase with inline playback and icon-on
 
 Dictionary backups use readable JSON v3 (v2 details plus reading vocabulary) with stable entry identity, source context, translation origin, progress, contextual analysis, personal notes, cached word help and exact audio-source links. V1 and V2 remain readable. Restore backup explicitly replaces fields on matching identities and adds missing records without removing unrelated entries; merge and translations-only preserve existing progress and notes. Interrupted requests are not resumed as in-flight state. Export validates its output against the importer and includes source context by default in the UI. Media files and library records remain outside dictionary JSON: audio links work only with the original local item/track identity and available files; reimporting a book under a new UUID does not automatically relink it. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
 
-Ordinary automatic translation and word-by-word help use Apple Translation. Contextual translation
-instead uses OpenAI Responses API structured output so one request resolves the selected expression
+Ordinary automatic translation uses Apple Translation for explicit Translate Again/Force/Retry,
+legacy pending-entry recovery, dictionary imports without translations and source-language changes.
+Source-language pickers also use Apple language availability. These remain supported offline-capable
+workflows. The unreachable legacy word-by-word translator has been removed. Contextual translation
+uses OpenAI Responses API structured output so one request resolves the selected expression
 against its saved surrounding text and returns a direct translation plus a short explanation. It is
 explicitly enabled by the user and is not an offline feature.
 
@@ -123,9 +126,19 @@ status when available. API keys, headers, prompt/input text and model response b
 Export logs uses the system file exporter and is available from settings and translation details.
 No diagnostic upload is automatic.
 
-Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
+The retired Polish Wiktionary definition lookup has no UI or production caller and is removed,
+including its parser, coordinator and write-only error logging. The SGJP resolver and compressed
+pack existed solely to provide fallback lemmas for that lookup, so they and their exclusive pack
+builder are removed too. Reading vocabulary counts surface forms and has never depended on SGJP;
+contextual lemmas come from the current cloud analysis. SQLite remains required by VocabularyIndex.
+Existing installed morphology files are left untouched; no startup deletion or store migration is
+needed. Git history retains the retired implementation.
 
-Polish inflected forms are resolved locally before a fallback Wiktionary request. A reproducible build tool reduces the BSD-licensed SGJP/Morfeusz source feed to unique `surface form → dictionary title` pairs. For the current debugging phase, the complete database is zlib-compressed into the application bundle and expanded into Application Support on first use. Ambiguous forms remain explicit choices for the learner rather than being resolved arbitrarily. A downloadable language pack can replace the bundled resource later without changing the lookup interface.
+Persisted WordHelpItem and PolishDictionaryResult shapes, including optional lemma references,
+remain in the model for SwiftData and JSON v2/v3 compatibility. Historical Polish lookup diagnostics
+retain their Codable shape and a read-only adapter for backup export. No legacy result, attribution,
+translation origin, status or backup field is dropped. See docs/LEGACY_TRANSLATION_AUDIT.md for the
+call-path audit and retained functionality.
 
 ## Learning parts
 

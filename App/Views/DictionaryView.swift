@@ -476,9 +476,6 @@ struct DictionaryEntryDetailView: View {
 
     @ViewBuilder private var contextProgress: some View {
         switch contextual.status {
-        case .needsDownload:
-            Label("Language download required", systemImage: "arrow.down.circle")
-                .foregroundStyle(.secondary)
         case .translatingContext:
             HStack { ProgressView(); Text("Translating selection and sentence…") }
         default:

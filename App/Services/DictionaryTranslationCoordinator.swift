@@ -238,8 +238,19 @@ final class DictionaryTranslationCoordinator {
 enum TranslationConfiguration {
     static func next(previous: TranslationSession.Configuration?, source: String,
                      target: String) -> TranslationSession.Configuration {
-        QualityTranslationConfiguration.next(previous: previous, source: source, target: target)
+        let sourceLanguage = Locale.Language(identifier: source)
+        let targetLanguage = Locale.Language(identifier: target)
+        if var previous, previous.source == sourceLanguage, previous.target == targetLanguage {
+            previous.invalidate()
+            return previous
+        }
+        if #available(iOS 26.4, *) {
+            return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage,
+                                                    preferredStrategy: .highFidelity)
+        }
+        return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
     }
 }
+
 
 private enum TranslationWorkerError: Error { case emptyResult }

@@ -72,19 +72,9 @@ final class DictionaryFeatureTests: XCTestCase {
         XCTAssertEqual((sentence.text as NSString).substring(with: sentence.selection), "zamek")
     }
 
-    func testWordBreakdownMarksCommonGrammarWordsButKeepsSelectedShortWordVisible() {
-        let tokens = WordBreakdownBuilder.tokens(in: "Ja idę do domu i czytam.", selectedText: "do",
-                                                 languageCode: "pl")
-
-        XCTAssertEqual(tokens.map(\.text), ["Ja", "idę", "do", "domu", "i", "czytam"])
-        XCTAssertFalse(tokens.first(where: { $0.text == "do" })?.isGrammarWord ?? true,
-                       "The selected expression is never hidden as a grammar word")
-        XCTAssertTrue(tokens.first(where: { $0.text == "i" })?.isGrammarWord ?? false)
-    }
-
-    func testQualityConfigurationInvalidatesForRepeatedRequests() {
-        let first = QualityTranslationConfiguration.next(previous: nil, source: "pl", target: "ru")
-        let second = QualityTranslationConfiguration.next(previous: first, source: "pl", target: "ru")
+    func testTranslationConfigurationPrefersHighFidelityWhenAvailable() {
+        let first = TranslationConfiguration.next(previous: nil, source: "pl", target: "ru")
+        let second = TranslationConfiguration.next(previous: first, source: "pl", target: "ru")
 
         XCTAssertGreaterThan(second.version, first.version)
         if #available(iOS 26.4, *) {
@@ -296,7 +286,7 @@ extension DictionaryFeatureTests {
             polishDictionaryResult: .init(requestedWord: "zamek", headword: "zamek", partOfSpeech: "rzeczownik",
                 meanings: [.init(id: "1", definition: "budowla", examples: ["Stary zamek."], usageLabels: [])],
                 sourceURL: "https://pl.wiktionary.org/wiki/zamek", revisionID: 12,
-                fetchedAt: Date(timeIntervalSince1970: 104.125)))]
+                fetchedAt: Date(timeIntervalSince1970: 104.125), formOfLemma: "zamek"))]
         entry.selectedSenseText = "крепость"
         entry.userNote = "Здесь речь о здании."
         return (item, entry)
