@@ -4,7 +4,7 @@
 
 - New/Learnt show their totals without a parenthesized review count; Learning/Practising retain the count without “to repeat”.
 - Round results contain only the current round and its preview. Four wrong answers for the same entry in one round block promotion on its eventual correct answer; retries continue until correct. Checkpoints and Undo retain the per-entry counter. Existing wrong-answer demotion remains unchanged.
-- Startup translation recovery checks installed languages before creating a session, leaving missing downloads for an explicit retry instead of presenting download UI at launch. This addresses a possible source of the reported brief bottom popup; reproduction after a long pause still requires device confirmation.
+- Startup translation recovery checks installed languages before creating a session, leaving missing downloads for an explicit retry instead of presenting download UI at launch, and clears idle translation sessions. This addresses a possible source of the reported brief bottom popup; reproduction after a long pause still requires device confirmation.
 - Settings can validate the entered or saved API key with a small request to the selected model, showing OK or an error.
 - New timed dictionary selections retain separate selected-word and whole-sentence audio ranges. Both modes support manual boundary editing and backup/restore; existing entries are not backfilled. Without word timings, cue boundaries remain the fallback.
 - Library and book reader show reading percentage weighted by completed chapters’ audio duration, including legacy parts and whole-book completion.

@@ -221,6 +221,7 @@ final class DictionaryTranslationCoordinator {
     private func finish(_ job: Job) {
         guard currentJob == job else { return }
         currentJob = nil
+        configuration = nil
         Task { @MainActor in
             await Task.yield()
             if let context = self.modelContext { self.startNext(context: context) }
