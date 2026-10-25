@@ -54,13 +54,19 @@ struct BookReaderView: View {
                     followGeneration += 1
                     following = true
                 }
+                .nativeSecondaryAction()
                 .padding(8)
             }
         }
         .safeAreaInset(edge: .bottom) { playerBar }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ReadingCompletionButton(item: item, scope: .book) }
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -69,6 +75,7 @@ struct BookReaderView: View {
                     if updatingWordTimings { ProgressView() }
                     else { Label("Update phrase audio", systemImage: "waveform.badge.plus") }
                 }
+                .labelStyle(.iconOnly)
                 .disabled(updatingWordTimings)
                 .accessibilityIdentifier("reader.update-phrase-audio")
                 .fileImporter(isPresented: $choosingWordTimings, allowedContentTypes: [.zip]) { result in
@@ -178,11 +185,6 @@ struct BookReaderView: View {
                 Spacer()
                 PlaybackRateMenu(playback: playback.playback)
             }
-            if let id = playback.activeTrackID,
-               let index = item.tracks.firstIndex(where: { $0.id == id }) {
-                ReadingCompletionButton(item: item, scope: .track(item.tracks[index].id))
-                .font(.caption)
-            }
             Slider(value: Binding(
                 get: { scrubbing ? scrubPosition : playback.localPosition },
                 set: { scrubPosition = $0 }
@@ -192,24 +194,24 @@ struct BookReaderView: View {
             }
             .accessibilityLabel("Track playback position")
             HStack {
-                Text(time(scrubbing ? scrubPosition : playback.localPosition)).monospacedDigit()
+                Text(time(scrubbing ? scrubPosition : playback.localPosition))
                 Spacer()
-                Button { playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true } label: {
-                    Image(systemName: "gobackward.10")
-                }
-                Button { playback.toggle(); if playback.wantsToPlay { followGeneration += 1; following = true } } label: {
-                    Image(systemName: playback.wantsToPlay ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
-                }
-                .accessibilityLabel(playback.wantsToPlay ? "Pause" : "Play")
-                Button { playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true } label: {
-                    Image(systemName: "goforward.10")
-                }
-                Spacer()
-                Text(time(activeTrack?.duration ?? 0)).monospacedDigit()
+                Text(time(activeTrack?.duration ?? 0))
             }
+            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            NativeTransportControls(isPlaying: playback.wantsToPlay, back: {
+                playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true
+            }, toggle: {
+                playback.toggle(); if playback.wantsToPlay { followGeneration += 1; following = true }
+            }, forward: {
+                playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true
+            })
         }
-        .padding()
-        .background(.bar)
+        .font(.subheadline)
+        .padding(16)
+        .nativeFloatingSurface()
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 
     private var documentRevision: String {

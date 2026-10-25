@@ -8,6 +8,8 @@ The project also contains a standalone local subtitle-aligner utility. It conver
 
 ## Current scope
 
+- Native Library / Dictionary / Practice navigation, a dedicated practice home and a featured in-progress book; shared native action hierarchy with Liquid Glass on iOS 26 and iOS 18 fallbacks. Both readers use scalable editorial serif typography and a comfortable iPad text measure, with floating playback controls and disclosed reading options.
+
 - iOS 18+; Swift 6; SwiftUI; iPhone and iPad.
 - Local media library backed by SwiftData and Application Support files.
 - Previewed raw ZIP and strict manifest-package audiobook import with 1–100 physical audio tracks, sequential/background audio playback, per-track seeking and timers, local progress, and crash recovery.

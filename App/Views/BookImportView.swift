@@ -110,6 +110,7 @@ struct BookImportView: View {
             }
             .disabled(processing)
             .environment(\.editMode, .constant(.active))
+            .nativeForm()
             .navigationTitle("Import audiobook")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -119,6 +120,7 @@ struct BookImportView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Import") { importBook() }
+                        .nativePrimaryAction()
                         .disabled(preview == nil || processing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasTranscript || wordPreviewKey != previewKey || wordPreview == nil || !vocabulary.ready)
                 }
             }

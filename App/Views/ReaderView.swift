@@ -74,13 +74,19 @@ struct ReaderView: View {
                     followGeneration += 1
                     following = true
                 }
+                    .nativeSecondaryAction()
                     .padding(8)
             }
         }
         .safeAreaInset(edge: .bottom) { playerBar }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ReadingCompletionButton(item: item, scope: .book) }
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Language", systemImage: "character.book.closed") {
@@ -139,27 +145,34 @@ struct ReaderView: View {
                     }
                     .accessibilityIdentifier("reader.choose-chapter")
                     Spacer()
-                    if let part = currentPart { ReadingCompletionButton(item: item, scope: .part(part.id)) }
+                    PlaybackRateMenu(playback: playback)
                 }
+            } else {
+                HStack { Text("Audio").font(.subheadline.weight(.medium)); Spacer(); PlaybackRateMenu(playback: playback) }
             }
             Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
                 scrubbing = editing
                 if !editing { playback.seek(to: scrubPosition); followGeneration += 1; following = true }
             }.accessibilityLabel("Playback position")
             HStack {
-                Text(time(playback.position - lowerBound)).monospacedDigit()
+                Text(time(playback.position - lowerBound))
                 Spacer()
-                Button { playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true } label: { Image(systemName: "gobackward.10") }
-                    .accessibilityLabel("Back 10 seconds")
-                Button { playback.toggle(); if playback.isPlaying { followGeneration += 1; following = true } } label: { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
-                    .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
-                Button { playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true } label: { Image(systemName: "goforward.10") }
-                    .accessibilityLabel("Forward 10 seconds")
-                Spacer()
-                PlaybackRateMenu(playback: playback)
-                Text(time(upperBound - lowerBound)).monospacedDigit()
+                Text(time(upperBound - lowerBound))
             }
-        }.padding().background(.bar)
+            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            NativeTransportControls(isPlaying: playback.isPlaying, back: {
+                playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true
+            }, toggle: {
+                playback.toggle(); if playback.isPlaying { followGeneration += 1; following = true }
+            }, forward: {
+                playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true
+            })
+        }
+        .font(.subheadline)
+        .padding(16)
+        .nativeFloatingSurface()
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
     private func time(_ value: Double) -> String {
         let seconds = Int(max(0, value))

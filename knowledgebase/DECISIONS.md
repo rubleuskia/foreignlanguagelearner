@@ -1,5 +1,13 @@
 # Architectural and product decisions
 
+## Native Glass navigation with editorial reading
+
+Library, Dictionary and Practice are peer destinations in a native TabView, each with its own navigation stack. Practice presents the existing learning session, preserving its resumable state machine. Recovery and automatic translation remain attached to the app root so tab selection does not cancel them. Readers hide the tab bar and retain chapter controls in a floating player; manual completion is available in a reading-actions menu with its existing confirmation.
+
+Primary actions use system Liquid Glass on iOS 26, with bordered prominent native controls on iOS 18. Secondary actions use a lower-emphasis capsule. Content uses semantic system backgrounds; glass is confined to controls and floating panels. SwiftUI supplies appearance and accessibility adaptations rather than custom blur or animation.
+
+Reading text uses the system serif design at a 21-point default, UIFontMetrics-scaled typography and paragraph spacing. iPad text is limited to a comfortable measure through text-container insets, while interface controls keep system sans serif. Typography attributes are reapplied after document replacement and Dynamic Type changes, without editing source text or its UTF-16 selection/audio ranges. Reading vocabulary and advanced settings are disclosed on demand. No persistence schema, service boundary or learning algorithm changes are part of the redesign.
+
 ## Local-first media and persistence
 
 Media is copied into Application Support and metadata/transcript segments are stored with SwiftData. Imports do not require a server or network access, and failed imports clean up their copied files.
