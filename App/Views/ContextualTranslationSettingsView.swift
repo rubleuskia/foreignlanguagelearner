@@ -16,6 +16,10 @@ struct ContextualTranslationSettingsView: View {
     @State private var promptMessage: String?
     @State private var promptMessageIsError = false
 
+    @State private var wordPrompt = OpenAIWordExplanationProvider.defaultPrompt
+    @State private var hasCustomWordPrompt = false
+    @State private var wordPromptMessage: String?
+
     @State private var cooldownDrafts = ["24", "72", "96"]
     @State private var cooldownMessage: String?
 
@@ -132,6 +136,7 @@ struct ContextualTranslationSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            wordPromptSection
         }
         .nativeForm()
         .navigationTitle("Settings")
@@ -139,6 +144,54 @@ struct ContextualTranslationSettingsView: View {
             cooldownDrafts = (1...3).map { String(LearningCooldown.hours(level: $0)) }
             refreshKeyStatus()
             refreshPrompt()
+            refreshWordPrompt()
+        }
+    }
+
+    private var wordPromptSection: some View {
+        Section {
+            DisclosureGroup("Word explanation prompt") {
+                Text("Used when you tap a word in Meaning in context.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $wordPrompt)
+                    .font(.footnote.monospaced())
+                    .frame(minHeight: 260)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("settings.word-prompt.editor")
+                    .onChange(of: wordPrompt) { _, _ in wordPromptMessage = nil }
+                HStack {
+                    Text("\(wordPrompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
+                        .font(.caption)
+                        .foregroundStyle(wordPromptIsValid ? Color.secondary : Color.red)
+                    Spacer()
+                    if hasCustomWordPrompt {
+                        Text("Customized").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Button("Save Prompt", systemImage: "checkmark") {
+                    do {
+                        try ContextAnalysisSettings.setWordExplanationPrompt(wordPrompt)
+                        refreshWordPrompt()
+                        wordPromptMessage = hasCustomWordPrompt ? "Custom prompt saved." : "Default prompt is active."
+                    } catch {
+                        wordPromptMessage = "Prompt must contain 1–\(ContextAnalysisSettings.maximumPromptUTF16) characters."
+                    }
+                }
+                .disabled(!wordPromptIsValid)
+                .accessibilityIdentifier("settings.word-prompt.save")
+                Button("Reset to Default", systemImage: "arrow.counterclockwise") {
+                    ContextAnalysisSettings.resetWordExplanationPrompt()
+                    refreshWordPrompt()
+                    wordPromptMessage = "Default prompt restored."
+                }
+                .accessibilityIdentifier("settings.word-prompt.reset")
+                if let wordPromptMessage {
+                    Text(wordPromptMessage).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Save to use this prompt for new word explanations. Reset to Default restores the original prompt.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -147,6 +200,17 @@ struct ContextualTranslationSettingsView: View {
             get: { OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini },
             set: { selectedModelRawValue = $0.rawValue }
         )
+    }
+
+    private var wordPromptIsValid: Bool {
+        let trimmed = wordPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.utf16.count <= ContextAnalysisSettings.maximumPromptUTF16
+    }
+
+    private func refreshWordPrompt() {
+        wordPrompt = ContextAnalysisSettings.wordExplanationPrompt()
+        hasCustomWordPrompt = ContextAnalysisSettings.wordExplanationPromptOverride() != nil
+        wordPromptMessage = nil
     }
 
     private var promptIsValid: Bool {
