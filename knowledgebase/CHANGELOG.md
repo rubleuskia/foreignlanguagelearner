@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-25 — Onboarding implementation plan (documentation only)
+
+- Add `docs/ONBOARDING_IMPLEMENTATION_PLAN.md` with the proposed import wizard, partial-book states, safe resource updates, contextual onboarding, implementation sequence and acceptance checks.
+- This is a future implementation plan, not a shipped feature. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md remain unchanged. Implementation PRs must record the decisions and supported workflows they actually introduce.
+
 ## 2026-10-25 — Chapter completion and audio boundary controls
 
 - Natural audiobook track completion marks the finished chapter read through the reading-vocabulary transaction, including the final chapter. Manual selection does not mark chapters read and opens the selected chapter at the beginning with the transcript scrolled to the top.
