@@ -1,35 +1,31 @@
 import SwiftUI
 import SwiftData
 
-struct ReadingCompletionButton: View {
+/// Keep confirmation state on the menu itself: transient menu rows cannot
+/// present an alert reliably after the system dismisses the menu.
+struct ReadingActionsMenu: View {
     @Environment(\.modelContext) private var context
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     let item: LearningItem
-    let scope: ReadingScope
+    let chapterScope: ReadingScope?
     @State private var proposal: ReadingCompletionProposal?
+    @State private var selectedScope: ReadingScope = .book
     @State private var working = false
     @State private var error: String?
 
-    private var completed: Bool { ReadingVocabularyStore.completed(item, scope: scope) }
-    private var isBook: Bool { scope == .book }
+    private var isBook: Bool { selectedScope == .book }
 
     var body: some View {
-        Button(completed ? (isBook ? "Book read" : "Read") : (isBook ? "Mark whole book read" : "Mark chapter read"),
-               systemImage: completed ? "checkmark.circle.fill" : "circle") {
-            working = true
-            Task {
-                defer { working = false }
-                do { proposal = try await vocabulary.prepare(item: item, scope: scope) }
-                catch { self.error = error.localizedDescription }
-            }
+        Menu("Reading actions", systemImage: "ellipsis") {
+            if let chapterScope { completionAction(chapterScope) }
+            completionAction(.book)
         }
-        .disabled(completed || working || !vocabulary.ready)
-        .accessibilityIdentifier(isBook ? "reader.complete-book" : "reader.complete-chapter")
+        .accessibilityIdentifier("reader.actions")
         .alert(isBook ? "Mark whole book read?" : "Mark chapter read?",
-               isPresented: Binding(get: { proposal != nil }, set: { if !$0 { proposal = nil } })) {
+               isPresented: Binding(get: { proposal != nil }, set: { if !$0 { proposal = nil } }),
+               presenting: proposal) { value in
             Button("Cancel", role: .cancel) { proposal = nil }
             Button("Mark read") {
-                guard let value = proposal else { return }
                 proposal = nil; working = true
                 Task {
                     defer { working = false }
@@ -38,16 +34,31 @@ struct ReadingCompletionButton: View {
                 }
             }
             .accessibilityIdentifier("reader.confirm-completion")
-        } message: {
-            if let proposal {
-                Text(proposal.hasText
-                     ? "\(proposal.added) new unique words will become studied. \(isBook ? "All chapters will be marked read; full text and available subtitles are included. " : "")This cannot be undone. The source language will be locked."
-                     : "This chapter has no subtitles. Its words will be counted when you mark the whole book read. This cannot be undone. The source language will be locked.")
-            }
+        } message: { proposal in
+            Text(proposal.hasText
+                 ? "\(proposal.added) new unique words will become studied. \(isBook ? "All chapters will be marked read; full text and available subtitles are included. " : "")This cannot be undone. The source language will be locked."
+                 : "This chapter has no subtitles. Its words will be counted when you mark the whole book read. This cannot be undone. The source language will be locked.")
         }
         .alert("Could not mark read", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: { Text(error ?? "") }
+    }
+
+    private func completionAction(_ scope: ReadingScope) -> some View {
+        let completed = ReadingVocabularyStore.completed(item, scope: scope)
+        let book = scope == .book
+        return Button(completed ? (book ? "Book read" : "Read") : (book ? "Mark whole book read" : "Mark chapter read"),
+                      systemImage: completed ? "checkmark.circle.fill" : "circle") {
+            selectedScope = scope
+            working = true
+            Task {
+                defer { working = false }
+                do { proposal = try await vocabulary.prepare(item: item, scope: scope) }
+                catch { self.error = error.localizedDescription }
+            }
+        }
+        .disabled(completed || working || !vocabulary.ready)
+        .accessibilityIdentifier(book ? "reader.complete-book" : "reader.complete-chapter")
     }
 }
 
@@ -112,16 +123,36 @@ struct VocabularyTranscriptView: View {
     @State private var indexedText: String?
     @State private var error: String?
     @State private var enabled = true
+    @State private var showingStatistics = false
 
     var body: some View {
         VStack(spacing: 4) {
             ReadingVocabularyStatus()
-            HStack(alignment: .top) {
-                VocabularyStatisticsView(words: indexedText == document.text ? textIndex?.uniqueForms : nil, language: language, error: error)
-                Spacer()
-                Toggle("New words", isOn: $enabled).fixedSize()
-                    .font(.caption).accessibilityIdentifier("reader.new-words")
-            }.padding(.horizontal)
+            VStack(alignment: .leading, spacing: 8) {
+                Button { showingStatistics.toggle() } label: {
+                    HStack {
+                        Label("Reading vocabulary", systemImage: "text.book.closed")
+                        Spacer()
+                        Image(systemName: showingStatistics ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Reading vocabulary")
+                .accessibilityValue(showingStatistics ? "Expanded" : "Collapsed")
+                .accessibilityIdentifier("reader.vocabulary-details")
+                if showingStatistics {
+                    VocabularyStatisticsView(words: indexedText == document.text ? textIndex?.uniqueForms : nil, language: language, error: error)
+                    Toggle("New words", isOn: $enabled)
+                        .accessibilityIdentifier("reader.new-words")
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 4)
             TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
                                wordStyleRevision: vocabulary.revision,

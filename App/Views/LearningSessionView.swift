@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct LearningSessionView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var quickStart = false
     @State private var didQuickStart = false
     @State private var initialLevels: [UUID: Int] = [:]
@@ -65,7 +66,7 @@ struct LearningSessionView: View {
             .safeAreaInset(edge: .bottom) {
                 if let pendingUndo {
                     Button("Undo", systemImage: "arrow.uturn.backward", action: undoAnswer)
-                        .buttonStyle(.borderedProminent)
+                        .nativePrimaryAction()
                         .accessibilityIdentifier("learn.undo")
                         .padding()
                         .frame(maxWidth: .infinity)
@@ -78,6 +79,7 @@ struct LearningSessionView: View {
                         }
                 }
             }
+            .background(NativeDesign.page)
             .navigationTitle(previewRound == nil ? "Learn" : "Preview")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -85,6 +87,31 @@ struct LearningSessionView: View {
                     Button("Close") {
                         if round?.canResume == true { confirmingClose = true }
                         else { closeAndDismiss() }
+                    }
+                }
+            }
+            .toolbar {
+                if let current {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("Phrase actions", systemImage: "ellipsis") {
+                            CopyMenuButton(value: current.translationText ?? "", label: "Copy translation",
+                                           identifier: "learn.copy-translation")
+                            Button("Edit translation", systemImage: "pencil") {
+                                closeAudio()
+                                translationDraft = current.translationText ?? ""
+                                editingEntry = current
+                            }
+                            .accessibilityIdentifier("learn.edit")
+                            if revealed || (previewRound != nil && current.learningLevel == 1) {
+                                CopyMenuButton(value: current.text, label: "Copy original",
+                                               identifier: "learn.copy-original")
+                                if let sourceContext = current.contextText {
+                                    CopyMenuButton(value: sourceContext, label: "Copy source context",
+                                                   identifier: "learn.copy-source-context")
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("learn.actions")
                     }
                 }
             }
@@ -140,13 +167,13 @@ struct LearningSessionView: View {
                         Text(option.title).tag(option)
                     }
                 }
-                .pickerStyle(.inline)
+                .pickerStyle(.menu)
             }
             Section("Phrase cooldown") {
                 Toggle(isOn: $ignoreCooldown) {
-                    Label("Ignore words cooldown", systemImage: ignoreCooldown ? "checkmark.square" : "square")
+                    Text("Ignore words cooldown")
                 }
-                    .toggleStyle(.button)
+                    .toggleStyle(.switch)
                     .accessibilityIdentifier("learn.ignore-cooldown")
                 Text("Cooldown intervals can be changed in app Settings.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -157,8 +184,10 @@ struct LearningSessionView: View {
                 if let level = roundPool.first?.learningLevel {
                     LabeledContent("Current level", value: "\(level)")
                 }
-                Text("Practise all phrases at the lowest available level before moving to the next. Preview each phrase first and choose whether to learn it, advance its level, mark it as known or skip it without changes. During learning, wrong answers return to the end until answered correctly. After Check, swipe left for Right or right for Wrong. Undo is available for 3 seconds.")
-                    .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("How practice works") {
+                    Text("Preview phrases first. Practice starts at the lowest available level; wrong answers return to the queue. After Check, swipe left for Right or right for Wrong. Undo is available for 3 seconds.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
             }
             Section {
                 Button(action: startRound) {
@@ -166,7 +195,7 @@ struct LearningSessionView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity, minHeight: 28)
                 }
-                .buttonStyle(.borderedProminent)
+                .nativePrimaryAction()
                 .controlSize(.large)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -211,17 +240,6 @@ struct LearningSessionView: View {
                     .font(.largeTitle)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("learn.translation")
-                HStack {
-                    CopyButton(value: entry.translationText ?? "", label: "Copy translation",
-                               identifier: "learn.copy-translation")
-                    Button("Edit translation", systemImage: "pencil") {
-                        closeAudio()
-                        translationDraft = entry.translationText ?? ""
-                        editingEntry = entry
-                    }
-                    .font(.caption)
-                    .accessibilityIdentifier("learn.edit")
-                }
 
                 if revealed || (preview != nil && entry.learningLevel == 1) {
                     Divider()
@@ -229,19 +247,13 @@ struct LearningSessionView: View {
                         .font(.title2)
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("learn.original")
-                    HStack {
-                        CopyButton(value: entry.text, label: "Copy original",
-                                   identifier: "learn.copy-original")
-                        phraseAudio(for: entry)
-                    }
+                    phraseAudio(for: entry)
                     if let contextText = entry.contextText {
                         Text(highlightedContext(contextText, entry: entry))
                             .font(.body)
                             .multilineTextAlignment(.center)
                             .textSelection(.enabled)
                             .accessibilityIdentifier("learn.source-context")
-                        CopyButton(value: contextText, label: "Copy source context",
-                                   identifier: "learn.copy-source-context")
                     }
                     contextTranslation(for: entry)
                     if let round {
@@ -249,51 +261,78 @@ struct LearningSessionView: View {
                             Button("Wrong", systemImage: "xmark.circle") {
                                 answer(entry, presentationID: round.currentPresentationID, right: false)
                             }
-                            .buttonStyle(.bordered).tint(.red)
+                            .nativeSecondaryAction().tint(.red)
                             .accessibilityIdentifier("learn.wrong")
                             Button("Right", systemImage: "checkmark.circle") {
                                 answer(entry, presentationID: round.currentPresentationID, right: true)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .nativePrimaryAction()
                             .accessibilityIdentifier("learn.right")
                         }
                     }
                 } else {
-                    Button("Check") { revealed = true }
-                        .buttonStyle(.borderedProminent)
+                    Button { revealed = true } label: {
+                        Text("Check").frame(maxWidth: .infinity)
+                    }
+                        .nativePrimaryAction()
                         .accessibilityIdentifier("learn.check")
                 }
+                if let preview, dynamicTypeSize.isAccessibilitySize,
+                   revealed || entry.learningLevel == 1 {
+                    previewActions(entry, preview: preview)
+                }
             }
-            .frame(maxWidth: 700)
-            .padding()
+            .frame(maxWidth: 620)
+            .padding(24)
+            .background(NativeDesign.surface, in: RoundedRectangle(cornerRadius: NativeDesign.cornerRadius))
+            .padding(20)
             .frame(maxWidth: .infinity)
         }
+        .background(NativeDesign.page)
         .modifier(LearningSwipeModifier(enabled: preview == nil && revealed && round != nil) { right in
             guard let round else { return }
             answer(entry, presentationID: round.currentPresentationID, right: right)
         })
         .id(preview?.currentPresentationID ?? round?.currentPresentationID)
         .safeAreaInset(edge: .bottom) {
-            if let preview, revealed || entry.learningLevel == 1 {
-                VStack(spacing: 8) {
-                    Button("Start learning") { previewAction(entry, preview: preview, action: .startLearning) }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityIdentifier("learn.preview-learn")
-                    Button("Move to next level") { previewAction(entry, preview: preview, action: .moveToNextLevel) }
-                        .buttonStyle(.bordered)
-                        .accessibilityIdentifier("learn.preview-next-level")
-                    Button("Mark as known") { previewAction(entry, preview: preview, action: .markAsKnown) }
-                        .buttonStyle(.bordered)
-                        .accessibilityIdentifier("learn.preview-known")
-                    Button("Skip") { previewAction(entry, preview: preview, action: .skip) }
-                        .buttonStyle(.bordered)
-                        .accessibilityIdentifier("learn.preview-skip")
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(.bar)
+            if let preview, !dynamicTypeSize.isAccessibilitySize,
+               revealed || entry.learningLevel == 1 {
+                previewActions(entry, preview: preview)
             }
         }
+    }
+
+    private func previewActions(_ entry: DictionaryEntry, preview: LearningPreviewState) -> some View {
+        VStack(spacing: 10) {
+            Button { previewAction(entry, preview: preview, action: .startLearning) } label: {
+                Text("Start learning").frame(maxWidth: .infinity)
+            }
+                .nativePrimaryAction()
+                .accessibilityIdentifier("learn.preview-learn")
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+            layout {
+                Button { previewAction(entry, preview: preview, action: .moveToNextLevel) } label: {
+                    Text("Move to next level").frame(maxWidth: .infinity)
+                }
+                .nativeSecondaryAction()
+                .accessibilityIdentifier("learn.preview-next-level")
+                Button { previewAction(entry, preview: preview, action: .markAsKnown) } label: {
+                    Text("Mark as known").frame(maxWidth: .infinity)
+                }
+                .nativeSecondaryAction()
+                .accessibilityIdentifier("learn.preview-known")
+            }
+            Button("Skip") { previewAction(entry, preview: preview, action: .skip) }
+                .buttonStyle(.borderless)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("learn.preview-skip")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .nativeFloatingSurface()
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 
     private func contextTranslation(for entry: DictionaryEntry) -> some View {
@@ -323,7 +362,7 @@ struct LearningSessionView: View {
                         Button("Use this as translation") {
                             saveTranslation(entry, value: candidate)
                         }
-                        .buttonStyle(.bordered)
+                        .nativeSecondaryAction()
                         .accessibilityIdentifier("learn.use-context-translation")
                     }
                 }
@@ -351,7 +390,7 @@ struct LearningSessionView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+        .background(NativeDesign.surface, in: RoundedRectangle(cornerRadius: NativeDesign.cornerRadius))
     }
 
     private func completionView(_ round: LearningRoundState) -> some View {
@@ -377,7 +416,7 @@ struct LearningSessionView: View {
 
                 HStack {
                     Button("Repeat") { startRound() }
-                        .buttonStyle(.borderedProminent)
+                        .nativeSecondaryAction()
                         .disabled(eligibleEntries.isEmpty)
                     Button("Change round size") {
                         closeAudio()
@@ -385,7 +424,7 @@ struct LearningSessionView: View {
                         self.round = nil
                         revealed = false
                     }
-                    .buttonStyle(.bordered)
+                    .nativeSecondaryAction()
                 }
 
                 Divider().padding(.vertical, 4)
@@ -432,10 +471,10 @@ struct LearningSessionView: View {
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                        .background(NativeDesign.surface, in: RoundedRectangle(cornerRadius: NativeDesign.cornerRadius))
                     }
                 }
-                Button("Finish") { closeAndDismiss() }.buttonStyle(.bordered)
+                Button("Finish") { closeAndDismiss() }.nativePrimaryAction()
             }
             .padding()
         }

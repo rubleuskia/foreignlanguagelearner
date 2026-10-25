@@ -135,6 +135,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-skip"].tap()
@@ -153,6 +154,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
@@ -182,6 +184,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
@@ -198,6 +201,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertFalse(useTranslation.exists)
         app.buttons["Close"].tap()
         app.buttons["dictionary.learn"].tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
@@ -219,7 +223,9 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["In progress"].exists)
         XCTAssertTrue(app.staticTexts["Learnt phrases"].exists)
         let learnt = app.buttons["dictionary.entry.do widzenia"]
-        if !learnt.isHittable { app.swipeUp() }
+        if !learnt.isHittable || learnt.frame.maxY > app.tabBars.firstMatch.frame.minY {
+            app.swipeUp()
+        }
         learnt.swipeLeft()
         app.buttons["Delete"].tap()
         XCTAssertFalse(learnt.exists)
@@ -238,7 +244,8 @@ final class LibraryFlowTests: XCTestCase {
             app.launch()
             app.buttons["Dictionary"].tap()
             app.buttons["dictionary.learn"].tap()
-            if !app.buttons["learn.start"].isHittable { app.swipeUp() }
+            XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
+        if !app.buttons["learn.start"].isHittable { app.swipeUp() }
             app.buttons["learn.start"].tap()
             XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["learn.right"].exists)
@@ -265,7 +272,8 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["dictionary.filter.reset"].tap()
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
         app.buttons["dictionary.learn"].tap()
-        app.descendants(matching: .any)["learn.ignore-cooldown"].firstMatch.tap()
+        app.switches["learn.ignore-cooldown"].coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-next-level"].tap()
@@ -289,6 +297,7 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["Dictionary"].tap()
         app.buttons["dictionary.learn"].tap()
+        XCTAssertTrue(app.buttons["learn.start"].waitForExistence(timeout: 5))
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()

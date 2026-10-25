@@ -5,7 +5,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-end-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
         XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10))
         app.buttons["Play"].tap()
@@ -15,14 +15,18 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.buttons["Pause"].tap()
         picker.tap()
         app.buttons["reader.chapter.one"].tap()
+        app.buttons["Reading vocabulary"].tap()
+        app.buttons["reader.actions"].tap()
         let read = app.buttons["reader.complete-chapter"]
         expectation(for: NSPredicate(format: "enabled == false"), evaluatedWith: read)
         waitForExpectations(timeout: 10)
         XCTAssertEqual(read.label, "Read")
+        app.textViews["reader.transcript"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.9)).tap()
         XCTAssertTrue(app.staticTexts["vocabulary.statistics"].label.contains("New: 0"))
         XCTAssertTrue(app.staticTexts["0:00"].exists, "Manual chapter choice restarts at zero")
         picker.tap()
         app.buttons["reader.chapter.two"].tap()
+        app.buttons["reader.actions"].tap()
         XCTAssertTrue(app.buttons["reader.complete-chapter"].isEnabled, "Manual selection must not complete the previous chapter")
     }
 
@@ -30,7 +34,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
         let text = app.textViews["reader.transcript"]
         XCTAssertTrue(text.waitForExistence(timeout: 10))
@@ -47,10 +51,11 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
         let text = app.textViews["reader.transcript"]
         XCTAssertTrue(text.waitForExistence(timeout: 10))
+        app.buttons["Reading vocabulary"].tap()
         XCTAssertTrue(app.staticTexts["vocabulary.statistics"].waitForExistence(timeout: 10))
         app.buttons["Play"].tap()
         let pause = app.buttons["Pause"]
@@ -81,7 +86,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-scroll-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
         let play = app.buttons["Play"]
         XCTAssertTrue(play.waitForExistence(timeout: 10)); play.tap()
@@ -104,13 +109,15 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"]
         app.launch()
-        let story = app.staticTexts["Reading vocabulary story"]
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10))
         let badge = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "library.vocabulary.")).firstMatch
         let initialCount = NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "New", "4")
         expectation(for: initialCount, evaluatedWith: badge)
         waitForExpectations(timeout: 10)
         story.tap()
+        app.buttons["Reading vocabulary"].tap()
+        app.buttons["reader.actions"].tap()
         let chapter = app.buttons["reader.complete-chapter"]
         XCTAssertTrue(chapter.waitForExistence(timeout: 10))
         let stats = app.staticTexts["vocabulary.statistics"]
@@ -119,32 +126,39 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         chapter.tap()
         XCTAssertTrue(app.alerts["Mark chapter read?"].waitForExistence(timeout: 5))
         app.alerts.buttons["Cancel"].tap()
-        XCTAssertTrue(chapter.isEnabled)
         XCTAssertTrue(stats.label.contains("New: 2"))
+        app.buttons["reader.actions"].tap()
+        XCTAssertTrue(chapter.isEnabled)
         chapter.tap()
         app.alerts.buttons["reader.confirm-completion"].firstMatch.tap()
         let noNew = NSPredicate(format: "label CONTAINS %@", "New: 0")
         expectation(for: noNew, evaluatedWith: stats)
         waitForExpectations(timeout: 10)
+        app.buttons["reader.actions"].tap()
         XCTAssertFalse(chapter.isEnabled)
+        app.textViews["reader.transcript"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.9)).tap()
         app.segmentedControls.buttons["Full text"].tap()
         let twoNew = NSPredicate(format: "label CONTAINS %@", "New: 2")
         expectation(for: twoNew, evaluatedWith: stats)
         waitForExpectations(timeout: 10)
+        app.buttons["reader.actions"].tap()
         app.buttons["reader.complete-book"].tap()
         XCTAssertTrue(app.alerts["Mark whole book read?"].waitForExistence(timeout: 5))
         app.alerts.buttons["reader.confirm-completion"].firstMatch.tap()
         expectation(for: noNew, evaluatedWith: stats)
         waitForExpectations(timeout: 10)
+        app.buttons["reader.actions"].tap()
         XCTAssertFalse(app.buttons["reader.complete-book"].isEnabled)
+        app.textViews["reader.transcript"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.9)).tap()
         let toggle = app.switches["reader.new-words"]
         XCTAssertTrue(toggle.exists)
         toggle.tap()
         XCTAssertTrue(stats.label.contains("New: 0"))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(story.waitForExistence(timeout: 5))
-        let completedCount = NSPredicate(format: "label CONTAINS %@ AND NOT label CONTAINS %@", "4", "New")
-        expectation(for: completedCount, evaluatedWith: badge)
-        waitForExpectations(timeout: 10)
+        // The featured card disappears on completion; query the remaining row
+        // by its spoken count instead of retaining the removed card's element.
+        let completedCount = NSPredicate(format: "label CONTAINS %@ AND NOT label CONTAINS %@", "Unique word forms: 4", "New")
+        XCTAssertTrue(app.descendants(matching: .any).matching(completedCount).firstMatch.waitForExistence(timeout: 10))
     }
 }

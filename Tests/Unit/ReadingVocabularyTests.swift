@@ -277,6 +277,43 @@ final class ReadingVocabularyTests: XCTestCase {
         }
     }
 
+    @MainActor func testEditorialTypographySurvivesDocumentReplacementWithoutChangingRanges() throws {
+        let first = TranscriptDocument(segments: [.init(start: 0, end: 2, text: "Zażółć 🌍 gęślą jaźń.")])
+        var parent = TranscriptTextView(document: first, activeSegment: 0,
+            following: .constant(false), followGeneration: 0, onSelectionBegan: {},
+            handleSelection: { _, _, _, _, _ in })
+        let coordinator = parent.makeCoordinator()
+        let view = TranscriptTextView.makeTextView(frame: CGRect(x: 0, y: 0, width: 1024, height: 700))
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        let font = try XCTUnwrap(view.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        XCTAssertEqual(font.fontDescriptor.withDesign(.serif)?.postscriptName, font.fontDescriptor.postscriptName)
+        let paragraph = try XCTUnwrap(view.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        XCTAssertGreaterThan(paragraph.lineSpacing, 0)
+        XCTAssertGreaterThan(paragraph.paragraphSpacing, paragraph.lineSpacing)
+        XCTAssertEqual(view.text, first.text)
+        XCTAssertEqual((view.text as NSString).substring(with: first.ranges[0]), first.segments[0].text)
+        XCTAssertEqual(view.bounds.width - view.textContainerInset.left - view.textContainerInset.right, 680, accuracy: 1)
+        let second = TranscriptDocument(segments: [.init(start: 2, end: 4, text: "Nowy rozdział.")])
+        parent = TranscriptTextView(document: second, activeSegment: 0,
+            following: .constant(false), followGeneration: 0, onSelectionBegan: {},
+            handleSelection: { _, _, _, _, _ in })
+        coordinator.parent = parent
+        coordinator.apply(to: view)
+        XCTAssertEqual(view.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont, font)
+        XCTAssertNotNil(view.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil))
+        XCTAssertEqual(view.text, second.text)
+    }
+
+    @MainActor func testEditorialTypographyScalesForAccessibilitySizes() {
+        let regular = UITraitCollection(preferredContentSizeCategory: .large)
+        let accessible = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        XCTAssertGreaterThan(ReadingTypography.font(compatibleWith: accessible).pointSize,
+                             ReadingTypography.font(compatibleWith: regular).pointSize)
+        XCTAssertGreaterThan(ReadingTypography.paragraph(compatibleWith: accessible).lineSpacing,
+                             ReadingTypography.paragraph(compatibleWith: regular).lineSpacing)
+    }
+
     @MainActor func testWordForegroundSurvivesCueChangesAndSelectionDefersUpdates() throws {
         let document = TranscriptDocument(segments: [.init(start: 0, end: 2, text: "Kot pies"), .init(start: 2, end: 4, text: "śpi")])
         var parent = TranscriptTextView(document: document, activeSegment: 0, following: .constant(false), followGeneration: 0,

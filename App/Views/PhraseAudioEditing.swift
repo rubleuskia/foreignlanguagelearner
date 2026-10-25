@@ -163,12 +163,14 @@ private struct PhraseAudioBoundaryEditor: View {
                     if let message = error ?? playback.errorMessage { Text(message).foregroundStyle(.red) }
                 }
             }
+            .nativeForm()
             .navigationTitle(mode == .sentence ? "Phrase boundaries" : "Audio boundaries")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
+                        .nativePrimaryAction()
                         .disabled(resolved(start: start, end: end) == nil)
                         .accessibilityIdentifier("audio-editor.save")
                 }

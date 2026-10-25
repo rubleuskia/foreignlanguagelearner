@@ -4,6 +4,7 @@ import Translation
 import UniformTypeIdentifiers
 
 struct DictionaryView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
@@ -46,30 +47,46 @@ struct DictionaryView: View {
                 }
                 if entries.contains(where: \.isReadyForReview) {
                     Section {
-                        Button("Quick start", systemImage: "play.fill") {
-                            learningLaunch = .quickStart
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("\(entries.count(where: \.isReadyForReview)) ready to repeat")
+                                .font(.title3.weight(.semibold))
+                            Text("A short round from your saved expressions.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button { learningLaunch = .quickStart } label: {
+                                Label("Quick start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                            }
+                            .nativePrimaryAction()
+                            .accessibilityIdentifier("dictionary.quick-start")
                         }
-                        .accessibilityIdentifier("dictionary.quick-start")
+                        .padding(.vertical, 8)
                     }
                 }
                 Section("Learning progress") {
-                    ForEach(1...4, id: \.self) { level in
-                        Button { selectedLevel = level } label: {
-                            HStack {
-                                LearningLevelBadge(level: level)
-                                Spacer()
-                                if selectedLevel == level { Image(systemName: "checkmark") }
-                                Text(level == 1 || level == 4
-                                     ? "\(entries.count(where: { $0.learningLevel == level }))"
-                                     : "\(entries.count(where: { $0.learningLevel == level })) (\(entries.count(where: { $0.learningLevel == level && $0.isReadyForReview })))")
-                                    .font(.headline.monospacedDigit())
-                                    .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                             count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), spacing: 8) {
+                        ForEach(1...4, id: \.self) { level in
+                            Button { selectedLevel = level } label: {
+                                VStack(spacing: 6) {
+                                    Text(LearningLevel.title(level)).font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(level == 1 || level == 4
+                                         ? "\(entries.count(where: { $0.learningLevel == level }))"
+                                         : "\(entries.count(where: { $0.learningLevel == level })) (\(entries.count(where: { $0.learningLevel == level && $0.isReadyForReview })))")
+                                        .font(.headline.monospacedDigit())
+                                        .foregroundStyle(.primary)
+                                        .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 64)
+                                .padding(6)
+                                .background(selectedLevel == level ? Color.accentColor.opacity(0.12) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                            in: RoundedRectangle(cornerRadius: 14))
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedLevel == level ? [.isSelected] : [])
+                            .accessibilityIdentifier("dictionary.filter.level.\(level)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("dictionary.filter.level.\(level)")
                     }
+                    .padding(.vertical, 4)
                     Toggle("Ready to repeat", isOn: $readyOnly)
                         .accessibilityIdentifier("dictionary.filter.ready")
                     if selectedLevel != nil || readyOnly {
@@ -105,6 +122,8 @@ struct DictionaryView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(NativeDesign.page)
         .navigationTitle("Dictionary")
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -255,6 +274,7 @@ struct DictionaryEntryDetailView: View {
 
                     HStack(alignment: .top, spacing: 12) {
                         Text(entry.text)
+                            .font(.title2.weight(.semibold))
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -402,6 +422,7 @@ struct DictionaryEntryDetailView: View {
                     }
                 }
             }
+            .nativeForm()
             .navigationTitle("Dictionary entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(editing ? "Cancel" : "Close") { if editing { editing = false } else { dismiss() } } }
@@ -592,6 +613,7 @@ private struct DictionaryImportPreviewView: View {
                 }
                 if preview.conflicts > 0 { Text("Conflicting local translations and entry identities will be kept unchanged.").foregroundStyle(.secondary) }
             }
+            .nativeForm()
             .navigationTitle("Import Preview")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

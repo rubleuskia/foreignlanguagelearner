@@ -66,10 +66,10 @@ struct TranscriptTextView: UIViewRepresentable {
         view.isSelectable = true
         view.alwaysBounceVertical = true
         view.adjustsFontForContentSizeCategory = true
-        view.font = .preferredFont(forTextStyle: .body)
+        view.font = ReadingTypography.font(compatibleWith: view.traitCollection)
         view.textColor = .label
         view.backgroundColor = .systemBackground
-        view.textContainerInset = UIEdgeInsets(top: 20, left: 16, bottom: 40, right: 16)
+        view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 48, right: 24)
         view.accessibilityIdentifier = "reader.transcript"
         view.delegate = context.coordinator
         context.coordinator.apply(to: view)
@@ -107,6 +107,10 @@ struct TranscriptTextView: UIViewRepresentable {
         #endif
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
+            let margin = max(24, (bounds.width - 680) / 2)
+            if textContainerInset.left != margin {
+                textContainerInset = UIEdgeInsets(top: 24, left: margin, bottom: 48, right: margin)
+            }
             super.layoutSubviews()
             didLayout?()
         }
@@ -180,6 +184,7 @@ struct TranscriptTextView: UIViewRepresentable {
                 hadNonemptySelection = false
                 highlighted = nil
                 appliedWordRevision = nil
+                appliedContentSizeCategory = nil
                 appliedWordRanges = []
                 followKey = nil
                 documentRevision += 1
@@ -409,8 +414,10 @@ struct TranscriptTextView: UIViewRepresentable {
             appliedIndexIdentity = identity
             isApplyingProgrammaticUpdate = true
             if appliedContentSizeCategory != category {
-                view.textStorage.addAttribute(.font, value: UIFont.preferredFont(forTextStyle: .body),
-                                              range: NSRange(location: 0, length: length))
+                view.textStorage.addAttributes([
+                    .font: ReadingTypography.font(compatibleWith: view.traitCollection),
+                    .paragraphStyle: ReadingTypography.paragraph(compatibleWith: view.traitCollection)
+                ], range: NSRange(location: 0, length: length))
             }
             (view.layoutManager as? TranscriptLayoutManager)?.setWords(ranges, underline: parent.differentiateWithoutColor)
             isApplyingProgrammaticUpdate = false
