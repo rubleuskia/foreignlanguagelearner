@@ -36,6 +36,7 @@ struct LearningTrack: Codable, Equatable, Sendable, Identifiable {
     var title: String
     var mediaFilename: String
     var subtitleFilename: String?
+    var wordTimingsFilename: String?
     var duration: Double
     var alignmentStatus: TrackAlignmentStatus
     var lastPosition: Double
@@ -43,11 +44,12 @@ struct LearningTrack: Codable, Equatable, Sendable, Identifiable {
 
     init(id: String, title: String, mediaFilename: String, subtitleFilename: String? = nil,
          duration: Double, alignmentStatus: TrackAlignmentStatus = .untimed,
-         lastPosition: Double = 0, isCompleted: Bool = false) {
+         lastPosition: Double = 0, isCompleted: Bool = false, wordTimingsFilename: String? = nil) {
         self.id = id
         self.title = title
         self.mediaFilename = mediaFilename
         self.subtitleFilename = subtitleFilename
+        self.wordTimingsFilename = wordTimingsFilename
         self.duration = duration
         self.alignmentStatus = alignmentStatus
         self.lastPosition = lastPosition
@@ -69,7 +71,7 @@ struct BookMediaDescriptor: Equatable, Sendable {
     let isLegacy: Bool
 
     @MainActor init(item: LearningItem) {
-        if item.tracks.isEmpty {
+        if item.tracks.isEmpty && item.hasAudio {
             tracks = [.init(id: "legacy", title: item.title, mediaFilename: item.mediaFilename,
                             subtitleFilename: item.transcriptFilename, duration: item.duration,
                             alignmentStatus: item.segments.first?.start == nil ? .untimed : .aligned)]
@@ -114,9 +116,11 @@ struct TranscriptDocument: Sendable {
     let sourceIndices: [Int]
     let text: String
     let ranges: [NSRange]
+    let wordTimings: [TranscriptWordTiming]
 
-    init(segments: [TranscriptSegment], sourceIndices: [Int]? = nil) {
+    init(segments: [TranscriptSegment], sourceIndices: [Int]? = nil, wordTimings: [TranscriptWordTiming] = []) {
         self.segments = segments
+        self.wordTimings = wordTimings
         self.sourceIndices = sourceIndices ?? Array(segments.indices)
         self.text = segments.map(\.text).joined(separator: "\n\n")
         var offset = 0
@@ -141,6 +145,39 @@ struct TranscriptDocument: Sendable {
 }
 
 @Model final class LearningItem {
+    // Defaults keep existing stores readable. Empty filenames represent absent resources.
+    var resourceRevision: String = ""
+    var readingCharacterOffset: Int = 0
+    var sourceLanguageLockedByHistory: Bool = false
+    var isSourceLanguageLocked: Bool { sourceLanguageLockedByHistory || hasReadingCompletion }
+    var hasAudio: Bool { !mediaFilename.isEmpty || !tracks.isEmpty }
+    var hasText: Bool { !transcriptFilename.isEmpty || !segments.isEmpty || tracks.contains { $0.subtitleFilename != nil } }
+    var resourceStatus: String {
+        if !hasAudio { return "Text only" }
+        if !hasText { return "Audio only" }
+        if tracks.isEmpty { return segments.contains { $0.start != nil } ? "Synchronized" : "Without synchronization" }
+        switch BookSynchronizationState.resolve(tracks) {
+        case .synced: return "Synchronized"
+        case .reviewRequired: return "Synchronization needs review"
+        case .partlySynced(let review): return review ? "Partly synchronized · needs review" : "Partly synchronized"
+        case .untimed: return "Without synchronization"
+        }
+    }
+    var isBookCompleted: Bool = false
+    var readingVocabularyMigrationVersion: Int = 0
+
+    var readingProgress: Double {
+        if isBookCompleted { return 1 }
+        let chapters: [(Double, Bool)] = tracks.isEmpty
+            ? parts.map { ($0.end - $0.start, $0.isCompleted) }
+            : tracks.map { ($0.duration, $0.isCompleted) }
+        let valid = chapters.filter { $0.0.isFinite && $0.0 > 0 }
+        let total = valid.reduce(0) { $0 + $1.0 }
+        guard total > 0 else { return 0 }
+        return valid.filter { $0.1 }.reduce(0) { $0 + $1.0 } / total
+    }
+
+    var hasReadingCompletion: Bool { isBookCompleted || tracks.contains(where: \.isCompleted) || parts.contains(where: \.isCompleted) }
     @Attribute(.unique) var id: UUID
     var title: String
     var createdAt: Date
@@ -194,9 +231,16 @@ struct TranscriptDocument: Sendable {
     var translationUpdatedAt: Date?
     var translationRevision: Int = 0
     var learningLevel: Int = 1
+    var levelChangedAt: Date? = nil
     var localSourceItemID: UUID?
     var audioStart: Double?
     var audioEnd: Double?
+    var phraseAudioStart: Double? = nil
+    var phraseAudioEnd: Double? = nil
+    var manualPhraseAudioStart: Double? = nil
+    var manualPhraseAudioEnd: Double? = nil
+    var manualAudioStart: Double? = nil
+    var manualAudioEnd: Double? = nil
     var sourceTrackID: String? = nil
     var contextText: String?
     var contextSelectionLocation: Int?
@@ -218,6 +262,7 @@ struct TranscriptDocument: Sendable {
         sourceTitle = item.title
         self.segmentIndex = segmentIndex
         createdAt = .now
+        levelChangedAt = .distantPast
         sourceLanguageCode = item.sourceLanguageCode
         localSourceItemID = item.id
         self.audioStart = audioStart

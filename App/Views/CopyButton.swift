@@ -9,24 +9,22 @@ struct CopyButton: View {
     @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                copy()
-            } label: {
-                Label(label, systemImage: "doc.on.doc")
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .accessibilityLabel(label)
-            .accessibilityIdentifier(identifier)
-            if confirmationToken != nil {
-                Text("Copied")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Copied")
-                    .transition(.opacity)
-            }
+        Button {
+            copy()
+        } label: {
+            Label(label, systemImage: confirmationToken == nil ? "doc.on.doc" : "checkmark")
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
         }
-        .onDisappear { resetTask?.cancel() }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(label)
+        .accessibilityValue(confirmationToken == nil ? "" : "Copied")
+        .accessibilityIdentifier(identifier)
+        .help(label)
+        .onDisappear {
+            resetTask?.cancel()
+            confirmationToken = nil
+        }
     }
 
     private func copy() {
@@ -43,8 +41,26 @@ struct CopyButton: View {
     }
 }
 
+/// Keep copy actions inside the content row so Form cannot split them into separate rows.
+struct CopyableContentRow<Content: View>: View {
+    let value: String
+    let label: String
+    let identifier: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            content()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            CopyButton(value: value, label: label, identifier: identifier)
+        }
+    }
+}
+
 struct PlaybackRateMenu: View {
     let playback: PlaybackController
+    var compact = false
 
     var body: some View {
         Menu {
@@ -60,8 +76,14 @@ struct PlaybackRateMenu: View {
                 }
             }
         } label: {
-            Label(playback.selectedRate.title, systemImage: "speedometer")
-                .frame(minHeight: 44)
+            if compact {
+                Text(playback.selectedRate.title)
+                    .font(.subheadline.weight(.medium))
+                    .frame(minWidth: 44, minHeight: 44)
+            } else {
+                Label(playback.selectedRate.title, systemImage: "speedometer")
+                    .frame(minHeight: 44)
+            }
         }
         .accessibilityLabel("Playback speed, \(playback.selectedRate.title)")
     }

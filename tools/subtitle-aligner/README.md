@@ -312,3 +312,11 @@ The earlier output is never modified. Reuse fails closed when an unselected trac
 [WhisperX](https://github.com/m-bain/whisperX) is a possible alternative. Its [alignment implementation](https://github.com/m-bain/whisperX/blob/main/whisperx/alignment.py) includes a Polish model, but its interface expects text segments with approximate audio intervals. This utility's guided matching stage could provide a starting point for a future WhisperX adapter; no WhisperX backend is implemented here.
 
 Other current limitations: no PDF extraction/OCR, GUI, automatic chapter detection, subtitle editor, automatic correction of abridgments, confidence-based review UI, translation, source character mapping, or on-device iOS inference. Model artifacts are cached locally and outputs are estimates that need review.
+
+## Word timing packages and existing-book updates
+
+Batch publishing now retains word boundaries in optional per-track JSON sidecars instead of losing them when grouping words into SRT cues. The app uses these for selected-word playback and labels cue-only playback **Play context**.
+
+Use `word_timings.py --book /path/to/unpacked/book --alignment-directory /path/to/results/tracks --output /path/to/new.book.zip` to upgrade cached results without rerunning models. Add `--timings-only` for a smaller update ZIP; select it using **Update phrase audio** in an existing book's reader. Existing output files are never overwritten. Audio hashes, text/token identity and timing validity are checked before publishing. Zero-duration tokens stay unavailable rather than receiving invented times.
+
+See [word-level phrase audio](../../docs/WORD_AUDIO_TIMINGS.md) for the sidecar schema, limits, migration behavior and real Lalka validation.

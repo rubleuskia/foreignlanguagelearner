@@ -4,12 +4,18 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import batch_align
 
 
 class BatchAlignTests(unittest.TestCase):
+    def setUp(self):
+        probe = patch("batch_align.probe_audio", return_value=100.0)
+        probe.start()
+        self.addCleanup(probe.stop)
+
     def make_book(self, root, count=3, invalid_coverage=False):
         root.mkdir()
         words = [f"word{i}" for i in range(count)]
@@ -62,6 +68,11 @@ class BatchAlignTests(unittest.TestCase):
                 self.assertIn("manifest.json", archive.namelist())
                 self.assertIn("audio/027.mp3", archive.namelist())
                 self.assertIn("subtitles/027.srt", archive.namelist())
+                self.assertIn("word-timings/027.json", archive.namelist())
+                manifest = json.loads(archive.read("manifest.json"))
+                self.assertEqual(manifest["tracks"][-1]["wordTimings"], "word-timings/027.json")
+                timing = json.loads(archive.read("word-timings/027.json"))
+                self.assertEqual(timing["words"], [{"text": "word27", "start": 0, "end": 1}])
 
     def test_invalid_coverage_fails_before_model_load(self):
         with tempfile.TemporaryDirectory() as temporary:

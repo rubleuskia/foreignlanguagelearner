@@ -3,41 +3,141 @@ import SwiftData
 import Translation
 
 struct ContentView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \LearningItem.createdAt, order: .reverse) private var items: [LearningItem]
+    @State private var featuredReader: LearningItem?
     @State private var showingImport = false
     @State private var showingBookImport = false
     @State private var errorMessage: String?
+    @State private var makingExample = false
 
     var body: some View {
+        TabView {
+            library
+                .tabItem { Label("Library", systemImage: "books.vertical") }
+            NavigationStack { DictionaryView() }
+                .tabItem { Label("Dictionary", systemImage: "book.closed") }
+            NavigationStack { PracticeHomeView() }
+                .tabItem { Label("Practice", systemImage: "rectangle.on.rectangle") }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        .tint(.blue)
+        .task {
+            do {
+                let entries = try context.fetch(FetchDescriptor<DictionaryEntry>())
+                try LearningCooldown.backfill(entries, save: { try context.save() })
+            } catch { errorMessage = error.localizedDescription }
+            seedLearningUXFixtureIfNeeded()
+            #if DEBUG
+            do { try ProgressiveBookUIFixture.seed(context: context) }
+            catch { errorMessage = error.localizedDescription }
+            do { try ReadingVocabularyUIFixture.seed(context: context) }
+            catch { errorMessage = error.localizedDescription }
+            #endif
+            await translationCoordinator.recover(context: context)
+            do {
+                try LibraryRecoveryService.recover(context: context)
+                await vocabulary.start(context: context)
+            }
+            catch { errorMessage = error.localizedDescription }
+        }
+        .task(id: vocabularyIndexIdentity) {
+            await vocabulary.refreshLibrary(items)
+        }
+        .translationTask(translationCoordinator.configuration,
+                         action: translationCoordinator.perform(session:))
+        .alert("Library", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
+    }
+
+    private var library: some View {
         NavigationStack {
             Group {
                 if items.isEmpty {
-                    ContentUnavailableView("Your library is empty", systemImage: "headphones", description: Text("Upload audio and a transcript to start learning."))
+                    ContentUnavailableView {
+                        Label("Your library is empty", systemImage: "books.vertical")
+                    } description: {
+                        Text("Read a text, listen to audio, or bring an entire audiobook. Add missing files later.")
+                    } actions: {
+                        Button("Add book", systemImage: "plus") { showingBookImport = true }
+                            .nativePrimaryAction()
+                            .accessibilityIdentifier("library.upload")
+                        Button("Try an example", systemImage: "sparkles") { addExample() }
+                            .nativeSecondaryAction()
+                            .disabled(makingExample)
+                            .accessibilityIdentifier("library.example")
+                        if makingExample { ProgressView("Preparing example…") }
+                    }
                 } else {
                     List {
-                        ForEach(items) { item in
-                        NavigationLink {
-                            if item.tracks.isEmpty { ReaderView(item: item) }
-                            else { BookReaderView(item: item) }
-                        } label: {
-                            Label {
-                                VStack(alignment: .leading) {
-                                    Text(item.title)
-                                    Text(summary(for: item))
+                        if let recent = items.first(where: { !$0.isBookCompleted && ($0.lastPosition > 0 || $0.lastTrackID != nil || $0.readingCharacterOffset > 0) }) {
+                            Section("Continue reading") {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    NavigationLink { reader(for: recent) } label: {
+                                        HStack(spacing: 16) {
+                                            NativeBookCover(item: recent, large: true)
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text(recent.title).font(.title2.weight(.semibold))
+                                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                                if recent.hasText { BookVocabularyBadge(item: recent) }
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    if recent.hasAudio {
+                                    ProgressView(value: recent.readingProgress)
+                                        .accessibilityLabel("Reading progress")
+                                    Text("Read: \(recent.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
                                         .font(.caption).foregroundStyle(.secondary)
+                                    } else {
+                                        Text("Continue from your saved place").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Button { featuredReader = recent } label: {
+                                        Label("Continue reading", systemImage: "play.fill")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .nativePrimaryAction()
+                                    .accessibilityIdentifier("library.continue")
                                 }
-                            } icon: { Image(systemName: item.mediaKind == "video" ? "video" : "waveform") }
+                                .padding(.vertical, 8)
+                            }
                         }
-                        }.onDelete(perform: deleteItems)
+                        Section("All materials") {
+                            ForEach(items) { item in
+                                HStack {
+                                NavigationLink { reader(for: item) } label: {
+                                    HStack(spacing: 14) {
+                                        NativeBookCover(item: item)
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(item.title).font(.headline).foregroundStyle(.primary)
+                                            if item.hasText { BookVocabularyBadge(item: item) }
+                                            Text(item.hasAudio
+                                                 ? "\(item.hasText ? "Read" : "Listened"): \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))"
+                                                 : item.isBookCompleted ? "Read" : "Ready to read")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                            Text(summary(for: item)).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                }
+                                BookResourceMenu(item: item)
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .onDelete(perform: deleteItems)
+                        }
                     }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
                 }
             }
+            .background(NativeDesign.page)
+            .safeAreaInset(edge: .top) { ReadingVocabularyStatus() }
             .navigationTitle("Library")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { NavigationLink("Dictionary") { DictionaryView() } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    LibraryBackupMenu()
                     NavigationLink {
                         ContextualTranslationSettingsView()
                     } label: {
@@ -45,26 +145,23 @@ struct ContentView: View {
                     }
                     .accessibilityIdentifier("library.settings")
 
-                    Menu("More import options", systemImage: "ellipsis.circle") {
-                        Button("Single audio or video") { showingImport = true }
-                        Button("Audiobook ZIP") { showingBookImport = true }
-                            .accessibilityIdentifier("library.upload-book")
-                    } primaryAction: { showingImport = true }
-                    .accessibilityIdentifier("library.upload")
+                    Button("Add book", systemImage: "plus") { showingBookImport = true }
+                    .accessibilityIdentifier("library.add-menu")
                 }
             }
+            .navigationDestination(item: $featuredReader) { reader(for: $0) }
             .sheet(isPresented: $showingImport) { ImportItemView() }
             .sheet(isPresented: $showingBookImport) { BookImportView() }
-            .task {
-                seedLearningUXFixtureIfNeeded()
-                translationCoordinator.recover(context: context)
-                do { try LibraryRecoveryService.recover(context: context) }
-                catch { errorMessage = error.localizedDescription }
-            }
-            .translationTask(translationCoordinator.configuration,
-                             action: translationCoordinator.perform(session:))
-            .alert("Could not delete item", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
         }
+    }
+
+    @ViewBuilder private func reader(for item: LearningItem) -> some View {
+        if item.tracks.isEmpty { ReaderView(item: item).id(item.resourceRevision) }
+        else { BookReaderView(item: item).id(item.resourceRevision) }
+    }
+
+    private var vocabularyIndexIdentity: String {
+        "\(vocabulary.ready):\(vocabulary.revision):" + items.map(ReadingVocabularyStore.catalogKey).joined(separator: ";")
     }
 
     private func deleteItems(at offsets: IndexSet) {
@@ -90,19 +187,22 @@ struct ContentView: View {
     }
 
     private func summary(for item: LearningItem) -> String {
+        if !item.hasAudio { return item.resourceStatus }
         guard !item.tracks.isEmpty else {
             return item.parts.isEmpty
-                ? "\(Int(item.duration / 60)) min · \(item.segments.count) transcript segments"
+                ? "\(Int(item.duration / 60)) min · \(item.resourceStatus)"
                 : "\(item.parts.count) parts · \(item.segments.count) transcript segments"
         }
-        let state: String
-        switch BookSynchronizationState.resolve(item.tracks) {
-        case .synced: state = "Synced"
-        case .reviewRequired: state = "Review required"
-        case .partlySynced(let review): state = review ? "Partly synced · review" : "Partly synced"
-        case .untimed: state = "Untimed"
+        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(item.resourceStatus)"
+    }
+
+    private func addExample() {
+        makingExample = true
+        Task {
+            defer { makingExample = false }
+            do { featuredReader = try await DemoBookService.add(context: context) }
+            catch { errorMessage = error.localizedDescription }
         }
-        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(state)"
     }
 
     private func seedLearningUXFixtureIfNeeded() {
@@ -114,10 +214,14 @@ struct ContentView: View {
         let practice = DictionaryEntry(
             text: "dzień dobry", item: item, segmentIndex: 0,
             context: SelectionContext(text: "Powiedział dzień dobry.",
-                                      selection: NSRange(location: 10, length: 11)),
+                                      selection: NSRange(location: 11, length: 11)),
             audioStart: 1, audioEnd: 2
         )
         practice.translationText = "добрый день"
+        if ProcessInfo.processInfo.arguments.contains("--learning-context-fixture") {
+            practice.contextTranslationText = "dzień — dzień — день\n\ndobry — dobry — добрый"
+            practice.contextSelectedTranslationText = "здравствуйте"
+        }
         practice.translationOrigin = .manual
         practice.translationStatus = .ready
         let learnt = DictionaryEntry(text: "do widzenia", item: item, segmentIndex: nil)

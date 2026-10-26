@@ -12,6 +12,298 @@ private struct NeverCompletingContextAnalysisService: ContextAnalysisServing {
 }
 
 final class LearningUXTests: XCTestCase {
+    @MainActor
+    private func trainingEntry(level: Int) -> DictionaryEntry {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 0)
+        entry.translationText = "замок"
+        entry.translationStatus = .ready
+        entry.learningLevel = level
+        return entry
+    }
+
+    @MainActor
+    func testFourFailuresBlockPromotionUntilNextRoundAndSurviveCheckpoint() throws {
+        let entry = trainingEntry(level: 1)
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        for _ in 0..<4 {
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: round.currentPresentationID,
+                right: false, save: {}))
+            XCTAssertEqual(round.currentID, entry.id)
+        }
+        round = try JSONDecoder().decode(LearningRoundState.self, from: JSONEncoder().encode(round))
+        XCTAssertEqual(round.wrongAttemptsByEntry?[entry.id], 4)
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: true, save: {}))
+        XCTAssertTrue(round.isComplete)
+        XCTAssertEqual(entry.learningLevel, 1)
+        var next = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &next,
+            expectedEntryID: entry.id, presentationID: next.currentPresentationID, right: true, save: {}))
+        XCTAssertEqual(entry.learningLevel, 2)
+    }
+
+    @MainActor
+    func testThreeFailuresStillAllowPromotionAndFailedSaveDoesNotCount() throws {
+        let entry = trainingEntry(level: 1)
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        for _ in 0..<3 {
+            _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: false, save: {})
+        }
+        XCTAssertThrowsError(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: false,
+            save: { throw CocoaError(.fileWriteUnknown) }))
+        XCTAssertEqual(round.wrongAttemptsByEntry?[entry.id], 3)
+        _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: true, save: {})
+        XCTAssertEqual(entry.learningLevel, 2)
+    }
+
+    func testRoundLevelsSurviveCheckpointAndLegacyDecoding() throws {
+        let first = UUID(), second = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [first, second])
+        round.initialLevels = [first: 2, second: 3]
+        round.recordAnswer(entryID: first, presentationID: round.currentPresentationID, right: true)
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(defaults: defaults)?.initialLevels, round.initialLevels)
+
+        let data = try JSONEncoder().encode(round)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "initialLevels")
+        legacy.removeValue(forKey: "wrongAttemptsByEntry")
+        let restored = try JSONDecoder().decode(LearningRoundState.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(restored.initialLevels)
+        XCTAssertTrue(restored.canResume)
+        LearningRoundCheckpoint.save(nil, defaults: defaults)
+    }
+
+    @MainActor
+    func testReviewReadinessExcludesLearntAndUntranslatedWords() {
+        let entry = trainingEntry(level: 2)
+        entry.levelChangedAt = .distantPast
+        XCTAssertTrue(entry.isReadyForReview)
+        entry.learningLevel = 4
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.learningLevel = 2
+        entry.translationText = nil
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.translationText = "замок"
+        entry.levelChangedAt = .distantFuture
+        XCTAssertFalse(entry.isReadyForReview)
+        entry.levelChangedAt = nil
+        XCTAssertFalse(entry.isReadyForReview)
+    }
+
+    @MainActor
+    func testCooldownRemainingTimeUsesSavedDateAndCurrentSettings() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let entry = trainingEntry(level: 2)
+        entry.levelChangedAt = now
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now, defaults: defaults), 72 * 3600)
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 72 * 3600), "3d 0h 0m")
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 90061), "1d 1h 2m")
+        XCTAssertEqual(LearningCooldown.remainingDescription(seconds: 1), "0d 0h 1m")
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now.addingTimeInterval(72 * 3600), defaults: defaults), 0)
+        defaults.set(1.0, forKey: "learning.cooldown.level.2")
+        XCTAssertEqual(LearningCooldown.remainingTime(entry, now: now.addingTimeInterval(1800), defaults: defaults), 1800)
+        entry.levelChangedAt = nil
+        XCTAssertNil(LearningCooldown.remainingTime(entry, now: now, defaults: defaults))
+    }
+
+    @MainActor
+    func testCooldownBoundariesOverridesAndLegacyBackfill() throws {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for (level, hours) in [(1, 24.0), (2, 72.0), (3, 96.0)] {
+            let entry = trainingEntry(level: level)
+            entry.levelChangedAt = now
+            XCTAssertFalse(LearningCooldown.isReady(entry, now: now.addingTimeInterval(hours * 3600 - 1), defaults: defaults))
+            XCTAssertTrue(LearningCooldown.isReady(entry, now: now.addingTimeInterval(hours * 3600), defaults: defaults))
+            XCTAssertTrue(LearningRoundPool.entries(from: [entry], now: now, defaults: defaults).isEmpty)
+            XCTAssertEqual(LearningRoundPool.entries(from: [entry], ignoreCooldown: true, now: now, defaults: defaults).count, 1)
+        }
+        let legacy = trainingEntry(level: 2)
+        legacy.levelChangedAt = nil
+        try LearningCooldown.backfill([legacy], now: now, save: {})
+        try LearningCooldown.backfill([legacy], now: now.addingTimeInterval(100), save: {})
+        XCTAssertEqual(legacy.levelChangedAt, now)
+        defaults.set(0.0, forKey: "learning.cooldown.level.2")
+        XCTAssertTrue(LearningCooldown.isReady(legacy, now: now, defaults: defaults))
+    }
+
+    @MainActor
+    func testCooldownAnswerRollbackAndUndo() throws {
+        let entry = trainingEntry(level: 1)
+        let originalDate = entry.levelChangedAt
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        let before = round
+        let firstPresentation = round.currentPresentationID
+        XCTAssertThrowsError(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: firstPresentation, right: true,
+            save: { throw CocoaError(.fileWriteUnknown) }))
+        XCTAssertEqual(entry.learningLevel, 1)
+        XCTAssertEqual(entry.levelChangedAt, originalDate)
+        let presentation = round.currentPresentationID
+        XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: presentation, right: true, save: {}))
+        XCTAssertFalse(LearningCooldown.isReady(entry))
+        let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 1, savedLevel: 2,
+            previousRound: before, answeredRound: round, expiresAt: .now.addingTimeInterval(3),
+            previousLevelChangedAt: originalDate, savedLevelChangedAt: entry.levelChangedAt)
+        XCTAssertTrue(try undo.restore(entry: entry, round: &round, save: {}))
+        XCTAssertEqual(entry.levelChangedAt, originalDate)
+    }
+
+    @MainActor
+    func testPoolFillsRoundFromLowestLevelsFirst() {
+        let first = trainingEntry(level: 1), second = trainingEntry(level: 1)
+        let higher = trainingEntry(level: 2), highest = trainingEntry(level: 3)
+        let known = trainingEntry(level: 4), untranslated = trainingEntry(level: 1)
+        untranslated.translationText = nil
+        let entries = [highest, first, higher, second, known, untranslated, first]
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries, limit: 30).map(\.id)), [first.id, second.id, higher.id, highest.id])
+        XCTAssertEqual(LearningRoundPool.entries(from: entries, limit: 2).count, 2)
+        first.learningLevel = 2
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id, highest.id])
+        second.learningLevel = 2
+        XCTAssertEqual(Set(LearningRoundPool.entries(from: entries).map(\.id)), [first.id, second.id, higher.id, highest.id])
+        first.learningLevel = 3
+        second.learningLevel = 3
+        higher.learningLevel = 3
+        XCTAssertEqual(LearningRoundPool.entries(from: entries).count, 4)
+        XCTAssertTrue(LearningRoundPool.entries(from: [known, untranslated]).isEmpty)
+    }
+
+    @MainActor
+    func testUndoRestoresRightAndWrongIncludingRoundCompletion() throws {
+        for right in [true, false] {
+            let entry = trainingEntry(level: 3)
+            let before = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+            var round = before
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: entry.id, presentationID: before.currentPresentationID,
+                right: right, save: {}))
+            let now = Date()
+            let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 3,
+                savedLevel: entry.learningLevel, previousRound: before, answeredRound: round,
+                expiresAt: now.addingTimeInterval(3))
+            XCTAssertTrue(try undo.restore(entry: entry, round: &round, now: now, save: {}))
+            XCTAssertEqual(entry.learningLevel, 3)
+            XCTAssertEqual(round.pendingIDs, before.pendingIDs)
+            XCTAssertEqual(round.completedIDs, [])
+            XCTAssertEqual(round.wrongAttemptCount, 0)
+            XCTAssertFalse(round.isComplete)
+            XCTAssertTrue(round.hasValidPartition)
+            XCTAssertNotEqual(round.currentPresentationID, before.currentPresentationID)
+            XCTAssertFalse(try undo.restore(entry: entry, round: &round, now: now, save: {}))
+        }
+    }
+
+    @MainActor
+    func testUndoExpiryAndSaveFailurePreserveAnsweredState() throws {
+        enum Expected: Error { case failure }
+        let entry = trainingEntry(level: 1)
+        let before = LearningRoundState(selection: .five, selectedIDs: [entry.id])
+        var round = before
+        _ = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: before.currentPresentationID,
+            right: true, save: {})
+        let answered = round, now = Date()
+        let undo = LearningAnswerUndo(entryID: entry.id, previousLevel: 1, savedLevel: 2,
+            previousRound: before, answeredRound: round, expiresAt: now.addingTimeInterval(3))
+        XCTAssertThrowsError(try undo.restore(entry: entry, round: &round, now: now,
+                                             save: { throw Expected.failure }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(round, answered)
+        XCTAssertFalse(try undo.restore(entry: entry, round: &round, now: now.addingTimeInterval(3),
+                                       save: { XCTFail("Expired undo must not save") }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(round, answered)
+    }
+
+    func testUnfinishedRoundCheckpointSurvivesReopeningAndClearsOnCompletion() throws {
+        let suite = "LearningCheckpointTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let a = UUID(), b = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [a, b])
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+        round.recordAnswer(entryID: a, presentationID: round.currentPresentationID, right: false)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        let reopenedDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        var resumed = try XCTUnwrap(LearningRoundCheckpoint.load(defaults: reopenedDefaults))
+        XCTAssertEqual(resumed, round)
+        XCTAssertEqual(resumed.pendingIDs, [b, a])
+        resumed.recordAnswer(entryID: b, presentationID: resumed.currentPresentationID, right: true)
+        LearningRoundCheckpoint.save(resumed, defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(defaults: defaults)?.completedIDs, [b])
+        resumed.recordAnswer(entryID: a, presentationID: resumed.currentPresentationID, right: true)
+        LearningRoundCheckpoint.save(resumed, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+    }
+
+    func testCheckpointIgnoresCorruptDataAndClearsWhenRemainingEntryIsSkipped() throws {
+        let suite = "LearningCheckpointTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("invalid".utf8), forKey: LearningRoundCheckpoint.key)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+        let id = UUID()
+        var round = LearningRoundState(selection: .five, selectedIDs: [id])
+        round.recordAnswer(entryID: id, presentationID: round.currentPresentationID, right: false)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        round.skip(entryID: id, presentationID: round.currentPresentationID)
+        LearningRoundCheckpoint.save(round, defaults: defaults)
+        XCTAssertNil(LearningRoundCheckpoint.load(defaults: defaults))
+    }
+
+    @MainActor
+    func testRightAnswerPersistsLevelBeforeRoundCompletion() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = ModelConfiguration(url: directory.appendingPathComponent("learning.store"))
+        let id: UUID
+        var checkpoint: Data
+        do {
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+                                               configurations: configuration)
+            let context = ModelContext(container)
+            let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                    mediaFilename: "media.m4a", transcriptFilename: "story.srt",
+                                    duration: 10, segments: [])
+            let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: 0)
+            entry.translationText = "замок"
+            entry.translationStatus = .ready
+            entry.learningLevel = 2
+            id = entry.id
+            context.insert(item)
+            context.insert(entry)
+            try context.save()
+            var round = LearningRoundState(selection: .five, selectedIDs: [id, UUID()])
+            XCTAssertTrue(try LearningAnswerTransaction.apply(entry: entry, round: &round,
+                expectedEntryID: id, presentationID: round.currentPresentationID, right: true,
+                save: { try context.save() }))
+            XCTAssertFalse(round.isComplete)
+            checkpoint = try JSONEncoder().encode(round)
+        }
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+                                           configurations: configuration)
+        let entries = try ModelContext(reopened).fetch(FetchDescriptor<DictionaryEntry>())
+        XCTAssertEqual(entries.first(where: { $0.id == id })?.learningLevel, 3)
+        let resumed = try JSONDecoder().decode(LearningRoundState.self, from: checkpoint)
+        XCTAssertEqual(resumed.completedIDs, [id])
+        XCTAssertFalse(resumed.pendingIDs.contains(id))
+    }
+
     func testRoundSelectionCountsForZeroThreeAndTwentyFiveAvailable() {
         XCTAssertEqual(LearningRoundSelection.five.count(available: 0), 0)
         XCTAssertEqual(LearningRoundSelection.five.count(available: 3), 3)
@@ -129,7 +421,7 @@ final class LearningUXTests: XCTestCase {
 
     @MainActor
     func testPreviewSuccessFailureRetryDismissAndLateResponseDoNotMutatePersistence() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -229,6 +521,121 @@ final class LearningUXTests: XCTestCase {
         ))
     }
 
+    func testFollowReadingZoneAndForcedReturn() throws {
+        func offset(_ lineY: CGFloat, force: Bool = false) -> CGFloat? {
+            TranscriptFollowLayout.followOffsetY(
+                lineRect: CGRect(x: 0, y: lineY - 10, width: 20, height: 20),
+                currentOffset: 200, boundsHeight: 500, contentHeight: 2000,
+                adjustedTop: 20, adjustedBottom: 30, force: force
+            )
+        }
+        XCTAssertNil(offset(400), "A cue inside the reading zone must not move the text")
+        XCTAssertNil(offset(490), "The lower edge is still inside the reading zone")
+        XCTAssertEqual(try XCTUnwrap(offset(500)), 300, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(offset(350)), 150, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(offset(430, force: true)), 230, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(TranscriptFollowLayout.followOffsetY(
+            lineRect: CGRect(x: 0, y: 50, width: 20, height: 20),
+            currentOffset: 0, boundsHeight: 500, contentHeight: 100,
+            adjustedTop: 20, adjustedBottom: 30, force: true
+        )), -20, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testFollowRecomputesAfterLayoutAndExplicitResume() throws {
+        final class RecordingTextView: UITextView {
+            var destinations = [CGPoint]()
+            override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+                destinations.append(contentOffset)
+                super.setContentOffset(contentOffset, animated: false)
+            }
+        }
+        let document = TranscriptDocument(segments: (0..<30).map {
+            .init(start: Double($0), end: Double($0 + 1),
+                  text: "A passage with several words for testing transcript layout.")
+        })
+        let representable = TranscriptTextView(
+            document: document, activeSegment: 15, following: .constant(true),
+            followGeneration: 0, onSelectionBegan: {}, handleSelection: { _, _, _, _, _ in }
+        )
+        let coordinator = representable.makeCoordinator()
+        let storage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(layoutManager)
+        layoutManager.addTextContainer(container)
+        let view = RecordingTextView(frame: .zero, textContainer: container)
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        view.font = .systemFont(ofSize: 17)
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        coordinator.applyFollow(to: view)
+        let original = try XCTUnwrap(view.destinations.last).y
+        view.destinations.removeAll()
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Unchanged layout must not restart scrolling")
+
+        view.contentSize.height += 50
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Estimated content height changes must not interrupt the same cue's scrolling")
+
+        view.textContainerInset.top += 100
+        view.layoutIfNeeded()
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(try XCTUnwrap(view.destinations.last).y, original + 100, accuracy: 1)
+
+        view.setContentOffset(.zero, animated: false)
+        coordinator.resetFollow(in: view)
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(try XCTUnwrap(view.destinations.last).y, original + 100, accuracy: 1)
+
+        view.selectedRange = NSRange(location: 10, length: 4)
+        view.destinations.removeAll()
+        coordinator.applyFollow(to: view)
+        XCTAssertTrue(view.destinations.isEmpty, "Selection must prevent automatic movement")
+    }
+
+    @MainActor
+    func testOneFollowReachesDistantCueWithStaleContentSize() throws {
+        let document = TranscriptDocument(segments: (0..<2000).map {
+            .init(start: Double($0), end: Double($0 + 1),
+                  text: "Passage \($0). A long sentence that wraps across several visual lines on the phone.")
+        })
+        let active = 1700
+        let parent = TranscriptTextView(document: document, activeSegment: active,
+            following: .constant(true), followGeneration: 1, onSelectionBegan: {},
+            handleSelection: { _, _, _, _, _ in })
+        let coordinator = parent.makeCoordinator()
+        final class ImmediateTextView: UITextView {
+            override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+                super.setContentOffset(contentOffset, animated: false)
+            }
+        }
+        let storage = NSTextStorage()
+        let manager = TranscriptLayoutManager()
+        manager.allowsNonContiguousLayout = true
+        let container = NSTextContainer(size: .zero)
+        storage.addLayoutManager(manager)
+        manager.addTextContainer(container)
+        let view = ImmediateTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 500), textContainer: container)
+        view.font = .systemFont(ofSize: 17)
+        view.textContainerInset = UIEdgeInsets(top: 20, left: 16, bottom: 40, right: 16)
+        coordinator.apply(to: view)
+        view.layoutIfNeeded()
+        // TextKit may know the distant line before UITextView publishes the new scroll extent.
+        view.contentSize.height = 500
+        UIView.performWithoutAnimation { coordinator.applyFollow(to: view) }
+        let line = try XCTUnwrap(TranscriptTextView.Coordinator.firstVisualLineRect(
+            for: document.ranges[active], in: view))
+        let visible = view.bounds.inset(by: view.adjustedContentInset)
+        XCTAssertGreaterThanOrEqual(line.midY, visible.minY)
+        XCTAssertLessThanOrEqual(line.midY, visible.maxY,
+            "A single follow must reach the highlighted cue even when the old content height is stale")
+        let offset = view.contentOffset.y
+        coordinator.applyFollow(to: view)
+        XCTAssertEqual(view.contentOffset.y, offset, accuracy: 1)
+    }
+
     @MainActor
     func testTextKitUsesFirstVisualLineOfLongCueAndSelectionPausesOnce() throws {
         var following = true
@@ -292,7 +699,7 @@ final class LearningUXTests: XCTestCase {
                                                        fileExists: { _ in false }))
         XCTAssertEqual(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
                                                          fileExists: { _ in true })?.identity.range,
-                       2...3)
+                       1.5...3.5)
         entry.audioEnd = 11
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
                                                        fileExists: { _ in true }))
@@ -300,5 +707,90 @@ final class LearningUXTests: XCTestCase {
         entry.audioEnd = 3
         XCTAssertNil(PhraseAudioSourceResolver.resolve(entry: entry, items: [item],
                                                        fileExists: { _ in true }))
+    }
+}
+
+extension LearningUXTests {
+    @MainActor private func previewEntry(level: Int = 1) -> DictionaryEntry {
+        let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
+                                mediaFilename: "story.m4a", transcriptFilename: "story.srt", duration: 10, segments: [])
+        let entry = DictionaryEntry(text: "zamek", item: item, segmentIndex: nil)
+        entry.translationText = "замок"
+        entry.translationStatus = .ready
+        entry.learningLevel = level
+        return entry
+    }
+
+    @MainActor func testPreviewSkipExcludesWordWithoutMutatingOrSaving() throws {
+        let entry = previewEntry(level: 2), next = previewEntry()
+        var preview = LearningPreviewState(selection: .five, selectedIDs: [entry.id, next.id])
+        let presentation = preview.currentPresentationID
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: presentation, action: .skip, save: { XCTFail("Skip must not save") }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(preview.currentID, next.id)
+        XCTAssertTrue(preview.learningIDs.isEmpty)
+        XCTAssertFalse(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: presentation, action: .skip, save: { XCTFail("Stale skip must not save") }))
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: next, preview: &preview,
+            presentationID: preview.currentPresentationID, action: .skip,
+            save: { XCTFail("Skip must not save") }))
+        XCTAssertTrue(preview.isComplete)
+        XCTAssertTrue(preview.learningIDs.isEmpty)
+    }
+
+    @MainActor func testPreviewCollectsOnlyStartLearningAndTransitionsToNormalRound() throws {
+        let entries = [previewEntry(), previewEntry(level: 2), previewEntry()]
+        var preview = LearningPreviewState(selection: .five, selectedIDs: entries.map(\.id) + [entries[0].id])
+        XCTAssertEqual(preview.selectedIDs.count, 3)
+        for (entry, action) in zip(entries, [LearningPreviewAction.startLearning, .moveToNextLevel, .markAsKnown]) {
+            XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+                presentationID: preview.currentPresentationID, action: action, save: {}))
+        }
+        XCTAssertTrue(preview.isComplete)
+        XCTAssertEqual(preview.reviewedCount, 3)
+        XCTAssertEqual(preview.learningIDs, [entries[0].id])
+        XCTAssertEqual(entries.map(\.learningLevel), [1, 3, 4])
+        let round = LearningRoundState(selection: preview.selection, selectedIDs: preview.learningIDs)
+        XCTAssertEqual(round.currentID, entries[0].id)
+        XCTAssertEqual(round.wrongAttemptCount, 0)
+        XCTAssertEqual(round.rightAttemptCount, 0)
+        XCTAssertTrue(round.hasValidPartition)
+    }
+
+    @MainActor func testPreviewFailedSaveKeepsCardAndLevelAndRejectsStaleDoubleTap() throws {
+        struct FailedSave: Error {}
+        let entry = previewEntry(level: 3)
+        var preview = LearningPreviewState(selection: .five, selectedIDs: [entry.id])
+        let original = preview
+        for action in [LearningPreviewAction.moveToNextLevel, .markAsKnown] {
+            XCTAssertThrowsError(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+                presentationID: preview.currentPresentationID, action: action, save: { throw FailedSave() }))
+            XCTAssertEqual(entry.learningLevel, 3)
+            XCTAssertEqual(preview, original)
+        }
+        var saves = 0
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: original.currentPresentationID, action: .moveToNextLevel, save: { saves += 1 }))
+        XCTAssertEqual(entry.learningLevel, 4)
+        XCTAssertEqual(saves, 1)
+        XCTAssertFalse(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: original.currentPresentationID, action: .moveToNextLevel, save: { saves += 1 }))
+        XCTAssertEqual(saves, 1)
+        XCTAssertTrue(preview.learningIDs.isEmpty)
+    }
+
+    @MainActor func testPreviewStartLearningDoesNotMutateOrSaveAndSkipHandlesMissingEntry() throws {
+        let entry = previewEntry(level: 2)
+        let missing = UUID()
+        var preview = LearningPreviewState(selection: .five, selectedIDs: [missing, entry.id])
+        let stale = preview.currentPresentationID
+        XCTAssertTrue(preview.advance(entryID: missing, presentationID: stale, learn: false))
+        XCTAssertFalse(preview.advance(entryID: entry.id, presentationID: stale, learn: false))
+        XCTAssertTrue(try LearningPreviewTransaction.apply(entry: entry, preview: &preview,
+            presentationID: preview.currentPresentationID, action: .startLearning,
+            save: { XCTFail("Start learning does not change stored progress") }))
+        XCTAssertEqual(entry.learningLevel, 2)
+        XCTAssertEqual(preview.learningIDs, [entry.id])
     }
 }

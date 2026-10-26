@@ -4,6 +4,25 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class BookFeatureTests: XCTestCase {
+    @MainActor
+    func testReadingProgressWeightsCompletedChaptersByDuration() {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 100, segments: [], tracks: [
+                .init(id: "1", title: "Short", mediaFilename: "1.m4a", duration: 10, isCompleted: true),
+                .init(id: "2", title: "Long", mediaFilename: "2.m4a", duration: 90)
+            ])
+        XCTAssertEqual(item.readingProgress, 0.1, accuracy: 0.0001)
+        item.tracks[1].isCompleted = true
+        XCTAssertEqual(item.readingProgress, 1)
+        item.tracks = []
+        item.parts = [.init(start: 0, end: 25, isCompleted: true), .init(start: 25, end: 100)]
+        XCTAssertEqual(item.readingProgress, 0.25)
+        item.parts = []
+        XCTAssertEqual(item.readingProgress, 0)
+        item.isBookCompleted = true
+        XCTAssertEqual(item.readingProgress, 1)
+    }
+
     @MainActor func testLocalSeekStaysInsideActiveTrackInLongBook() {
         let item = LearningItem(id: UUID(), title: "Long book", mediaKind: "audio", mediaFilename: "",
                                 transcriptFilename: "transcript.txt", duration: 36000, segments: [],
@@ -25,6 +44,67 @@ final class BookFeatureTests: XCTestCase {
         controller.seekLocal(.nan)
         XCTAssertEqual(controller.playback.position, 42)
         XCTAssertFalse(controller.wantsToPlay)
+    }
+
+    @MainActor func testNaturalEndReportsFinishedTrackBeforeAdvancingButManualChoiceDoesNot() {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 40, segments: [], tracks: [
+                .init(id: "one", title: "One", mediaFilename: "one.wav", duration: 20, lastPosition: 8),
+                .init(id: "two", title: "Two", mediaFilename: "two.wav", duration: 20, lastPosition: 12)
+            ])
+        let controller = BookPlaybackController()
+        controller.open(item: item)
+        defer { controller.close() }
+        var finished: [String] = []
+        controller.didFinishTrack = { id in
+            XCTAssertEqual(controller.activeTrackID, id)
+            finished.append(id)
+        }
+        controller.selectTrack("two")
+        XCTAssertEqual(controller.localPosition, 0)
+        XCTAssertTrue(finished.isEmpty)
+        controller.selectTrack("one")
+        let staleEnd = controller.playback.didReachEnd
+        controller.wantsToPlay = true
+        controller.playback.didReachEnd?()
+        XCTAssertEqual(finished, ["one"])
+        XCTAssertEqual(controller.activeTrackID, "two")
+        XCTAssertEqual(controller.localPosition, 0)
+        staleEnd?()
+        XCTAssertEqual(finished, ["one"])
+        controller.playback.didReachEnd?()
+        XCTAssertEqual(finished, ["one", "two"])
+        XCTAssertFalse(controller.wantsToPlay)
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[0].lastPosition, 20)
+    }
+
+    @MainActor func testClosingBookDoesNotRefreshFromClearedPlayerOrOverwriteSavedProgress() async throws {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 40, segments: [], tracks: [
+                .init(id: "one", title: "One", mediaFilename: "one.wav", duration: 20),
+                .init(id: "two", title: "Two", mediaFilename: "two.wav", duration: 20, lastPosition: 12)
+            ], lastTrackID: "two")
+        let controller = BookPlaybackController()
+        controller.open(item: item)
+        controller.snapshot(into: item)
+        controller.close()
+        // Let the cancelled position observer resume, as happens after navigating Back.
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.localPosition, 12)
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[1].lastPosition, 12)
+        XCTAssertEqual(item.lastTrackID, "two")
+        XCTAssertEqual(item.lastPosition, 32)
+        controller.open(item: item)
+        XCTAssertEqual(controller.activeTrackID, "two")
+        XCTAssertEqual(controller.localPosition, 12)
+        controller.selectTrack("two")
+        XCTAssertEqual(controller.localPosition, 0, "Only an explicit chapter choice restarts the chapter")
+        controller.snapshot(into: item)
+        controller.close()
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[1].lastPosition, 0, "A closed snapshot must not restore the stale pre-selection position")
     }
 
     func testTimelineUsesHalfOpenBoundariesAndExactTotal() throws {
@@ -162,7 +242,7 @@ final class BookFeatureTests: XCTestCase {
         let configuration = ModelConfiguration(url: store)
         let legacyID = UUID(), bookID = UUID(), dictionaryID = UUID()
         do {
-            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                                configurations: configuration)
             let legacy = LearningItem(id: legacyID, title: "Legacy", mediaKind: "video",
                                       mediaFilename: "media.mp4", transcriptFilename: "text.srt",
@@ -180,7 +260,7 @@ final class BookFeatureTests: XCTestCase {
             container.mainContext.insert(legacy); container.mainContext.insert(entry); container.mainContext.insert(book)
             try container.mainContext.save()
         }
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                           configurations: ModelConfiguration(url: store))
         let items = try reopened.mainContext.fetch(FetchDescriptor<LearningItem>())
         XCTAssertEqual(Set(items.map(\.id)), [legacyID, bookID])

@@ -20,29 +20,35 @@ struct SelectionTranslationView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Original") {
+                    CopyableContentRow(value: preview.selectedText, label: "Copy original",
+                                       identifier: "preview.copy-original") {
+                        Text(preview.selectedText).font(.title2.weight(.semibold)).textSelection(.enabled)
+                    }
+                }
+                Section("Audio") { audioContent }
                 Section("Context explanation") {
                     analysisContent
                 }
                 Section {
-                    Button(coordinator.savedEntryID != nil ? "Added to Dictionary" : "Add to Dictionary",
-                           systemImage: coordinator.savedEntryID != nil ? "checkmark.circle.fill" : "text.badge.plus") {
+                    Button {
                         coordinator.saveToDictionary(context: context, service: contextAnalysisService)
+                    } label: {
+                        Label(coordinator.savedEntryID != nil ? "Added to Dictionary" : "Add to Dictionary",
+                              systemImage: coordinator.savedEntryID != nil ? "checkmark.circle.fill" : "text.badge.plus")
+                            .frame(maxWidth: .infinity)
                     }
+                    .nativePrimaryAction()
                     .disabled(coordinator.savedEntryID != nil || coordinator.isSaving)
                     .accessibilityIdentifier("preview.add-to-dictionary")
                     if coordinator.isSaving { Text("Translating before saving…").foregroundStyle(.secondary) }
                 }
-                Section("Original") {
-                    Text(preview.selectedText).textSelection(.enabled)
-                    CopyButton(value: preview.selectedText, label: "Copy original",
-                               identifier: "preview.copy-original")
-                }
-                Section("Audio") { audioContent }
                 if let sentence = coordinator.sourceSentence {
                     Section("Source sentence") {
-                        Text(sentence).textSelection(.enabled)
-                        CopyButton(value: sentence, label: "Copy source sentence",
-                                   identifier: "preview.copy-source-sentence")
+                        CopyableContentRow(value: sentence, label: "Copy source sentence",
+                                           identifier: "preview.copy-source-sentence") {
+                            Text(sentence).textSelection(.enabled)
+                        }
                     }
                 } else if coordinator.contextUnavailable {
                     Section("Source context") {
@@ -51,8 +57,11 @@ struct SelectionTranslationView: View {
                     }
                 }
                 Section("Source") { Text(preview.sourceTitle) }
-                Section { ExportLogsButton() }
+                Section {
+                    DisclosureGroup("Diagnostics") { ExportLogsButton() }
+                }
             }
+            .nativeForm()
             .navigationTitle("Translate in Context")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -85,20 +94,22 @@ struct SelectionTranslationView: View {
             if let explanation = coordinator.contextExplanation,
                let translation = coordinator.selectedTranslation {
                 if !explanation.isEmpty {
-                    Text(explanation)
-                        .textSelection(.enabled)
-                    CopyButton(value: explanation, label: "Copy word explanations",
-                               identifier: "preview.copy-word-explanations")
-                    Divider()
+                    CopyableContentRow(value: explanation, label: "Copy word explanations",
+                                       identifier: "preview.copy-word-explanations") {
+                        ContextWordExplanationView(explanation: explanation, selectedText: preview.selectedText,
+                            context: preview.context, sourceLanguage: preview.sourceLanguageCode,
+                            targetLanguage: preview.targetLanguageCode)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Overall translation")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(translation).textSelection(.enabled)
+                CopyableContentRow(value: translation, label: "Copy phrase translation",
+                                   identifier: "preview.copy-translation") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Overall translation")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(translation).textSelection(.enabled)
+                    }
                 }
-                CopyButton(value: translation, label: "Copy phrase translation",
-                           identifier: "preview.copy-translation")
             }
         case .failed(let message):
             Text(message).foregroundStyle(.red)
@@ -114,7 +125,7 @@ struct SelectionTranslationView: View {
                 Button {
                     toggleAudio(source)
                 } label: {
-                    Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
+                    Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
                           systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                 }
                 .accessibilityIdentifier("preview.play-audio")

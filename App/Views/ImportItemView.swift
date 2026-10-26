@@ -3,6 +3,7 @@ import SwiftData
 import UniformTypeIdentifiers
 
 struct ImportItemView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var media: URL?
@@ -15,6 +16,11 @@ struct ImportItemView: View {
     @State private var partMinutes = 10
     @State private var sourceLanguageCode = "pl"
     @State private var sourceLanguages = [SourceLanguage.polish]
+
+    @State private var wordPreview: VocabularyImportPreview?
+    @State private var wordPreviewKey: String?
+    @State private var wordError: String?
+    private var previewKey: String { "\(transcript?.absoluteString ?? ""):\(sourceLanguageCode)" }
 
     var body: some View {
         NavigationStack {
@@ -44,21 +50,47 @@ struct ImportItemView: View {
                     Toggle("Split into parts", isOn: $splitIntoParts).accessibilityIdentifier("import.split")
                     if splitIntoParts { Stepper("Part length: \(partMinutes) minutes", value: $partMinutes, in: 1...60) }
                 } header: { Text("Parts") } footer: { Text("Parts share the imported media file. Splitting requires a timed SRT or WebVTT transcript.") }
+                if transcript != nil {
+                    Section("Reading vocabulary") {
+                        ReadingVocabularyStatus()
+                        VocabularyStatisticsView(words: wordPreviewKey == previewKey ? wordPreview?.words : nil,
+                                                 language: sourceLanguageCode, error: wordError)
+                        if wordError != nil { Button("Retry word count") { Task { await countWords() } } }
+                    }
+                }
                 if importing { ProgressView("Importing…") }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             }
-            .navigationTitle("Upload item")
+            .nativeForm()
+            .navigationTitle("Add material")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(importing) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Import") { Task { await importItem() } }
-                        .disabled(media == nil || transcript == nil || importing)
+                        .nativePrimaryAction()
+                        .disabled(media == nil || transcript == nil || importing || !vocabulary.ready || wordPreviewKey != previewKey || wordPreview == nil)
                 }
             }
             .disabled(importing)
             .interactiveDismissDisabled(importing)
+            .task(id: previewKey) { await countWords() }
             .task { sourceLanguages = await SourceLanguage.availableForRussian() }
         }
+    }
+
+    @MainActor private func countWords() async {
+        let key = previewKey
+        wordError = nil
+        guard let transcript else { wordPreview = nil; return }
+        do {
+            _ = try VocabularyTokenizer.language(sourceLanguageCode)
+            let job = Task.detached { try VocabularyImportPreview.file(transcript) }
+            let result = try await withTaskCancellationHandler(operation: { try await job.value }, onCancel: { job.cancel() })
+            try Task.checkCancellation()
+            guard key == previewKey else { return }
+            wordPreview = result; wordPreviewKey = key
+        } catch is CancellationError { }
+        catch { if key == previewKey { wordError = error.localizedDescription; wordPreview = nil } }
     }
 
     @MainActor private func importItem() async {
@@ -67,7 +99,19 @@ struct ImportItemView: View {
         errorMessage = nil
         defer { importing = false }
         do {
+            let language = try VocabularyTokenizer.language(sourceLanguageCode)
+            let latest = try await Task.detached { try VocabularyImportPreview.file(transcript) }.value
+            guard latest.fingerprint == wordPreview?.fingerprint else {
+                wordPreview = latest; wordPreviewKey = previewKey
+                throw ReadingVocabularyError.changed
+            }
             let imported = try await MediaImportService().importFiles(media: media, transcript: transcript)
+            let committedWords = try await Task.detached { try VocabularyImportPreview(text: imported.document.text) }.value
+            guard committedWords.fingerprint == latest.fingerprint else {
+                try? FileManager.default.removeItem(at: MediaImportService.directory(for: imported.id))
+                wordPreview = committedWords; wordPreviewKey = previewKey
+                throw ReadingVocabularyError.changed
+            }
             let parts = splitIntoParts ? LearningPartPlanner.makeParts(segments: imported.document.segments, duration: imported.duration, targetDuration: Double(partMinutes * 60)) : []
             if splitIntoParts && parts.isEmpty {
                 try? FileManager.default.removeItem(at: MediaImportService.directory(for: imported.id))
@@ -76,7 +120,8 @@ struct ImportItemView: View {
             let item = LearningItem(id: imported.id, title: imported.title, mediaKind: imported.mediaKind,
                                     mediaFilename: imported.mediaFilename, transcriptFilename: imported.transcriptFilename,
                                     duration: imported.duration, segments: imported.document.segments, parts: parts,
-                                    sourceLanguageCode: sourceLanguageCode)
+                                    sourceLanguageCode: language)
+            item.readingVocabularyMigrationVersion = 1
             context.insert(item)
             do { try context.save() }
             catch {

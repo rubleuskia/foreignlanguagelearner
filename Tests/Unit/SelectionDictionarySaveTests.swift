@@ -16,7 +16,7 @@ private actor CountingAnalysisService: ContextAnalysisServing {
 @MainActor
 final class SelectionDictionarySaveTests: XCTestCase {
     private func fixture() throws -> (ModelContainer, LearningItem, SelectionTranslationPreview) {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
                                             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
                                 mediaFilename: "track.m4a", transcriptFilename: "story.srt",
@@ -24,12 +24,13 @@ final class SelectionDictionarySaveTests: XCTestCase {
         container.mainContext.insert(item)
         try container.mainContext.save()
         let source = "Zepsuł się zamek w kurtce."
-        let preview = SelectionTranslationPreview(
+        var preview = SelectionTranslationPreview(
             selectedText: "zamek", sourceLanguageCode: "pl",
             context: .init(text: source, selection: (source as NSString).range(of: "zamek")),
             sourceItemID: item.id, sourceTitle: item.title, audioRange: 3...5,
             sourceTrackID: "track-2", segmentIndex: 4
         )
+        preview.phraseAudioRange = 1...8
         return (container, item, preview)
     }
 
@@ -63,6 +64,8 @@ final class SelectionDictionarySaveTests: XCTestCase {
         XCTAssertEqual(entry.sourceTrackID, "track-2")
         XCTAssertEqual(entry.audioStart, 3)
         XCTAssertEqual(entry.audioEnd, 5)
+        XCTAssertEqual(entry.phraseAudioStart, 1)
+        XCTAssertEqual(entry.phraseAudioEnd, 8)
         XCTAssertEqual(entry.segmentIndex, 4)
         XCTAssertEqual(entry.contextText, preview.context?.text)
         XCTAssertEqual(entry.localSourceItemID, preview.sourceItemID)

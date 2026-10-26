@@ -67,6 +67,28 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
         self.client = client
     }
 
+    /// Checks authentication, model access and quota using a tiny request without user content.
+    func validateAPIKey() async throws {
+        guard !apiKey.isEmpty else { throw ContextAnalysisError.missingConfiguration }
+        var request = URLRequest(url: endpointURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": model.rawValue, "input": "Reply OK.", "max_output_tokens": 32,
+            "store": false, "reasoning": ["effort": model.reasoningEffort]
+        ])
+        let (data, response) = try await client.data(for: request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw Self.mapHTTPError(statusCode: response.statusCode, data: data)
+        }
+        let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard result.error == nil, result.status == "completed" || result.status == "incomplete" else {
+            throw Self.mapAPIError(result.error)
+        }
+    }
+
     func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
         guard !apiKey.isEmpty else { throw ContextAnalysisError.missingConfiguration }
         do {
@@ -196,7 +218,7 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
         )
     }
 
-    private static func mapHTTPError(statusCode: Int, data: Data) -> ContextAnalysisError {
+    static func mapHTTPError(statusCode: Int, data: Data) -> ContextAnalysisError {
         let payload = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data)
         if let code = payload?.error.code {
             if code == "context_length_exceeded" { return .inputTooLarge }
@@ -327,7 +349,7 @@ private struct OpenAIRequest: Encodable {
     struct StringProperty: Encodable { let type = "string" }
 }
 
-private struct OpenAIResponse: Decodable {
+struct OpenAIResponse: Decodable {
     struct OutputItem: Decodable { let content: [Content]? }
     struct Content: Decodable {
         let type: String
@@ -340,7 +362,7 @@ private struct OpenAIResponse: Decodable {
     let error: OpenAIError?
 }
 
-private struct OpenAIError: Decodable { let code: String? }
+struct OpenAIError: Decodable { let code: String? }
 private struct OpenAIErrorEnvelope: Decodable { let error: OpenAIError }
 
 private struct StructuredOutput: Decodable {

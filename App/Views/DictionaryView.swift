@@ -1,88 +1,155 @@
 import SwiftUI
 import SwiftData
 import Translation
-import UniformTypeIdentifiers
 
 struct DictionaryView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var entries: [DictionaryEntry]
+    @AppStorage(LearningRoundCheckpoint.key) private var savedRoundData = Data()
+    @State private var selectedLevel: Int?
+    @State private var readyOnly = false
     @State private var selectedEntry: DictionaryEntry?
-    @State private var showingLearn = false
-    @State private var exporting = false
-    @State private var exportFile: DictionaryJSONFile?
-    @State private var includeContext = true
-    @State private var importing = false
-    @State private var importMode: DictionaryImportMode = .merge
-    @State private var importPreview: DictionaryImportPreview?
+    @State private var learningLaunch: LearningLaunch?
+
+    private enum LearningLaunch: String, Identifiable {
+        case setup, quickStart
+        var id: Self { self }
+    }
     @State private var errorMessage: String?
 
-    var body: some View {
-        Group {
-            if entries.isEmpty {
-                ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Select text in a transcript and choose Add to Dictionary."))
-            } else {
-                List {
-                    ForEach(entries) { entry in
-                        Button { selectedEntry = entry } label: { DictionaryRow(entry: entry) }
-                            .buttonStyle(.plain)
-                    }.onDelete(perform: deleteEntries)
-                }
-            }
+    private var learningEntries: [DictionaryEntry] {
+        entries.filter { entry in
+            if readyOnly && !entry.isReadyForReview { return false }
+            if let selectedLevel { return entry.learningLevel == selectedLevel }
+            return entry.learningLevel != 4
         }
-        .navigationTitle("Dictionary")
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Learn", systemImage: "brain.head.profile") { showingLearn = true }
-                    .disabled(!entries.contains(where: \.isLearningEligible))
-                    .accessibilityIdentifier("dictionary.learn")
-                Menu("Transfer", systemImage: "arrow.up.arrow.down") {
-                    Toggle("Include source context", isOn: $includeContext)
-                    Button("Export Dictionary + Diagnostics", systemImage: "square.and.arrow.up") { prepareExport() }
-                    Menu("Import Dictionary") {
-                        Button(DictionaryImportMode.merge.rawValue) { importMode = .merge; importing = true }
-                        Button(DictionaryImportMode.translations.rawValue) { importMode = .translations; importing = true }
+    }
+    private var learntEntries: [DictionaryEntry] { entries.filter { $0.learningLevel == 4 } }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { _ in
+            List {
+                OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil)
+                ReadingVocabularyStatus()
+                if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
+                    Section {
+                        Button("Continue unfinished training", systemImage: "play.circle") { learningLaunch = .setup }
+                            .accessibilityIdentifier("dictionary.resume")
+                    }
+                }
+                if entries.contains(where: \.isReadyForReview) {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("\(entries.count(where: \.isReadyForReview)) ready to repeat")
+                                .font(.title3.weight(.semibold))
+                            Text("A short round from your saved expressions.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button { learningLaunch = .quickStart } label: {
+                                Label("Quick start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                            }
+                            .nativePrimaryAction()
+                            .accessibilityIdentifier("dictionary.quick-start")
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+                Section("Learning progress") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                             count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), spacing: 8) {
+                        ForEach(1...4, id: \.self) { level in
+                            Button { selectedLevel = level } label: {
+                                VStack(spacing: 6) {
+                                    Text(LearningLevel.title(level)).font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(level == 1 || level == 4
+                                         ? "\(entries.count(where: { $0.learningLevel == level }))"
+                                         : "\(entries.count(where: { $0.learningLevel == level })) (\(entries.count(where: { $0.learningLevel == level && $0.isReadyForReview })))")
+                                        .font(.headline.monospacedDigit())
+                                        .foregroundStyle(.primary)
+                                        .accessibilityIdentifier("dictionary.stats.level.\(level)")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 64)
+                                .padding(6)
+                                .background(selectedLevel == level ? Color.accentColor.opacity(0.12) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                            in: RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedLevel == level ? [.isSelected] : [])
+                            .accessibilityIdentifier("dictionary.filter.level.\(level)")
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    Toggle("Ready to repeat", isOn: $readyOnly)
+                        .accessibilityIdentifier("dictionary.filter.ready")
+                    if selectedLevel != nil || readyOnly {
+                        Button("Reset filter") { selectedLevel = nil; readyOnly = false }
+                            .accessibilityIdentifier("dictionary.filter.reset")
+                    }
+                }
+                if entries.isEmpty {
+                    ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Open a book in Library, touch and hold a word, then choose Add to Dictionary. Text without audio works too."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    if !learningEntries.isEmpty || selectedLevel != nil || readyOnly {
+                        Section(selectedLevel.map { "In progress · Level \($0)" } ?? "In progress") {
+                            if learningEntries.isEmpty { Text(readyOnly ? "No phrases ready to repeat" : "No phrases at this level").foregroundStyle(.secondary) }
+                            ForEach(learningEntries) { entry in
+                                entryButton(entry)
+                            }
+                            .onDelete { deleteEntries($0, from: learningEntries) }
+                        }
+                    }
+                    if selectedLevel == nil && !readyOnly {
+                        Section("Learnt phrases") {
+                            if learntEntries.isEmpty {
+                                Text("No learnt phrases yet").foregroundStyle(.secondary)
+                            } else {
+                                ForEach(learntEntries) { entry in
+                                    entryButton(entry)
+                                }
+                                .onDelete { deleteEntries($0, from: learntEntries) }
+                            }
+                        }
                     }
                 }
             }
         }
-        .sheet(item: $selectedEntry) { DictionaryEntryDetailView(entry: $0) }
-        .sheet(isPresented: $showingLearn) { LearningSessionView() }
-        .sheet(item: $importPreview) { DictionaryImportPreviewView(preview: $0) }
-        .fileExporter(isPresented: $exporting, document: exportFile, contentType: .json,
-                      defaultFilename: "dictionary-\(Self.dayStamp).json") { result in
-            if case .failure(let error) = result { errorMessage = error.localizedDescription }
-            exportFile = nil
+        .scrollContentBackground(.hidden)
+        .background(NativeDesign.page)
+        .navigationTitle("Dictionary")
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Learn", systemImage: "brain.head.profile") { learningLaunch = .setup }
+                    .disabled(!entries.contains(where: \.isLearningEligible))
+                    .accessibilityIdentifier("dictionary.learn")
+            }
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in handleImport(result) }
+        .sheet(item: $selectedEntry) { DictionaryEntryDetailView(entry: $0) }
+        .sheet(item: $learningLaunch) { launch in
+            LearningSessionView(quickStart: launch == .quickStart)
+        }
         .alert("Dictionary error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
     }
 
-    private func deleteEntries(_ offsets: IndexSet) {
+    private func entryButton(_ entry: DictionaryEntry) -> some View {
+        Button { selectedEntry = entry } label: { DictionaryRow(entry: entry) }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dictionary.entry.\(entry.text)")
+    }
+
+    private func deleteEntries(_ offsets: IndexSet, from sectionEntries: [DictionaryEntry]) {
         do {
-            for index in offsets { translationCoordinator.cancel(entries[index].id); context.delete(entries[index]) }
+            for index in offsets {
+                let entry = sectionEntries[index]
+                translationCoordinator.cancel(entry.id)
+                context.delete(entry)
+            }
             try context.save()
         } catch { context.rollback(); errorMessage = error.localizedDescription }
-    }
-
-    private func prepareExport() {
-        do { exportFile = try DictionaryTransferService.export(entries: entries, includeContext: includeContext); exporting = true }
-        catch { errorMessage = error.localizedDescription }
-    }
-
-    private func handleImport(_ result: Result<URL, Error>) {
-        do {
-            let url = try result.get()
-            let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            let document = try DictionaryTransferService.decode(Data(contentsOf: url, options: .mappedIfSafe))
-            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries)
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    private static var dayStamp: String {
-        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; return formatter.string(from: .now)
     }
 }
 
@@ -100,8 +167,11 @@ private struct DictionaryRow: View {
                         .lineLimit(2)
                         .accessibilityIdentifier("dictionary.row-translation")
                 }
+                PhraseCooldownLabel(entry: entry)
                 Text(entry.sourceTitle).font(.caption).foregroundStyle(.secondary)
-                Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
+                if entry.translationStatus != .ready {
+                    Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
+                }
             }
             Spacer()
             LearningLevelBadge(level: entry.learningLevel)
@@ -136,11 +206,10 @@ struct DictionaryEntryDetailView: View {
     @State private var errorMessage: String?
     @State private var confirmingReplacement = false
     @State private var contextual = ContextualTranslationCoordinator()
-    @State private var dictionaryLookup = PolishDictionaryLookupCoordinator()
-    @State private var showGrammarWords = false
     @State private var hasAutoStarted = false
     @State private var senseDraft = ""
     @State private var noteDraft = ""
+    @State private var audioMode: PhraseAudioMode = .selection
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
     let autoStartContext: Bool
 
@@ -152,35 +221,38 @@ struct DictionaryEntryDetailView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Russian translation") {
-                    if editing {
-                        TextEditor(text: $draft).frame(minHeight: 100)
-                    } else if let translation = entry.translationText {
-                        Text(translation).textSelection(.enabled)
-                        CopyButton(value: translation, label: "Copy translation",
-                                   identifier: "dictionary.copy-translation")
-                    } else {
-                        Text("Translation is not available yet.").foregroundStyle(.secondary)
-                    }
-                }
-                Section("Original") {
-                    Text(entry.text).textSelection(.enabled)
-                    CopyButton(value: entry.text, label: "Copy original",
-                               identifier: "dictionary.copy-original")
-                }
-                Section("Audio") {
-                    if let source = audioSource {
-                        HStack {
-                            Button {
-                                toggleAudio(source)
-                            } label: {
-                                Label(playback.isPlaying ? "Pause phrase" : "Play phrase",
-                                      systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            }
-                            .accessibilityIdentifier("dictionary.play-audio")
-                            Spacer()
-                            PlaybackRateMenu(playback: playback)
+                Section("Source phrase") {
+                    if entry.phraseAudioStart != nil {
+                        Picker("Audio", selection: $audioMode) {
+                            ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
                         }
+                        .pickerStyle(.segmented)
+                        .onChange(of: audioMode) { _, _ in playback.close(); openedAudioIdentity = nil }
+                    }
+
+                    HStack(alignment: .top, spacing: 12) {
+                        Text(entry.text)
+                            .font(.title2.weight(.semibold))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("dictionary.original")
+                        if let source = audioSource {
+                            Button { toggleAudio(source) } label: {
+                                Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
+                                      systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .labelStyle(.iconOnly)
+                                    .font(.title2)
+                                    .frame(minWidth: 44, minHeight: 44)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("dictionary.play-audio")
+                            .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
+                        }
+                        CopyButton(value: entry.text, label: "Copy original",
+                                   identifier: "dictionary.copy-original")
+                    }
+                    if let source = audioSource {
                         Text("\(formatTime(source.identity.range.lowerBound))–\(formatTime(source.identity.range.upperBound)) · \(source.itemTitle)")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
@@ -188,35 +260,53 @@ struct DictionaryEntryDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if let contextText = entry.contextText {
-                    Section("Source context") {
-                        Text(highlightedContext(contextText))
-                            .textSelection(.enabled)
-                            .accessibilityIdentifier("dictionary.source-context")
-                        CopyButton(value: contextText, label: "Copy source context",
-                                   identifier: "dictionary.copy-source-context")
+                Section("Russian translation") {
+                    if editing {
+                        TextEditor(text: $draft).frame(minHeight: 100)
+                    } else if let translation = entry.translationText {
+                        HStack(alignment: .top, spacing: 12) {
+                            Text(translation).textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("dictionary.detail-translation")
+                            CopyButton(value: translation, label: "Copy translation",
+                                       identifier: "dictionary.copy-translation")
+                        }
+                    } else {
+                        Text("Translation is not available yet.").foregroundStyle(.secondary)
                     }
                 }
-                Section("Progress") { LabeledContent("Level") { LearningLevelBadge(level: entry.learningLevel) } }
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Meaning in context") {
-                        if let explanation = entry.contextTranslationText, !explanation.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Word explanations").font(.caption).foregroundStyle(.secondary)
-                                Text(explanation).textSelection(.enabled)
-                                CopyButton(value: explanation, label: "Copy word explanations",
-                                           identifier: "dictionary.copy-context-words")
-                            }
-                            if entry.contextSelectedTranslationText != nil { Divider() }
-                        }
-                        if let candidate = entry.contextSelectedTranslationText {
-                            LabeledContent("Overall translation", value: candidate)
-                            CopyButton(value: candidate, label: "Copy overall translation",
-                                       identifier: "dictionary.copy-context-selection")
-                            if candidate != entry.translationText {
-                                Button("Use as Saved Translation", systemImage: "checkmark.circle") {
-                                    useContextTranslation(candidate)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let explanation = entry.contextTranslationText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                               !explanation.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Word explanations").font(.caption).foregroundStyle(.secondary)
+                                        .accessibilityIdentifier("dictionary.context-words")
+                                    ContextWordExplanationView(explanation: explanation, selectedText: entry.text,
+                                        context: entry.contextText.flatMap { text in
+                                            guard let location = entry.contextSelectionLocation,
+                                                  let length = entry.contextSelectionLength else { return nil }
+                                            return SelectionContext(text: text, selection: NSRange(location: location, length: length))
+                                        }, sourceLanguage: entry.sourceLanguageCode, targetLanguage: entry.targetLanguageCode)
                                 }
+                                if entry.contextSelectedTranslationText != nil { Divider() }
+                            }
+                            if let candidate = entry.contextSelectedTranslationText {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Overall translation").font(.caption).foregroundStyle(.secondary)
+                                    Text(candidate.trimmingCharacters(in: .whitespacesAndNewlines))
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .accessibilityIdentifier("dictionary.context-overall")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let candidate = entry.contextSelectedTranslationText, candidate != entry.translationText {
+                            Button("Use as Saved Translation", systemImage: "checkmark.circle") {
+                                useContextTranslation(candidate)
                             }
                         }
                         contextProgress
@@ -230,25 +320,31 @@ struct DictionaryEntryDetailView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
-                    Section("Word-by-word help") {
-                        if !entry.wordHelpItems.isEmpty {
-                            ForEach(Array(visibleWordHelp.enumerated()), id: \.offset) { _, item in
-                                wordHelpRow(item)
-                            }
-                            if hiddenGrammarWordCount > 0 {
-                                Toggle("Show \(hiddenGrammarWordCount) grammar words", isOn: $showGrammarWords)
-                            }
+                }
+                if let contextText = entry.contextText {
+                    Section("Source context") {
+                        CopyableContentRow(value: contextText, label: "Copy source context",
+                                           identifier: "dictionary.copy-source-context") {
+                            Text(highlightedContext(contextText))
+                                .textSelection(.enabled)
+                                .accessibilityIdentifier("dictionary.source-context")
                         }
-                        contextProgress(wordsOnly: true)
-                        Button(entry.wordHelpItems.isEmpty ? "Generate Word-by-word Help" : "Refresh Word-by-word Help",
-                               systemImage: "list.bullet.rectangle") {
-                            contextual.translateWords(for: entry, context: context)
-                        }
-                        .accessibilityIdentifier("dictionary.word-help")
-                        Text("Generated only when requested. These are individual word translations; the sentence translation remains the guide to meaning in context.")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
-
+                }
+                Section("Progress") {
+                    Picker("Level", selection: Binding(
+                        get: { entry.learningLevel },
+                        set: { saveLevel($0) }
+                    )) {
+                        ForEach(1...4, id: \.self) { level in
+                            Text("\(level) · \(LearningLevel.title(level))").tag(level)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("dictionary.level-picker")
+                    PhraseCooldownLabel(entry: entry)
+                }
+                if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Your interpretation") {
                         TextField("Preferred meaning", text: $senseDraft)
                         TextField("Personal note", text: $noteDraft, axis: .vertical).lineLimit(2...5)
@@ -284,6 +380,7 @@ struct DictionaryEntryDetailView: View {
                     }
                 }
             }
+            .nativeForm()
             .navigationTitle("Dictionary entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(editing ? "Cancel" : "Close") { if editing { editing = false } else { dismiss() } } }
@@ -300,7 +397,6 @@ struct DictionaryEntryDetailView: View {
                 }
             }
             .interactiveDismissDisabled(editing)
-            .translationTask(contextual.configuration, action: contextual.perform(session:))
             .task {
                 senseDraft = entry.selectedSenseText ?? ""
                 noteDraft = entry.userNote ?? ""
@@ -314,7 +410,6 @@ struct DictionaryEntryDetailView: View {
                 playback.close()
                 openedAudioIdentity = nil
                 contextual.cancelCurrentRequest()
-                dictionaryLookup.cancelAll()
                 if !entry.hasTranslation, entry.translationStatus == .pending {
                     coordinator.enqueue(entry, context: context)
                 }
@@ -339,7 +434,7 @@ struct DictionaryEntryDetailView: View {
     }
 
     private var audioSource: PhraseAudioSource? {
-        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems)
+        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: entry.phraseAudioStart == nil ? .selection : audioMode)
     }
 
     private func toggleAudio(_ source: PhraseAudioSource) {
@@ -360,113 +455,10 @@ struct DictionaryEntryDetailView: View {
 
     @ViewBuilder private var contextProgress: some View {
         switch contextual.status {
-        case .needsDownload:
-            Label("Language download required", systemImage: "arrow.down.circle")
-                .foregroundStyle(.secondary)
         case .translatingContext:
             HStack { ProgressView(); Text("Translating selection and sentence…") }
         default:
             EmptyView()
-        }
-    }
-
-    @ViewBuilder private func contextProgress(wordsOnly: Bool) -> some View {
-        if wordsOnly, contextual.status == .translatingWords {
-            HStack { ProgressView(); Text("Translating sentence words…") }
-        }
-    }
-
-    private var visibleWordHelp: [WordHelpItem] {
-        showGrammarWords ? entry.wordHelpItems : entry.wordHelpItems.filter { !$0.isGrammarWord }
-    }
-
-    private var hiddenGrammarWordCount: Int {
-        entry.wordHelpItems.count(where: \WordHelpItem.isGrammarWord)
-    }
-
-    @ViewBuilder private func wordHelpRow(_ item: WordHelpItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LabeledContent(item.sourceText, value: item.translationText)
-            HStack {
-                CopyButton(value: item.sourceText, label: "Copy \(item.sourceText)",
-                           identifier: "dictionary.copy-word-source")
-                CopyButton(value: item.translationText, label: "Copy word translation",
-                           identifier: "dictionary.copy-word-translation")
-            }
-            if entry.sourceLanguageCode == "pl" {
-                if let result = item.polishDictionaryResult {
-                    DisclosureGroup("Polish definition · \(result.headword)") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if let form = result.resolvedFromForm {
-                                Text("\(form) → dictionary form: \(result.headword)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            if let partOfSpeech = result.partOfSpeech {
-                                Text(partOfSpeech).font(.caption).foregroundStyle(.secondary)
-                            }
-                            ForEach(Array(result.meanings.enumerated()), id: \.element.id) { index, meaning in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(index + 1). \(meaning.definition)")
-                                    if !meaning.usageLabels.isEmpty {
-                                        Text(meaning.usageLabels.joined(separator: " · "))
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    ForEach(meaning.examples, id: \.self) { example in
-                                        Text(example).italic().foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            HStack {
-                                if let sourceURL = URL(string: result.sourceURL) {
-                                    Link("Source: Polish Wiktionary", destination: sourceURL)
-                                }
-                                Spacer()
-                                switch dictionaryLookup.state(for: item.sourceText) {
-                                case .loading:
-                                    ProgressView()
-                                default:
-                                    Button("Refresh", systemImage: "arrow.clockwise") {
-                                        dictionaryLookup.lookup(item.sourceText, lemma: result.headword,
-                                                                for: entry, context: context)
-                                    }
-                                }
-                            }.font(.caption)
-                            if case .failed(let message) = dictionaryLookup.state(for: item.sourceText) {
-                                Text(message).font(.caption).foregroundStyle(.red)
-                            }
-                        }.padding(.top, 6)
-                    }
-                } else {
-                    switch dictionaryLookup.state(for: item.sourceText) {
-                    case .idle:
-                        Button("Look up Polish definition", systemImage: "book.closed") {
-                            dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
-                        }
-                        .accessibilityIdentifier("dictionary.polish-lookup.\(item.sourceText)")
-                    case .loading:
-                        HStack { ProgressView(); Text("Looking up Polish definition…") }
-                            .foregroundStyle(.secondary)
-                    case .choosingLemma(let lemmas):
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Choose the dictionary form for “\(item.sourceText)”:")
-                                .font(.caption).foregroundStyle(.secondary)
-                            ForEach(lemmas, id: \.self) { lemma in
-                                Button(lemma, systemImage: "book.closed") {
-                                    dictionaryLookup.lookup(item.sourceText, lemma: lemma,
-                                                            for: entry, context: context)
-                                }
-                            }
-                        }
-                    case .failed(let message):
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(message).font(.caption).foregroundStyle(.red)
-                            Button("Try Again", systemImage: "arrow.clockwise") {
-                                dictionaryLookup.lookup(item.sourceText, for: entry, context: context)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -508,6 +500,20 @@ struct DictionaryEntryDetailView: View {
         do { try context.save() } catch { context.rollback(); errorMessage = error.localizedDescription }
     }
 
+    private func saveLevel(_ level: Int) {
+        guard (1...4).contains(level), level != entry.learningLevel else { return }
+        let previousLevel = entry.learningLevel
+        let previousDate = entry.levelChangedAt
+        entry.learningLevel = level
+        entry.levelChangedAt = .now
+        do { try context.save() }
+        catch {
+            entry.learningLevel = previousLevel
+            entry.levelChangedAt = previousDate
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func saveInterpretation() {
         entry.selectedSenseText = senseDraft.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         entry.userNote = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
@@ -519,26 +525,53 @@ private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
-private struct DictionaryImportPreviewView: View {
+struct DictionaryImportPreviewView: View {
+    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var coordinator
-    let preview: DictionaryImportPreview
+    @State var preview: DictionaryImportPreview
     @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Mode") { Text(preview.mode.rawValue) }
+                Section("Mode") {
+                    Text(preview.mode.rawValue)
+                    if preview.mode == .restore {
+                        Text("Restores saved details and learning progress for matching entries. Other entries stay in the dictionary.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("Audio files are not included. Saved audio links work only while the original source book is available on this device.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if preview.document.schemaVersion == 1 {
+                        Text("This older backup does not contain word explanations, personal notes or audio links.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Section("Changes") {
                     LabeledContent("New entries", value: "\(preview.additions)")
                     LabeledContent("Translation updates", value: "\(preview.translationChanges)")
+                    if preview.mode == .restore {
+                        LabeledContent("Entries to restore", value: "\(preview.restorations)")
+                    }
                     LabeledContent("Conflicts kept local", value: "\(preview.conflicts)")
                     LabeledContent("Unchanged", value: "\(preview.unchanged)")
                     LabeledContent("Skipped", value: "\(preview.skipped)")
                 }
+                if let words = preview.document.readingVocabulary?.words {
+                    Section("Words from read texts") {
+                        if preview.mode == .translations { Text("\(words.count) reading words will be skipped. This mode updates translations only.") }
+                        else {
+                            LabeledContent("New studied words", value: "\(preview.vocabularyAdditions)")
+                            LabeledContent("Already studied", value: "\(preview.vocabularyDuplicates)")
+                            Text("Reading vocabulary is merged. No local studied words are removed. Books and chapter marks are not restored.").font(.caption)
+                        }
+                    }
+                }
                 if preview.conflicts > 0 { Text("Conflicting local translations and entry identities will be kept unchanged.").foregroundStyle(.secondary) }
             }
+            .nativeForm()
             .navigationTitle("Import Preview")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -549,7 +582,19 @@ private struct DictionaryImportPreviewView: View {
     }
     private func apply() {
         do {
+            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
+            let current = DictionaryTransferService.preview(document: preview.document, mode: preview.mode,
+                existing: try context.fetch(FetchDescriptor<DictionaryEntry>()),
+                existingVocabulary: try ReadingKnowledge.words(context: context))
+            if current.vocabularySnapshot != preview.vocabularySnapshot {
+                preview = current
+                throw ReadingVocabularyError.changed
+            }
             let pending = try DictionaryTransferService.apply(preview, context: context)
+            if preview.mode == .restore {
+                for entry in preview.document.entries { coordinator.cancel(entry.id) }
+            }
+            try vocabulary.reload(context: context)
             pending.forEach { coordinator.enqueue($0, context: context) }
             dismiss()
         } catch { errorMessage = error.localizedDescription }
@@ -573,5 +618,27 @@ struct LearningLevelBadge: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
             .accessibilityLabel("Level \(level), \(LearningLevel.title(level))")
+    }
+}
+
+/// A snapshot calculated during rendering; deliberately has no timer or TimelineView.
+private struct PhraseCooldownLabel: View {
+    let entry: DictionaryEntry
+
+    var body: some View {
+        if entry.learningLevel < 4 {
+            if let remaining = LearningCooldown.remainingTime(entry) {
+                Label(remaining > 0
+                      ? "Repeat in \(LearningCooldown.remainingDescription(seconds: remaining))"
+                      : "Ready to repeat",
+                      systemImage: remaining > 0 ? "clock" : "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dictionary.cooldown")
+            } else {
+                Label("Cooldown pending", systemImage: "clock")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }

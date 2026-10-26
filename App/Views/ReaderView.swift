@@ -12,11 +12,15 @@ struct ReaderView: View {
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     @State private var message: String?
+    @State private var chapterPicker: ChapterPickerSnapshot?
     @State private var selectedPart = 0
+    @State private var manualChapterGeneration = 0
     @State private var sourceLanguages = [SourceLanguage.polish]
     @State private var translationPreview: SelectionTranslationPreview?
     @State private var followGeneration = 0
     @State private var translationCache = SelectionTranslationCache()
+    @State private var openedRevision = ""
+    @State private var selecting = false
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
@@ -37,18 +41,21 @@ struct ReaderView: View {
             if item.mediaKind == "video" {
                 VideoPlayer(player: playback.player).frame(height: 200)
             }
-            if item.segments.first?.start == nil {
+            if item.hasAudio && item.hasText && item.segments.first?.start == nil {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
-            TranscriptTextView(document: document,
+            if item.hasText {
+            VocabularyTranscriptView(document: document, language: item.sourceLanguageCode,
                                activeSegment: document.activeSegment(at: playback.position),
                                following: $following,
                                followGeneration: followGeneration,
                                onSelectionBegan: {
                 playback.pause()
                 following = false
-            }) { action, text, selectionRange, segment, selectionContext in
+                selecting = true
+            }, initialReadingOffset: item.readingCharacterOffset,
+                onReadingOffsetChanged: { item.readingCharacterOffset = $0 }) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
                 let audio = audioRange(for: selectionRange)
                 let normalized = DictionaryEntry.normalized(text)
@@ -61,18 +68,37 @@ struct ReaderView: View {
                     audioRange: audio, segmentIndex: absoluteSegment,
                     saveOnOpen: action == .addToDictionary
                 )
+                if audio != nil {
+                    translationPreview?.phraseAudioRange = PhraseAudioTiming.sentenceRange(
+                        for: selectionRange, in: document, duration: item.duration)
+                }
+            }
+            .id(manualChapterGeneration)
+            } else {
+                ContentUnavailableView("Listen to your book", systemImage: "headphones", description: Text("Add text from the ⋮ menu to read and save phrases."))
             }
             if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
                     followGeneration += 1
                     following = true
                 }
+                    .nativeSecondaryAction()
                     .padding(8)
             }
         }
-        .safeAreaInset(edge: .bottom) { playerBar }
+        .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
+        .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: item.hasText && !selecting && translationPreview == nil) }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("Language", systemImage: "character.book.closed") {
@@ -85,17 +111,26 @@ struct ReaderView: View {
                         }
                     }
                 }
+                .disabled(item.isSourceLanguageLocked)
+                .help(item.isSourceLanguageLocked ? "The language is locked after marking a text read." : "Source language")
             }
         }
         .onAppear {
+            openedRevision = item.resourceRevision
             selectedPart = item.partIndex(containing: item.lastPosition)
             openCurrentPart()
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
+        .sheet(item: $chapterPicker) { snapshot in
+            ChapterPickerView(snapshot: snapshot) { id in
+                if let index = item.parts.firstIndex(where: { $0.id.uuidString == id }) { switchToPart(index) }
+            }
+        }
         .sheet(item: $translationPreview) {
             SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen)
         }
         .onChange(of: playback.position) { _, position in
+            guard openedRevision == item.resourceRevision, playback.player.currentItem != nil else { return }
             if abs(item.lastPosition - position) >= 5 {
                 item.lastPosition = position
                 updatePartPosition(position)
@@ -117,33 +152,41 @@ struct ReaderView: View {
         VStack(spacing: 8) {
             if !item.parts.isEmpty {
                 HStack {
-                    Menu("Part \(selectedPart + 1) of \(item.parts.count)") {
-                        ForEach(item.parts.indices, id: \.self) { index in
-                            Button("Part \(index + 1)\(item.parts[index].isCompleted ? " · Completed" : "")") { switchToPart(index) }
-                        }
+                    Button("Part \(selectedPart + 1) of \(item.parts.count)") {
+                        chapterPicker = .init(chapters: item.parts.enumerated().map { index, part in
+                            .init(id: part.id.uuidString, title: "Part \(index + 1)", completed: part.isCompleted)
+                        }, selectedID: currentPart?.id.uuidString)
                     }
+                    .accessibilityIdentifier("reader.choose-chapter")
                     Spacer()
-                    Button(currentPart?.isCompleted == true ? "Completed" : "Mark completed", systemImage: currentPart?.isCompleted == true ? "checkmark.circle.fill" : "circle") { toggleCompleted() }
+                    PlaybackRateMenu(playback: playback)
                 }
+            } else {
+                HStack { Text("Audio").font(.subheadline.weight(.medium)); Spacer(); PlaybackRateMenu(playback: playback) }
             }
             Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
                 scrubbing = editing
-                if !editing { playback.seek(to: scrubPosition); following = true }
+                if !editing { playback.seek(to: scrubPosition); followGeneration += 1; following = true }
             }.accessibilityLabel("Playback position")
             HStack {
-                Text(time(playback.position - lowerBound)).monospacedDigit()
+                Text(time(playback.position - lowerBound))
                 Spacer()
-                Button { playback.seek(to: max(lowerBound, playback.position - 10)); following = true } label: { Image(systemName: "gobackward.10") }
-                    .accessibilityLabel("Back 10 seconds")
-                Button { playback.toggle(); if playback.isPlaying { following = true } } label: { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
-                    .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
-                Button { playback.seek(to: min(upperBound, playback.position + 10)); following = true } label: { Image(systemName: "goforward.10") }
-                    .accessibilityLabel("Forward 10 seconds")
-                Spacer()
-                PlaybackRateMenu(playback: playback)
-                Text(time(upperBound - lowerBound)).monospacedDigit()
+                Text(time(upperBound - lowerBound))
             }
-        }.padding().background(.bar)
+            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            NativeTransportControls(isPlaying: playback.isPlaying, back: {
+                playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true
+            }, toggle: {
+                playback.toggle(); if playback.isPlaying { followGeneration += 1; following = true }
+            }, forward: {
+                playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true
+            })
+        }
+        .font(.subheadline)
+        .padding(16)
+        .nativeFloatingSurface()
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
     private func time(_ value: Double) -> String {
         let seconds = Int(max(0, value))
@@ -151,29 +194,11 @@ struct ReaderView: View {
     }
 
     private func audioRange(for selectionRange: NSRange) -> ClosedRange<Double>? {
-        let matching = document.ranges.indices.filter {
-            NSIntersectionRange(document.ranges[$0], selectionRange).length > 0
-        }
-        let absoluteIndices = matching.compactMap { index -> Int? in
-            guard document.sourceIndices.indices.contains(index) else { return nil }
-            return document.sourceIndices[index]
-        }
-        let timed = absoluteIndices.compactMap { index -> (index: Int, segment: TranscriptSegment)? in
-            guard item.segments.indices.contains(index), item.segments[index].start != nil,
-                  item.segments[index].end != nil else { return nil }
-            return (index, item.segments[index])
-        }
-        guard let first = timed.compactMap({ $0.segment.start }).min(),
-              let last = timed.compactMap({ $0.segment.end }).max(), last > first else { return nil }
-
-        let nextStart = item.segments.drop(while: { ($0.end ?? -.infinity) <= last })
-            .compactMap(\.start).first
-        let paddedEnd = min(last + 0.75, nextStart ?? item.duration, item.duration)
-        guard paddedEnd > first else { return first...last }
-        return first...paddedEnd
+        PhraseAudioTiming.range(for: selectionRange, in: document, duration: item.duration)
     }
 
     private func openCurrentPart() {
+        guard item.hasAudio else { return }
         let range = currentPart.map { $0.start...$0.end }
         playback.open(url: MediaImportService.directory(for: item.id).appending(path: item.mediaFilename), position: currentPart?.lastPosition ?? item.lastPosition, range: range)
     }
@@ -182,14 +207,11 @@ struct ReaderView: View {
         savePosition()
         playback.close()
         selectedPart = index
+        item.parts[index].lastPosition = item.parts[index].start
+        manualChapterGeneration += 1
+        followGeneration += 1
         following = true
         openCurrentPart()
-    }
-
-    private func toggleCompleted() {
-        guard item.parts.indices.contains(selectedPart) else { return }
-        item.parts[selectedPart].isCompleted.toggle()
-        try? context.save()
     }
 
     private func updatePartPosition(_ position: Double) {
@@ -198,13 +220,16 @@ struct ReaderView: View {
     }
 
     private func savePosition() {
-        item.lastPosition = playback.position
-        updatePartPosition(playback.position)
+        guard openedRevision == item.resourceRevision else { return }
+        if item.hasAudio && playback.player.currentItem != nil {
+            item.lastPosition = playback.position
+            updatePartPosition(playback.position)
+        }
         try? context.save()
     }
 
     private func changeLanguage(to code: String) {
-        guard code != item.sourceLanguageCode else { return }
+        guard !item.isSourceLanguageLocked, code != item.sourceLanguageCode else { return }
         let itemID = item.id
         do {
             let entries = try context.fetch(FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.localSourceItemID == itemID }))

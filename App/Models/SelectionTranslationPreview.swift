@@ -9,6 +9,7 @@ struct SelectionTranslationPreview: Identifiable, Equatable, Sendable {
     let sourceItemID: UUID
     let sourceTitle: String
     let audioRange: ClosedRange<Double>?
+    var phraseAudioRange: ClosedRange<Double>? = nil
     let sourceTrackID: String?
     let segmentIndex: Int?
     let saveOnOpen: Bool

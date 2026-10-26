@@ -42,6 +42,7 @@ enum LibraryFileTransactionService {
 @MainActor
 enum LibraryRecoveryService {
     static func recover(context: ModelContext, fileManager: FileManager = .default) throws {
+        try BookResourceUpdateService.recover(context: context)
         try recoverImports(context: context, fileManager: fileManager)
         try recoverDeletes(context: context, fileManager: fileManager)
     }

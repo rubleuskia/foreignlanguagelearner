@@ -20,11 +20,7 @@ targets:
   ForeignLanguageLearner:
     type: application
     platform: iOS
-    sources:
-      - path: App
-        excludes: [Resources]
-      - path: App/Resources
-        buildPhase: resources
+    sources: [App]
     info:
       path: App/Info.plist
       properties:
@@ -50,6 +46,7 @@ targets:
     sources: [Tests/Unit]
     dependencies:
       - target: ForeignLanguageLearner
+      - package: ZIPFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner.tests

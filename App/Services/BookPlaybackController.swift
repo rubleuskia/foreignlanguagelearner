@@ -9,6 +9,7 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var timeline: BookTimeline?
     var wantsToPlay = false
+    var didFinishTrack: ((String) -> Void)?
 
     private var tracks: [LearningTrack] = []
     private var itemID: UUID?
@@ -69,17 +70,18 @@ import Observation
     }
 
     func selectTrack(_ id: String) {
-        guard let track = tracks.first(where: { $0.id == id }) else { return }
-        openTrack(id, position: track.lastPosition, shouldPlay: wantsToPlay)
+        guard tracks.contains(where: { $0.id == id }) else { return }
+        openTrack(id, position: 0, shouldPlay: wantsToPlay)
     }
 
     func snapshot(into item: LearningItem) {
+        // Teardown callbacks must not overwrite the last live snapshot with stale track positions.
+        guard let id = activeTrackID, let index = item.tracks.firstIndex(where: { $0.id == id }) else { return }
         for saved in tracks {
             if let index = item.tracks.firstIndex(where: { $0.id == saved.id }) {
                 item.tracks[index].lastPosition = min(max(0, saved.lastPosition), item.tracks[index].duration)
             }
         }
-        guard let id = activeTrackID, let index = item.tracks.firstIndex(where: { $0.id == id }) else { return }
         item.tracks[index].lastPosition = min(max(0, localPosition), item.tracks[index].duration)
         item.lastTrackID = id
         item.duration = item.tracks.reduce(0) { $0 + $1.duration }
@@ -98,6 +100,7 @@ import Observation
         positionTask?.cancel()
         positionTask = nil
         playback.close()
+        didFinishTrack = nil
         activeTrackID = nil
         wantsToPlay = false
     }
@@ -131,6 +134,8 @@ import Observation
         guard generation == self.generation, activeTrackID == trackID,
               let index = tracks.firstIndex(where: { $0.id == trackID }) else { return }
         localPosition = tracks[index].duration
+        tracks[index].lastPosition = localPosition
+        didFinishTrack?(trackID)
         if index + 1 < tracks.count, wantsToPlay {
             openTrack(tracks[index + 1].id, position: 0, shouldPlay: true)
         } else {
@@ -143,15 +148,17 @@ import Observation
         positionTask?.cancel()
         positionTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(200))
+                do { try await Task.sleep(for: .milliseconds(200)) }
+                catch { return }
+                guard !Task.isCancelled else { return }
                 self?.refreshPosition()
             }
         }
     }
 
     private func refreshPosition() {
-        localPosition = playback.position
         guard let id = activeTrackID else { return }
+        localPosition = playback.position
         globalPosition = (try? timeline?.globalTime(trackID: id, localTime: localPosition)) ?? 0
         if let message = playback.errorMessage, let title = activeTrack?.title {
             errorMessage = "\(title): \(message)"

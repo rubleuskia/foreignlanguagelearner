@@ -8,13 +8,21 @@ struct ContextualTranslationSettingsView: View {
     @State private var apiKey = ""
     @State private var hasSavedAPIKey = false
     @State private var keyMessage: String?
+    @State private var checkingKey = false
+    @State private var keyCheckMessage: String?
+    @State private var keyCheckFailed = false
     @State private var prompt = OpenAIContextAnalysisProvider.defaultPrompt
     @State private var hasCustomPrompt = false
     @State private var promptMessage: String?
     @State private var promptMessageIsError = false
 
+    @State private var wordPrompt = OpenAIWordExplanationProvider.defaultPrompt
+    @State private var hasCustomWordPrompt = false
+    @State private var wordPromptMessage: String?
+
     var body: some View {
         Form {
+            OnboardingHelpSection()
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
                 Picker("Model", selection: selectedModelBinding) {
@@ -22,18 +30,33 @@ struct ContextualTranslationSettingsView: View {
                         Text(model.displayName).tag(model)
                     }
                 }
+                .disabled(checkingKey)
+                .onChange(of: selectedModelRawValue) { _, _ in keyCheckMessage = nil }
                 LabeledContent("Configuration") {
                     Text(hasSavedAPIKey ? "API key saved" : "API key required")
                         .foregroundStyle(hasSavedAPIKey ? Color.secondary : Color.orange)
                 }
                 SecureField("OpenAI API key", text: $apiKey)
+                    .disabled(checkingKey)
+                    .onChange(of: apiKey) { _, _ in keyCheckMessage = nil }
                     .textContentType(.password)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button(hasSavedAPIKey ? "Replace API Key" : "Save API Key") { saveAPIKey() }
                     .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(checkingKey ? "Checking…" : "Check API Key") {
+                    Task { await checkAPIKey() }
+                }
+                .disabled(checkingKey || (!hasSavedAPIKey && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .accessibilityIdentifier("settings.check-api-key")
+                if let keyCheckMessage {
+                    Text(keyCheckMessage).font(.caption)
+                        .foregroundStyle(keyCheckFailed ? Color.red : Color.green)
+                }
+                Text("Checks the entered key, or the saved key if the field is empty, with a small API request using the selected model.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if hasSavedAPIKey {
-                    Button("Delete API Key", role: .destructive) { deleteAPIKey() }
+                    Button("Delete API Key", role: .destructive) { deleteAPIKey() }.disabled(checkingKey)
                 }
                 if let keyMessage {
                     Text(keyMessage).font(.caption).foregroundStyle(.red)
@@ -42,41 +65,93 @@ struct ContextualTranslationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Diagnostics") { ExportLogsButton() }
-            Section("Translation prompt") {
-                TextEditor(text: $prompt)
-                    .font(.footnote.monospaced())
-                    .frame(minHeight: 260)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                HStack {
-                    Text("\(prompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
-                        .font(.caption)
-                        .foregroundStyle(promptIsValid ? Color.secondary : Color.red)
-                    Spacer()
-                    if hasCustomPrompt {
-                        Text("Customized").font(.caption).foregroundStyle(.secondary)
+            Section { DisclosureGroup("Diagnostics") { ExportLogsButton() } }
+            Section {
+                DisclosureGroup("Translation prompt") {
+                    TextEditor(text: $prompt)
+                        .font(.footnote.monospaced())
+                        .frame(minHeight: 260)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    HStack {
+                        Text("\(prompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
+                            .font(.caption)
+                            .foregroundStyle(promptIsValid ? Color.secondary : Color.red)
+                        Spacer()
+                        if hasCustomPrompt {
+                            Text("Customized").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                }
-                Button("Save Prompt", systemImage: "checkmark") { savePrompt() }
-                    .disabled(!promptIsValid)
-                Button("Reset to Default", systemImage: "arrow.counterclockwise") {
-                    resetPrompt()
-                }
-                if let promptMessage {
-                    Text(promptMessage)
+                    Button("Save Prompt", systemImage: "checkmark") { savePrompt() }
+                        .disabled(!promptIsValid)
+                    Button("Reset to Default", systemImage: "arrow.counterclockwise") {
+                        resetPrompt()
+                    }
+                    if let promptMessage {
+                        Text(promptMessage)
+                            .font(.caption)
+                            .foregroundStyle(promptMessageIsError ? Color.red : Color.secondary)
+                    }
+                    Text("Changes apply to new requests. The structured-output and prompt-injection safety rules remain enforced by the app.")
                         .font(.caption)
-                        .foregroundStyle(promptMessageIsError ? Color.red : Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                Text("Changes apply to new requests. The structured-output and prompt-injection safety rules remain enforced by the app.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            wordPromptSection
         }
+        .nativeForm()
         .navigationTitle("Settings")
         .task {
             refreshKeyStatus()
             refreshPrompt()
+            refreshWordPrompt()
+        }
+    }
+
+    private var wordPromptSection: some View {
+        Section {
+            DisclosureGroup("Word explanation prompt") {
+                Text("Used when you tap a word in Meaning in context.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $wordPrompt)
+                    .font(.footnote.monospaced())
+                    .frame(minHeight: 260)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("settings.word-prompt.editor")
+                    .onChange(of: wordPrompt) { _, _ in wordPromptMessage = nil }
+                HStack {
+                    Text("\(wordPrompt.utf16.count) / \(ContextAnalysisSettings.maximumPromptUTF16)")
+                        .font(.caption)
+                        .foregroundStyle(wordPromptIsValid ? Color.secondary : Color.red)
+                    Spacer()
+                    if hasCustomWordPrompt {
+                        Text("Customized").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Button("Save Prompt", systemImage: "checkmark") {
+                    do {
+                        try ContextAnalysisSettings.setWordExplanationPrompt(wordPrompt)
+                        refreshWordPrompt()
+                        wordPromptMessage = hasCustomWordPrompt ? "Custom prompt saved." : "Default prompt is active."
+                    } catch {
+                        wordPromptMessage = "Prompt must contain 1–\(ContextAnalysisSettings.maximumPromptUTF16) characters."
+                    }
+                }
+                .disabled(!wordPromptIsValid)
+                .accessibilityIdentifier("settings.word-prompt.save")
+                Button("Reset to Default", systemImage: "arrow.counterclockwise") {
+                    ContextAnalysisSettings.resetWordExplanationPrompt()
+                    refreshWordPrompt()
+                    wordPromptMessage = "Default prompt restored."
+                }
+                .accessibilityIdentifier("settings.word-prompt.reset")
+                if let wordPromptMessage {
+                    Text(wordPromptMessage).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Save to use this prompt for new word explanations. Reset to Default restores the original prompt.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -87,9 +162,39 @@ struct ContextualTranslationSettingsView: View {
         )
     }
 
+    private var wordPromptIsValid: Bool {
+        let trimmed = wordPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.utf16.count <= ContextAnalysisSettings.maximumPromptUTF16
+    }
+
+    private func refreshWordPrompt() {
+        wordPrompt = ContextAnalysisSettings.wordExplanationPrompt()
+        hasCustomWordPrompt = ContextAnalysisSettings.wordExplanationPromptOverride() != nil
+        wordPromptMessage = nil
+    }
+
     private var promptIsValid: Bool {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         return !trimmed.isEmpty && trimmed.utf16.count <= ContextAnalysisSettings.maximumPromptUTF16
+    }
+
+    @MainActor private func checkAPIKey() async {
+        checkingKey = true
+        keyCheckMessage = nil
+        defer { checkingKey = false }
+        do {
+            let draft = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = try draft.isEmpty ? OpenAIAPIKeyStore.load() : draft
+            guard let key else { throw ContextAnalysisError.missingConfiguration }
+            let provider = OpenAIContextAnalysisProvider(apiKey: key,
+                model: OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini)
+            try await provider.validateAPIKey()
+            keyCheckFailed = false
+            keyCheckMessage = "OK — API key and selected model are available."
+        } catch {
+            keyCheckFailed = true
+            keyCheckMessage = (error as? ContextAnalysisError)?.userMessage ?? error.localizedDescription
+        }
     }
 
     private func saveAPIKey() {
@@ -104,6 +209,7 @@ struct ContextualTranslationSettingsView: View {
     }
 
     private func deleteAPIKey() {
+        keyCheckMessage = nil
         do {
             try OpenAIAPIKeyStore.delete()
             apiKey = ""

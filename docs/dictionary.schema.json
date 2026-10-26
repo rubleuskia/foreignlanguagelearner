@@ -4,91 +4,250 @@
   "title": "Foreign Language Learner Dictionary",
   "type": "object",
   "additionalProperties": true,
-  "required": ["format", "schemaVersion", "exportedAt", "entries"],
+  "required": [
+    "format",
+    "schemaVersion",
+    "exportedAt",
+    "entries"
+  ],
   "properties": {
-    "format": { "const": "foreign-language-learner.dictionary" },
-    "schemaVersion": { "const": 1 },
-    "exportedAt": { "type": "string", "format": "date-time" },
+    "format": {
+      "const": "foreign-language-learner.dictionary"
+    },
+    "schemaVersion": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "entries": {
       "type": "array",
       "maxItems": 50000,
-      "items": { "$ref": "#/$defs/entry" }
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
     },
     "diagnostics": {
       "oneOf": [
-        { "type": "null" },
-        { "$ref": "#/$defs/diagnostics" }
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/diagnostics"
+        }
       ]
+    },
+    "readingVocabulary": {
+      "$ref": "#/$defs/readingVocabulary"
     }
   },
   "$defs": {
     "diagnostics": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["appVersion", "operatingSystem", "polishDefinitionErrors"],
+      "required": [
+        "appVersion",
+        "operatingSystem",
+        "polishDefinitionErrors"
+      ],
       "properties": {
-        "appVersion": { "type": "string" },
-        "operatingSystem": { "type": "string" },
+        "appVersion": {
+          "type": "string"
+        },
+        "operatingSystem": {
+          "type": "string"
+        },
         "polishDefinitionErrors": {
           "type": "array",
           "maxItems": 200,
-          "items": { "$ref": "#/$defs/polishDefinitionError" }
+          "items": {
+            "$ref": "#/$defs/polishDefinitionError"
+          }
         }
       }
     },
     "polishDefinitionError": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["timestamp", "operation", "word", "errorType", "errorDomain", "errorCode", "message"],
+      "required": [
+        "timestamp",
+        "operation",
+        "word",
+        "errorType",
+        "errorDomain",
+        "errorCode",
+        "message"
+      ],
       "properties": {
-        "timestamp": { "type": "string", "format": "date-time" },
-        "operation": { "type": "string", "maxLength": 100 },
-        "word": { "type": "string", "maxLength": 200 },
-        "preferredLemma": { "type": ["string", "null"], "maxLength": 200 },
-        "entryID": { "type": ["string", "null"], "format": "uuid" },
-        "errorType": { "type": "string" },
-        "errorDomain": { "type": "string", "maxLength": 200 },
-        "errorCode": { "type": "integer" },
-        "message": { "type": "string", "maxLength": 2000 }
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "word": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "preferredLemma": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "entryID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "errorType": {
+          "type": "string"
+        },
+        "errorDomain": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "errorCode": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        }
       }
     },
     "entry": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["id", "text", "sourceLanguage", "targetLanguage", "translation", "learningLevel", "createdAt", "source"],
+      "required": [
+        "id",
+        "text",
+        "sourceLanguage",
+        "targetLanguage",
+        "translation",
+        "learningLevel",
+        "createdAt",
+        "source"
+      ],
       "properties": {
-        "id": { "type": "string", "format": "uuid" },
-        "text": { "type": "string", "minLength": 1, "maxLength": 65536 },
-        "sourceLanguage": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "targetLanguage": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "translation": { "$ref": "#/$defs/translation" },
-        "learningLevel": { "type": "integer", "minimum": 1, "maximum": 4 },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "source": { "$ref": "#/$defs/source" }
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "sourceLanguage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "targetLanguage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "translation": {
+          "$ref": "#/$defs/translation"
+        },
+        "learningLevel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "details": {
+          "$ref": "#/$defs/details"
+        },
+        "levelChangedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
       }
     },
     "translation": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["text", "baseText", "origin", "updatedAt"],
+      "required": [
+        "text",
+        "baseText",
+        "origin",
+        "updatedAt"
+      ],
       "properties": {
-        "text": { "type": ["string", "null"], "maxLength": 65536 },
-        "baseText": { "type": ["string", "null"], "maxLength": 65536 },
-        "origin": { "type": ["string", "null"] },
-        "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 65536
+        },
+        "baseText": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 65536
+        },
+        "origin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
       }
     },
     "source": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["id", "title"],
+      "required": [
+        "id",
+        "title"
+      ],
       "properties": {
-        "id": { "type": "string", "format": "uuid" },
-        "title": { "type": "string" },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string"
+        },
         "context": {
           "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/context" }
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/context"
+            }
           ]
         }
       }
@@ -96,19 +255,252 @@
     "context": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["text", "selectionUTF16"],
+      "required": [
+        "text",
+        "selectionUTF16"
+      ],
       "properties": {
-        "text": { "type": "string", "maxLength": 2000 },
+        "text": {
+          "type": "string",
+          "maxLength": 2000
+        },
         "selectionUTF16": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["location", "length"],
+          "required": [
+            "location",
+            "length"
+          ],
           "properties": {
-            "location": { "type": "integer", "minimum": 0 },
-            "length": { "type": "integer", "minimum": 1 }
+            "location": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       }
+    },
+    "details": {
+      "type": "object",
+      "required": [
+        "wordHelpItems",
+        "translationStatus"
+      ],
+      "properties": {
+        "contextSelectedTranslationText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contextTranslationText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selectedSenseText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "userNote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceTrackID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "translationErrorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contextAnalysisUpdatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "wordHelpUpdatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "wordHelpItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/wordHelp"
+          }
+        },
+        "localSourceItemID": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "segmentIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "audioStart": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "audioEnd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "translationStatus": {
+          "enum": [
+            "pending",
+            "translating",
+            "needsDownload",
+            "ready",
+            "failed",
+            "unsupported"
+          ]
+        }
+      }
+    },
+    "wordHelp": {
+      "type": "object",
+      "required": [
+        "sourceText",
+        "translationText",
+        "isGrammarWord"
+      ],
+      "properties": {
+        "sourceText": {
+          "type": "string"
+        },
+        "translationText": {
+          "type": "string"
+        },
+        "isGrammarWord": {
+          "type": "boolean"
+        },
+        "polishDictionaryResult": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "readingVocabulary": {
+      "type": "object",
+      "required": [
+        "tokenizerVersion",
+        "words"
+      ],
+      "properties": {
+        "tokenizerVersion": {
+          "const": 1
+        },
+        "words": {
+          "type": "array",
+          "maxItems": 500000,
+          "items": {
+            "type": "object",
+            "required": [
+              "languageCode",
+              "normalizedForm",
+              "firstLearnedAt"
+            ],
+            "properties": {
+              "languageCode": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$"
+              },
+              "normalizedForm": {
+                "type": "string",
+                "minLength": 1
+              },
+              "firstLearnedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "$comment": "The Swift validator also enforces canonical Unicode forms, one token per form, unique language/form pairs, total word bytes <= 32 MiB and version-specific file size limits."
     }
-  }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "not": {
+        "required": [
+          "readingVocabulary"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "entries": {
+          "items": {
+            "required": [
+              "details"
+            ]
+          }
+        }
+      },
+      "not": {
+        "required": [
+          "readingVocabulary"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "schemaVersion": {
+          "const": 3
+        },
+        "entries": {
+          "items": {
+            "required": [
+              "details"
+            ]
+          }
+        }
+      },
+      "required": [
+        "readingVocabulary"
+      ]
+    }
+  ]
 }

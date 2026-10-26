@@ -2,6 +2,24 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class OpenAIContextAnalysisProviderTests: XCTestCase {
+    func testKeyValidationSendsNoUserContentAndReportsAuthenticationFailure() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse())])
+        try await OpenAIContextAnalysisProvider(apiKey: "test-key", model: .mini, client: client).validateAPIKey()
+        let requests = await client.requests
+        let body = try XCTUnwrap(requests.first?.httpBody)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(object["input"] as? String, "Reply OK.")
+        XCTAssertEqual(object["store"] as? Bool, false)
+        let failure = ScriptedHTTPClient([.success(try httpResponse(status: 401, json: "{}"))])
+        do {
+            try await OpenAIContextAnalysisProvider(apiKey: "bad", model: .mini, client: failure).validateAPIKey()
+            XCTFail("Invalid key should fail")
+        } catch {
+            XCTAssertEqual(error as? ContextAnalysisError,
+                OpenAIContextAnalysisProvider.mapHTTPError(statusCode: 401, data: Data("{}".utf8)))
+        }
+    }
+
     func testSettingsDefaultCustomAndResetPrompt() throws {
         let suite = "OpenAIContextAnalysisProviderTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

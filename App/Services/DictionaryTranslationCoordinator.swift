@@ -11,11 +11,13 @@ final class DictionaryTranslationCoordinator {
         let source: String
         let target: String
         let revision: Int
+        var allowsPreparation = true
     }
 
     var configuration: TranslationSession.Configuration?
     private(set) var currentJob: Job?
     private var queued: [UUID] = []
+    private var recoveredIDs: Set<UUID> = []
     private var modelContext: ModelContext?
     private var attemptedPreparationPairs: Set<String> = []
 
@@ -28,6 +30,7 @@ final class DictionaryTranslationCoordinator {
     }
 
     func retry(_ entry: DictionaryEntry, context: ModelContext) {
+        recoveredIDs.remove(entry.id)
         attemptedPreparationPairs.remove("\(entry.sourceLanguageCode)>\(entry.targetLanguageCode)")
         entry.translationRevision += 1
         entry.translationErrorCode = nil
@@ -54,6 +57,7 @@ final class DictionaryTranslationCoordinator {
             throw error
         }
 
+        recoveredIDs.remove(entry.id)
         attemptedPreparationPairs.remove("\(entry.sourceLanguageCode)>\(entry.targetLanguageCode)")
         queued.removeAll { $0 == entry.id }
         queued.insert(entry.id, at: 0)
@@ -61,7 +65,7 @@ final class DictionaryTranslationCoordinator {
         else { startNext(context: context) }
     }
 
-    func recover(context: ModelContext) {
+    func recover(context: ModelContext) async {
         modelContext = context
         guard let entries = try? context.fetch(FetchDescriptor<DictionaryEntry>()) else { return }
         let localItemIDs = Set((try? context.fetch(FetchDescriptor<LearningItem>()).map(\.id)) ?? [])
@@ -72,7 +76,19 @@ final class DictionaryTranslationCoordinator {
             entry.translationStatus = .pending
         }
         try? context.save()
-        for entry in entries where entry.translationStatus == .pending { enqueue(entry, context: context) }
+        for entry in entries where entry.translationStatus == .pending {
+            let status = await LanguageAvailability().status(
+                from: Locale.Language(identifier: entry.sourceLanguageCode),
+                to: Locale.Language(identifier: entry.targetLanguageCode))
+            guard entry.translationStatus == .pending, !entry.hasTranslation else { continue }
+            guard status == .installed else {
+                entry.translationStatus = status == .unsupported ? .unsupported : .needsDownload
+                try? context.save()
+                continue
+            }
+            recoveredIDs.insert(entry.id)
+            enqueue(entry, context: context)
+        }
     }
 
     func cancel(_ id: UUID) { queued.removeAll { $0 == id } }
@@ -89,6 +105,7 @@ final class DictionaryTranslationCoordinator {
                 return
             case .supported:
                 guard await markNeedsDownload(job) else { return }
+                guard job.allowsPreparation else { await finish(job); return }
                 guard await beginPreparation(job) else { return }
                 try await session.prepareTranslation()
             case .installed:
@@ -192,7 +209,8 @@ final class DictionaryTranslationCoordinator {
             guard let entry = fetch(id, context: context), !entry.hasTranslation,
                   entry.translationStatus != .unsupported else { continue }
             let job = Job(id: id, text: entry.text, source: entry.sourceLanguageCode,
-                          target: entry.targetLanguageCode, revision: entry.translationRevision)
+                          target: entry.targetLanguageCode, revision: entry.translationRevision,
+                          allowsPreparation: !recoveredIDs.contains(id))
             currentJob = job
             configuration = TranslationConfiguration.next(previous: configuration,
                                                           source: job.source, target: job.target)
@@ -203,6 +221,7 @@ final class DictionaryTranslationCoordinator {
     private func finish(_ job: Job) {
         guard currentJob == job else { return }
         currentJob = nil
+        configuration = nil
         Task { @MainActor in
             await Task.yield()
             if let context = self.modelContext { self.startNext(context: context) }
@@ -219,8 +238,19 @@ final class DictionaryTranslationCoordinator {
 enum TranslationConfiguration {
     static func next(previous: TranslationSession.Configuration?, source: String,
                      target: String) -> TranslationSession.Configuration {
-        QualityTranslationConfiguration.next(previous: previous, source: source, target: target)
+        let sourceLanguage = Locale.Language(identifier: source)
+        let targetLanguage = Locale.Language(identifier: target)
+        if var previous, previous.source == sourceLanguage, previous.target == targetLanguage {
+            previous.invalidate()
+            return previous
+        }
+        if #available(iOS 26.4, *) {
+            return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage,
+                                                    preferredStrategy: .highFidelity)
+        }
+        return TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
     }
 }
+
 
 private enum TranslationWorkerError: Error { case emptyResult }

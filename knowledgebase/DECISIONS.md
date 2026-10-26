@@ -1,5 +1,31 @@
 # Architectural and product decisions
 
+## Progressive books and first-use guidance (2026-10-25)
+
+- Text and audio are independently optional library resources. Empty filenames represent intentional absence; no placeholder media or fake track is created. Existing single-file/video records retain their adapters. Defaulted resource revision, UTF-16 reading anchor and historical language-lock fields are additive SwiftData fields. Untimed full-text reading restores its anchor independently of playback; reading completion keeps its existing explicit/duration-based semantics. Replacing resources must not unlock a language already used for accumulated reading knowledge.
+- One Add book wizard previews resources before import. TXT UTF-8, a playable audio file, raw audio ZIP with optional text, and strict manifest packages share the staged import service. The strict external package schema is unchanged: partial local books do not produce a pretend valid strict package. Raw ZIP subtitle files are not linked by filename similarity. Existing SRT/VTT/video import remains a secondary option.
+- Resource updates publish a uniquely named generation inside the same book directory, journal before moving files, save model references through the existing main context and restore explicit book/dictionary snapshots on failure. Recovery distinguishes referenced and unpublished generations, cleaning obsolete known resources only after success. Whole audio replacement assigns fresh track identities and clears old card audio bounds. Text replacement resets text position, dependent synchronization and completion; historical studied forms, card text, translations and levels stay.
+- Attaching synchronization requires a strict package and byte-identical recordings in the previewed order, plus matching normalized full text when already present. Track identities, playback and valid manual phrase ranges stay. Word-timing sidecars are remapped to the verified existing track identities; obsolete cue indices are cleared so a different segmentation cannot reinterpret saved cards. Legacy single-file audio may be promoted to a physical track only after the same verification.
+- Onboarding uses explicit, locally persisted per-step completion, a global skip, a visibility preference and a reset generation. A step is not completed merely by presentation. Reset affects tutorial history only and preserves the enabled preference. Contextual popovers are limited to the relevant visible screen; guide and settings remain available. No analytics or backend was added.
+- The optional example contains original English text and narration synthesized locally by the device. An unavailable or timed-out device voice falls back to a readable text example. It creates no dictionary or studied-word records. Translation still follows the existing Russian-target language-pack and explicit cloud opt-in boundaries.
+- Library-state JSON adds optional reading-anchor and historical language-lock fields; absent fields preserve existing values on older restores. Audio-only fingerprinting uses ordered recording hashes instead of requiring a transcript. Local resource-generation revisions are not portable and are not restored from another device.
+
+## Practice settings are separate from app configuration
+
+Phrase cooldown intervals belong to a dedicated Practice settings screen reached from the Practice tab. General Settings contains translation/API configuration, prompt customization and diagnostics. The extraction preserves the existing UserDefaults keys, interval validation and explicit Save cooldowns action; leaving without saving discards edits. Round setup points learners to Practice settings.
+
+## Practice card actions beside their content
+
+Practice preview and revealed-answer cards place the translation editor directly beside the translation as an icon-only action, and original copying beside the visible source text. Translation copying and source-context copying are omitted from these cards. The original copy action and audio controls remain hidden until the original is shown. Playback sits below the original, with a compact word/phrase menu, speed control and visible Edit audio action. This action reuses the existing boundary editor and its validation, without changing ranges, learning rules or dictionary long-press controls.
+
+## Native Glass navigation with editorial reading
+
+Library, Dictionary and Practice are peer destinations in a native TabView, each with its own navigation stack. Practice presents the existing learning session, preserving its resumable state machine. Recovery and automatic translation remain attached to the app root so tab selection does not cancel them. Readers hide the tab bar and retain chapter controls in a floating player; manual completion is available in a reading-actions menu with its existing confirmation.
+
+Primary actions use system Liquid Glass on iOS 26, with bordered prominent native controls on iOS 18. Secondary actions use a lower-emphasis capsule. Content uses semantic system backgrounds; glass is confined to controls and floating panels. SwiftUI supplies appearance and accessibility adaptations rather than custom blur or animation.
+
+Reading text uses the system serif design at a 21-point default, UIFontMetrics-scaled typography and paragraph spacing. iPad text is limited to a comfortable measure through text-container insets, while interface controls keep system sans serif. Typography attributes are reapplied after document replacement and Dynamic Type changes, without editing source text or its UTF-16 selection/audio ranges. Reading vocabulary and advanced settings are disclosed on demand. No persistence schema, service boundary or learning algorithm changes are part of the redesign.
+
 ## Local-first media and persistence
 
 Media is copied into Application Support and metadata/transcript segments are stored with SwiftData. Imports do not require a server or network access, and failed imports clean up their copied files.
@@ -22,7 +48,7 @@ Transcript text is bridged to `UITextView` so learners get native selection hand
 
 Automatic transcript following pauses during manual scrolling or text selection. The learner can resume it with “Follow audio.” Overlapping timed segments use the most recently started segment until it ends; gaps have no highlight.
 
-Follow centers the first visual line of the active cue using TextKit 1 after layout. A user-created nonempty selection pauses playback once and disables follow; moving selection handles does not repeat the pause. Explicit Follow clears the selection and recenters without starting playback. Document identity includes cue ranges and source mappings so equal transcript text with changed timing cannot reuse stale highlight or scroll state.
+Follow measures the first visual line of the active cue using TextKit 1 after layout. During playback it leaves that line stationary within 35–60% of the usable viewport, otherwise moving it to 40% with native interruptible scroll animation. Geometry changes recalculate the destination without animation; Reduce Motion disables animation. The follow cache includes content size and measured line geometry, and is recorded before scrolling to avoid reentrant layout. Long cues remain cue-level: no within-cue timing is inferred. A user-created nonempty selection pauses playback once and disables follow; moving selection handles does not repeat the pause. Explicit Follow clears the selection and returns to the reading anchor without starting playback. Playback resume and seek actions also invalidate the previous follow destination. Document identity includes cue ranges and source mappings so equal transcript text with changed timing cannot reuse stale highlight or scroll state.
 
 ## Subtitle alignment is a separate tool
 
@@ -69,10 +95,15 @@ improvements backlog.
 
 ## Dictionary portability and translation
 
-Dictionary transfer uses readable JSON with stable entry identity, source context, translation metadata, and learning progress. Translation-only imports may update translation content while preserving current progress. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
+Dictionary detail prioritizes the source phrase with inline playback and icon-only copy controls, without a playback-speed menu, followed by the saved translation and a compact Meaning in context block. Copy controls throughout the app use icons with descriptive accessibility labels and a checkmark confirmation. The Progress section permits direct selection of levels 1–4, saved immediately with the previous value restored on save failure; level 4 marks a phrase learnt and lowering it makes a translated, ready phrase eligible for practice again. Legacy Word-by-word help and its per-word definition UI are no longer exposed on this card; stored word-help data remains compatible. Contextual explanations and the overall translation remain selectable without dedicated copy buttons.
 
-Ordinary automatic translation and word-by-word help use Apple Translation. Contextual translation
-instead uses OpenAI Responses API structured output so one request resolves the selected expression
+Dictionary backups use readable JSON v3 (v2 details plus reading vocabulary) with stable entry identity, source context, translation origin, progress, contextual analysis, personal notes, cached word help and exact audio-source links. V1 and V2 remain readable. Restore backup explicitly replaces fields on matching identities and adds missing records without removing unrelated entries; merge and translations-only preserve existing progress and notes. Interrupted requests are not resumed as in-flight state. Export validates its output against the importer and includes source context by default in the UI. Media files and library records remain outside dictionary JSON: audio links work only with the original local item/track identity and available files; reimporting a book under a new UUID does not automatically relink it. The architecture keeps source/target language metadata extensible, with Russian as the initial product need.
+
+Ordinary automatic translation uses Apple Translation for explicit Translate Again/Force/Retry,
+legacy pending-entry recovery, dictionary imports without translations and source-language changes.
+Source-language pickers also use Apple language availability. These remain supported offline-capable
+workflows. The unreachable legacy word-by-word translator has been removed. Contextual translation
+uses OpenAI Responses API structured output so one request resolves the selected expression
 against its saved surrounding text and returns a direct translation plus a short explanation. It is
 explicitly enabled by the user and is not an offline feature.
 
@@ -121,9 +152,19 @@ status when available. API keys, headers, prompt/input text and model response b
 Export logs uses the system file exporter and is available from settings and translation details.
 No diagnostic upload is automatic.
 
-Polish monolingual definitions use the public Polish Wiktionary MediaWiki API as an explicit per-word action. The app parses only the Polish-language section, associates numbered examples with numbered meanings, attributes and links the source article, and persists successful results with the existing word-help data for offline reuse. Lookup failures never remove cached content, and automatic/background harvesting is outside the product boundary. The parser is conservative because Wiktionary markup is community-maintained and may evolve.
+The retired Polish Wiktionary definition lookup has no UI or production caller and is removed,
+including its parser, coordinator and write-only error logging. The SGJP resolver and compressed
+pack existed solely to provide fallback lemmas for that lookup, so they and their exclusive pack
+builder are removed too. Reading vocabulary counts surface forms and has never depended on SGJP;
+contextual lemmas come from the current cloud analysis. SQLite remains required by VocabularyIndex.
+Existing installed morphology files are left untouched; no startup deletion or store migration is
+needed. Git history retains the retired implementation.
 
-Polish inflected forms are resolved locally before a fallback Wiktionary request. A reproducible build tool reduces the BSD-licensed SGJP/Morfeusz source feed to unique `surface form → dictionary title` pairs. For the current debugging phase, the complete database is zlib-compressed into the application bundle and expanded into Application Support on first use. Ambiguous forms remain explicit choices for the learner rather than being resolved arbitrarily. A downloadable language pack can replace the bundled resource later without changing the lookup interface.
+Persisted WordHelpItem and PolishDictionaryResult shapes, including optional lemma references,
+remain in the model for SwiftData and JSON v2/v3 compatibility. Historical Polish lookup diagnostics
+retain their Codable shape and a read-only adapter for backup export. No legacy result, attribution,
+translation origin, status or backup field is dropped. See docs/LEGACY_TRANSLATION_AUDIT.md for the
+call-path audit and retained functionality.
 
 ## Learning parts
 
@@ -131,7 +172,13 @@ Learning content is modeled as virtual parts rather than requiring duplicated me
 
 ## Learning rounds and completion
 
-A learning round snapshots a unique eligible ID set at Start and keeps its original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
+Start round fills the requested size from eligible learning levels in order (1 before 2 before 3), shuffling within each level. If a lower level has fewer phrases than the round size, the remaining places come from the next level. Each new round reevaluates the pool.
+
+Start round snapshots a unique eligible ID set for a level-aware preliminary review (level 1 reveals immediately; levels 2–3 require Check). Each card offers Start learning (queue at its current level), Move to next level (save one level increase and exclude from this practice round), Mark as known (save level 4 and exclude), or Skip (exclude from this round without changing or saving the entry). Each choice advances the preview, with persistent changes committed before advancement. Stale presentation IDs are rejected and failed saves keep the card and its previous level. Missing/ineligible cards are skipped. The normal practice round starts only after the complete preview, using the IDs explicitly queued for learning; an empty queue finishes the preview directly. Repeat starts a fresh preview.
+
+A practice round keeps its queued ID set and original size. A wrong answer moves the same ID to the pending tail; a right answer completes that entry for the round after its learning-level save succeeds. Deleted or newly ineligible entries are skipped without replacement. Presentation IDs make answer events idempotent, and a failed save leaves level, queue, counters and revealed state unchanged.
+
+After revealing the answer, horizontal swipes left/right invoke the same saved Right/Wrong action as the buttons. A horizontal drag tints the card green/red and animates it offscreen before invoking the answer transaction. Short or vertical gestures do not answer; Reduce Motion suppresses lateral travel. Input is locked during dismissal, and failed saves restore the card. The most recent answer can be undone for three seconds, including on completion: its saved level, queue and counters are restored and the previous card is revealed with a fresh presentation identity. Undo is invalidated by another answer, skipping, starting a new round or leaving training. Failed undo saves preserve the answered state. Successful undo also rewrites the unfinished-round checkpoint to prevent resuming an undone answer.
 
 Round statistics describe attempts and completion inside that round. The completion screen separately queries every stored level-4 Russian entry with a ready, nonempty translation, so it includes phrases learned before the current round.
 
@@ -159,3 +206,109 @@ Playback seeks use generation tokens and completion callbacks. Periodic time obs
 ## Exportable lookup diagnostics
 
 Polish Definition failures are recorded both through Apple's unified `Logger` and in an app-local, file-protected JSON log capped at 200 newest events. Dictionary export embeds a snapshot of these events plus app/OS versions in an optional `diagnostics` field, preserving version-1 import compatibility and requiring an explicit user export before diagnostic data leaves the device. Logs contain the looked-up word and technical error details, but not source sentence context or media content.
+
+
+## Resumable training rounds
+
+Only level 1 preview cards reveal their answer immediately; levels 2–3 require Check before the preview actions. The translation remains the recall prompt, matching practice mode.
+
+A versioned local UserDefaults checkpoint stores the fixed round IDs, retry order, completed/skipped IDs, counts and presentation token after a successfully saved Right/Wrong answer. Preview-only sessions are not resumed. Completion clears the checkpoint; starting a new round replaces it without reverting earned levels. Restored missing/ineligible entries follow the existing skip path. Word-level changes remain immediate SwiftData saves, independent of closing or completing the round. Training cannot be dismissed by swipe, and Close requires confirmation for an unfinished round with answers. Dictionary and training setup offer continuation across reopening the app.
+
+Progress rows select a level filter, including level 4, in the word list below. Reset restores the separate in-progress and learnt sections.
+
+## Inline word explanations
+
+Detailed word explanations are a second, explicitly requested level of Meaning in context, shared by the selection preview, dictionary card and revealed learning card. Expanding a word opens content in place, not a new screen. Only one row expands at a time; cancellation and failures never replace the concise translation. The dedicated structured response contains a simple definition, contextual meaning, and one or two illustrative phrases with translations. It uses the existing cloud opt-in, Keychain credential and model selection, with a separate configurable word explanation prompt, independent of the concise-translation prompt (see the 2026-10-25 decision).
+
+The existing persisted `source — lemma — meaning` breakdown is decoded only when every line can be matched in order to the exact selected source tokens. Occurrence-specific UTF-16 ranges disambiguate repeated words. Unsupported legacy output is displayed unchanged; no guessed word lookup is issued. A missing surrounding context can use the selected phrase, matching the existing learning fallback.
+
+Successful details are derived data in a bounded 200-record Caches file, keyed by a hash of the word, lemma, exact context/range, languages, model and detailed-prompt version. The cache survives normal relaunches and works offline when present, but may be purged and is excluded from portable dictionary backups. No SwiftData migration or stored-translation overwrite is needed. Cancelled and invalid responses are not cached.
+
+## Isolated agent contributions
+
+New chats start from fetched origin/main on a dedicated codex/ branch. Concurrent work uses separate worktrees. Existing working-copy changes are preserved rather than reset during setup. Historical review reports explicitly identify their reviewed snapshot and require revalidation before their findings are treated as current.
+
+## Vocabulary accumulated from reading
+
+Performance revision (2026-10-19): [persistent vocabulary index and library badges](../docs/READING_VOCABULARY_INDEX_ARCHITECTURE.md). Unique book-word memberships and an inverted SQLite index update cached counts from newly studied forms. SwiftData remains authoritative. Startup/restore snapshot reconciliation repairs missed projection writes; ordinary updates deliver idempotent deltas. This replaces the proposed outbox with snapshot recovery. New knowledge is stored in bounded append-only batches in the same main-context transaction as completion flags, avoiding thousands of managed inserts without introducing a competing playback writer. Backup v3 remains a union of canonical forms and earliest dates; legacy individual records remain readable. This supersedes the per-word completion storage and full vocabulary reload described below.
+
+Library badges count the full completion corpus (TXT plus subtitles): unread books show new unique forms, explicitly completed books show total unique forms. Reader decoration is limited to the viewport using compact cached positions; text itself remains in a single UITextView. The implementation deliberately retains the existing atomic writer rather than moving all library and dictionary writes to a new actor. Startup knowledge loading uses a background read-only context; large backup work and full-document text layout still require physical-device profiling.
+
+[Reading vocabulary architecture](../docs/READING_VOCABULARY_ARCHITECTURE.md) records the complete behavior and implementation sequence (2026-10-18). Distinct surface forms from confirmed read texts are stored by canonical source language. Completion requires confirmation, cannot be undone, and never creates or changes dictionary cards. Whole-book completion is explicit because tracks cannot establish coverage of the full untimed TXT; it includes full text and all available track subtitle text. Tracks without subtitles may be marked read without contributing words.
+
+A versioned Unicode tokenizer supplies all completion, import statistics and reader ranges. Knowledge is durable SwiftData data independent of library lifetime. Older completion flags migrate idempotently; failures leave migration retryable. The application's main ModelContext is the sole writer for both playback and completion, with unrelated changes flushed before a short synchronous atomic save. This avoids stale cross-context arrays overwriting completed track/part flags. Failed completion explicitly restores observed flags in addition to rolling back inserted words.
+
+Reader new-word foreground color and optional accessibility underline are independent of the active cue background; color-only changes preserve native selection and following. Tokenization is asynchronous, cached for the active text, and not repeated on playback ticks. Language is locked after the first completion to preserve the namespace used for accumulated knowledge.
+
+Portable JSON v3 carries reading vocabulary together with dictionary details, without library files or completion flags. Restore and merge form a union and retain the earliest first-studied date; translations-only and v1/v2 files leave reading vocabulary untouched. Both domains share one save/rollback, and vocabulary changes invalidate stale import confirmations. V3 is limited to 64 MiB / 500,000 reading forms with 32 MiB of language/form bytes; v1/v2 retain their 20 MiB limit. No partial export or silent truncation is allowed.
+
+
+## Reader paint and chapter navigation stability
+
+New-word foreground, optional underline and active-cue background are drawn by `TranscriptLayoutManager`. Painting invalidates display only and must not edit `NSTextStorage` from layout or scroll callbacks. Base font changes still use text attributes. Native text selection, wrapping and glyph layout remain managed by TextKit. Follow requests depend on document/cue, explicit resume, viewport dimensions and insets, and text size category; changing estimated content height alone must not cancel or restart an in-flight movement.
+
+Both physical chapters and legacy virtual parts use a dedicated sheet List built from an immutable opening snapshot with stable IDs. Playback position updates do not rebuild the presented rows. Selection resolves the chosen ID against the current item before navigation; closing without selection leaves playback unchanged.
+
+## Phrase level cooldown (2026-10-19)
+
+Store an optional `levelChangedAt` on each dictionary entry. Legacy entries have no reliable transition history: translation timestamps describe a different event, so missing dates are backfilled once with the current time. Freshly added phrases are immediately available for first practice. Level changes from answers, preview and manual editing reset the clock, with transactional rollback and Undo restoring the old date.
+
+New rounds filter by the current level's user-editable cooldown (24/72/96 hours for levels 1/2/3). An unchecked-by-default “Ignore words cooldown” option bypasses selection filtering for that session. Retries and resumed rounds retain their selected membership. Settings are local UserDefaults preferences; transition dates travel in dictionary backups as an optional, backward-compatible field. Level 4 remains excluded.
+
+Cooldown interval editing lives in app Settings, with draft values committed only by Save cooldowns. Existing UserDefaults keys and defaults remain unchanged. Exercise setup exposes only the session override; unsaved global edits never affect practice selection.
+
+## Optional word timings refine phrase playback without changing reader cues
+
+Timed book tracks may reference a schema-v1 word-timing JSON sidecar through optional `wordTimings`. Bind it to track ID, normalized parsed subtitle text and exact audio SHA-256, validate every token and local finite ordered time, and preserve explicit zero-duration tokens. Keep ordinary cue text/highlighting for reading. Selection audio uses the first and last selected spoken-word boundaries only when every selected spoken word has a usable duration; otherwise label the existing cue range Play context. Never interpolate speech timing from character/word counts or infer timing for untimed full-book TXT.
+
+Update phrase audio attaches validated sidecars to an existing book with immutable source/track/media identity, completion and progress. Publish uniquely named files before updating model references; a failed save restores track/dictionary values and removes the prepared files. An interruption before the save can leave unreferenced sidecars but cannot replace old media or timing references. Resolve saved selections conservatively within their recorded first cue, using a saved precise range to disambiguate repeated occurrences; ambiguous old ranges remain unchanged. New selections and successful explicit updates persist refined audio bounds through the existing dictionary backup fields. A bounded, file-revision-keyed document cache avoids parsing chapters on playback ticks. Word-level alignment improves granularity but does not certify acoustic accuracy.
+
+Follow audio resolves contiguous layout through the destination cue and lays out its viewport before clamping the scroll target. If UITextView still exposes an older, smaller content height, raise it to the measured TextKit extent. Keep follow requests keyed by cue/document/viewport rather than estimated content-size changes, so scroll animations do not restart during lazy layout.
+
+Phrase cards display remaining cooldown as a render-time snapshot in days/hours/minutes, rounded up to a whole minute. They use the same saved transition date and current global intervals as round selection, without a periodic timer; level 4 has no countdown.
+
+## Manual phrase audio ranges take precedence
+
+Store optional manualAudioStart/manualAudioEnd as a paired absolute range in track-local seconds on each dictionary entry, separately from automatic audioStart/audioEnd. Playback uses a valid manual range before resolving word timings; invalid overrides fail closed. Word-timing updates may refine automatic bounds but never overwrite manual bounds. Reset clears the pair after Save. Editing is a draft with preview and cancellation, supports fractional earlier/later shifts on either boundary, and rejects nonfinite, inverted, negative or out-of-track ranges. Dictionary backups carry the optional pair; old backups omit it. Restore snapshots include both fields. The shared editor is available from both dictionary and learning cards.
+
+## Dictionary review readiness and round results
+
+Dictionary readiness counts, the Ready to repeat filter, and Quick start require both learning eligibility (including a saved ready Russian translation and a level below 4) and an expired cooldown. The filter combines with the selected level; Quick start uses up to 10 ready phrases across all levels, lower levels first, and opens the existing preview. Like Start round, it replaces an unfinished checkpoint. Dictionary readiness refreshes every 30 seconds.
+
+Capture starting levels before preview and retain them in the round checkpoint so completion cards show the net starting → current level, including preview changes and retries. Undo restores the round and entry together. Old checkpoints omit the transition rather than guessing. Completion shows only this round's cards, including its preview; other learnt phrases remain accessible in the dictionary.
+
+
+## Per-round retry limit, explicit key checks and duration-weighted reading (2026-10-25)
+
+Count wrong answers per entry within a round. At four errors, a later correct answer completes the entry without increasing its current level; wrong answers still follow the existing demotion rule. Counters are optional checkpoint fields for backwards compatibility, survive resume, and roll back with Undo. A new round starts fresh counters.
+
+Recover interrupted Apple translations only when both language models are installed. Missing downloads become needsDownload and require an explicit retry; recovery never requests preparation UI. Clear the session configuration when a job finishes so an idle session is not reactivated on foregrounding. Settings key validation sends a small, non-stored Responses request with no reader content and the selected model, checking authentication, model access and quota. It does not save a draft key or enable cloud translation.
+
+For new timed selections only, save the containing sentence's automatic audio bounds separately from the selected range. A selection crossing sentences includes all intersecting sentences. Each mode has independent optional manual bounds, editing, reset, and backup fields. Existing entries have no sentence range and retain their playback behavior; no backfill or migration derives new ranges for them. Exact word timings are preferred; otherwise use actual cue bounds, without guessing word timestamps.
+
+Reading fraction equals completed valid chapter audio duration divided by total valid chapter audio duration, using physical tracks or legacy virtual parts. A whole-book completion is 100%; no chapters/duration yields 0% otherwise. Playback position does not affect this metric.
+
+
+## 2026-10-25 — Natural chapter completion and audio editing
+
+- An audiobook track's natural end reports the completed track before advancing. The reader serializes automatic reading-vocabulary completion through the existing prepare/complete transaction, showing errors rather than silently losing the mark. The final track is included; seeking or choosing another chapter never marks an unfinished chapter read.
+- Explicit chapter choice starts its audio and transcript at the beginning, including reselecting the current chapter; initial book opening continues to restore saved playback position.
+- Automatic selected-word/context and whole-phrase playback adds 0.5 seconds before and after the resolved source range, clamped to the source media. Padding is applied at resolution, leaving stored timestamps and alignment matching exact, avoiding repeated padding after backup or timing updates. Manual overrides are exact and receive no padding.
+- Audio editing has two handles on a shared timeline, snapping dragged boundaries to tenths of a second with at least 0.1 seconds between them. The initial scale covers the phrase plus five seconds on either side; whole-track and zoom controls expose the full legal range. Existing numeric adjustments remain available in a collapsible section so preview and reset are visible alongside the sliders.
+- Active playback holds the iOS idle timer disabled so synchronized text stays visible. A weak registry of players and observed playback state release it on pause, end, interruption or player closure, while respecting another active player.
+
+
+## 2026-10-25 — Word explanation prompt customization
+
+The detailed Meaning in context request has its own Settings editor, with explicit Save and Reset to Default, trimmed nonempty input and the existing 8,000 UTF-16-unit prompt limit. Store overrides locally and read the effective prompt at the beginning of each request; the same snapshot goes into the request and cache key. Prompt version v2 invalidates the previous default results. Existing displayed explanations remain until a new request is made.
+
+The default requests 1–2 complete, natural sentences (aiming for 8–20 words each) and full translations. Each demonstrates the same word sense in an independent everyday situation, without quoting, paraphrasing, continuing or retelling the source or reusing its characters, events or distinctive details. Each example also differs from the other. Editable teaching instructions are followed by mandatory input-as-data and structured-response rules; the strict JSON schema remains fixed.
+
+
+## 2026-10-26 — Library state backups without book assets
+
+The Library toolbar owns Backup Library and Import Library; Dictionary no longer exposes transfer controls. Existing dictionary JSON v1–v3 import modes remain available from the Library menu. Library backups use `foreign-language-learner.library`, schema 1, capped at 128 MiB, embedding the existing validated dictionary v3 payload and adding book state, typed allowlisted settings, a valid resumable learning checkpoint and at most 200 validated word explanation cache records. Include settings for model, cloud analysis, both prompt texts and three level cooldowns. Never export the Keychain API key, arbitrary UserDefaults, book text/audio/subtitles/word timings, or rebuildable indexes. Saved phrase context remains part of the dictionary payload. Invalid stale training checkpoints referencing deleted entries are omitted.
+
+A book fingerprint hashes normalized full source text plus ordered track IDs and durations rounded to milliseconds (legacy media uses its transcript segments and single duration). It does not use title, UUID, local paths or alignment files. Changing only title or timing sidecars does not change identity; a different transcript or audio layout requires the matching edition. Restore retains the newly imported book's local UUID and physical-file metadata, restores the original title/date/language, completion flags, part structure, active track and playback positions, and remaps imported dictionary source/local-source IDs. Match exact original UUID among equal fingerprints when available; otherwise require one unambiguous local candidate and a one-to-one mapping. Never guess among duplicates or silently drop unmatched book progress. Reimport books before restoring the backup; partial library restoration and pending unmatched states are not supported in v1.
+
+Preview explains overwrites and required book imports. Missing/ambiguous/incompatible books and dictionary identity conflicts block Apply; revalidate portable data and local matching at Apply time. Unrelated library/dictionary records stay local and reading knowledge merges under existing earliest-date semantics. Dictionary, reading vocabulary and book-state mutations share the existing SwiftData transaction. Prepare the cache file before committing and restore it on failure; settings/checkpoint apply only after a successful model save. This is rollback-safe for reported save failures, not a cross-store crash transaction between SwiftData, cache files and UserDefaults. A restart/reimport can reapply the idempotent backup. Cached explanations are reloaded by the live cache actor after import.

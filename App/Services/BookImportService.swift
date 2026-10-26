@@ -11,6 +11,7 @@ actor BookImportService {
         let subtitleFilename: String?
         let duration: Double
         let alignmentStatus: TrackAlignmentStatus
+        var wordTimingsFilename: String? = nil
     }
 
     struct Preview: Identifiable, Equatable, Sendable {
@@ -46,6 +47,7 @@ actor BookImportService {
 
     private let limits: BookImportLimits
     private let fileManager: FileManager
+    private var vocabularyCache: [String: VocabularyImportPreview] = [:]
     private var manifests: [UUID: BookManifest] = [:]
 
     init(limits: BookImportLimits = .standard, fileManager: FileManager = .default) {
@@ -55,6 +57,42 @@ actor BookImportService {
 
     static var stagingRoot: URL {
         URL.applicationSupportDirectory.appending(path: "ImportStaging", directoryHint: .isDirectory)
+    }
+
+    /// Stage independent resources using the same checked prepare/commit path as ZIP books.
+    func previewFiles(audio: URL?, text: URL?) async throws -> Preview {
+        guard audio != nil || text != nil else { throw invalid("Choose text or audio to start.") }
+        let id = UUID()
+        let root = Self.stagingRoot.appending(path: id.uuidString)
+        let book = root.appending(path: "book")
+        try fileManager.createDirectory(at: book, withIntermediateDirectories: true)
+        do {
+            var tracks: [PreviewTrack] = []
+            if let audio {
+                let access = audio.startAccessingSecurityScopedResource()
+                defer { if access { audio.stopAccessingSecurityScopedResource() } }
+                let name = "audio/\(UUID().uuidString).\(audio.pathExtension.lowercased())"
+                let destination = book.appending(path: name)
+                try copyStreamed(from: audio, to: destination, maximumBytes: limits.maximumAudioBytes)
+                let duration = try await probeAudio(destination)
+                tracks = [.init(id: UUID().uuidString, title: audio.deletingPathExtension().lastPathComponent,
+                    sourcePath: audio.lastPathComponent, mediaFilename: name, subtitleFilename: nil,
+                    duration: duration, alignmentStatus: .untimed)]
+            }
+            var candidates: [String] = []
+            if let text {
+                let access = text.startAccessingSecurityScopedResource()
+                defer { if access { text.stopAccessingSecurityScopedResource() } }
+                guard text.pathExtension.lowercased() == "txt" else { throw invalid("Choose a UTF-8 TXT file. For SRT/VTT use audio or video with subtitles.") }
+                let destination = root.appending(path: "transcript-candidates").appending(path: candidateName(for: text.lastPathComponent))
+                try copyStreamed(from: text, to: destination, maximumBytes: UInt64(limits.maximumTranscriptBytes))
+                _ = try cachedVocabulary(destination, fileExtension: "txt")
+                candidates = [text.lastPathComponent]
+            }
+            return .init(id: id, itemID: UUID(), title: (text ?? audio!).deletingPathExtension().lastPathComponent,
+                sourceLanguage: "pl", tracks: tracks, transcriptCandidates: candidates,
+                selectedTranscript: candidates.first, isManifestPackage: false, ignoredFileCount: 0)
+        } catch { try? fileManager.removeItem(at: root); throw error }
     }
 
     func previewArchive(_ sourceURL: URL) async throws -> Preview {
@@ -89,6 +127,49 @@ actor BookImportService {
             try? fileManager.removeItem(at: root)
             throw error
         }
+    }
+
+    /// Read-only analysis serialized with staging cleanup by this actor.
+    func vocabularyPreview(_ preview: Preview, transcriptPath: String?, externalTranscript: URL?) throws -> VocabularyImportPreview {
+        let url: URL
+        if let externalTranscript { url = externalTranscript }
+        else if let path = transcriptPath ?? preview.selectedTranscript {
+            url = Self.stagingRoot.appending(path: preview.id.uuidString)
+                .appending(path: "transcript-candidates").appending(path: candidateName(for: path))
+        } else { return .combined([]) }
+        let directory = Self.stagingRoot.appending(path: preview.id.uuidString).appending(path: "book")
+        var values = [try cachedVocabulary(url, fileExtension: "txt")]
+        for track in preview.tracks {
+            if let filename = track.subtitleFilename {
+                values.append(try cachedVocabulary(directory.appending(path: filename)))
+            }
+        }
+        return .combined(values)
+    }
+
+    func vocabularyPreview(_ prepared: Prepared) throws -> VocabularyImportPreview {
+        var values: [VocabularyImportPreview] = []
+        if !prepared.transcriptFilename.isEmpty {
+            values.append(try cachedVocabulary(prepared.stagedBookDirectory.appending(path: prepared.transcriptFilename), fileExtension: "txt"))
+        }
+        for track in prepared.tracks {
+            if let filename = track.subtitleFilename {
+                values.append(try cachedVocabulary(prepared.stagedBookDirectory.appending(path: filename)))
+            }
+        }
+        return .combined(values)
+    }
+
+    private func cachedVocabulary(_ url: URL, fileExtension: String? = nil) throws -> VocabularyImportPreview {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let source = ReadingTextSource(text: nil, url: url, fileExtension: fileExtension ?? url.pathExtension)
+        let key = try source.cacheKey()
+        if let cached = vocabularyCache[key] { return cached }
+        let value = try VocabularyImportPreview.file(url, fileExtension: source.fileExtension, limit: limits.maximumTranscriptBytes)
+        guard try source.cacheKey() == key else { throw ReadingVocabularyError.changed }
+        vocabularyCache[key] = value
+        return value
     }
 
     func prepare(_ preview: Preview, title: String, sourceLanguage: String? = nil,
@@ -127,18 +208,21 @@ actor BookImportService {
             let candidate = root.appending(path: "transcript-candidates", directoryHint: .isDirectory)
                 .appending(path: candidateName(for: selected))
             try fileManager.copyItem(at: candidate, to: transcriptDestination)
-        } else {
-            throw invalid("Choose the book transcript before importing.")
         }
-        let transcriptData = try Data(contentsOf: transcriptDestination, options: .mappedIfSafe)
-        guard !transcriptData.isEmpty, transcriptData.count <= limits.maximumTranscriptBytes,
-              String(data: transcriptData, encoding: .utf8) != nil else { throw invalid("Transcript must be nonempty UTF-8 under 10 MB.") }
+        let hasTranscript = fileManager.fileExists(atPath: transcriptDestination.path)
+        guard hasTranscript || !orderedTracks.isEmpty else { throw invalid("Choose text or audio to start.") }
+        let transcriptData = hasTranscript ? try Data(contentsOf: transcriptDestination, options: .mappedIfSafe) : Data()
+        if hasTranscript {
+            guard !transcriptData.isEmpty, transcriptData.count <= limits.maximumTranscriptBytes,
+                  let text = String(data: transcriptData, encoding: .utf8),
+                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw invalid("Transcript must be nonempty UTF-8 under 10 MB.") }
+        }
 
         if var manifest = manifests[preview.id] {
             try BookManifestValidator.validate(manifest, transcriptData: transcriptData, limits: limits)
             manifest.title = cleanTitle
             try writeManifest(manifest, to: book.appending(path: "manifest.json"))
-        } else {
+        } else if hasTranscript && !orderedTracks.isEmpty {
             let tracks = orderedTracks.map {
                 BookManifest.Track(id: $0.id, title: $0.title, audio: $0.mediaFilename,
                                    alignmentStatus: .untimed, subtitle: nil, textRange: nil)
@@ -152,17 +236,18 @@ actor BookImportService {
         let learningTracks = orderedTracks.map {
             LearningTrack(id: $0.id, title: $0.title, mediaFilename: $0.mediaFilename,
                           subtitleFilename: $0.subtitleFilename, duration: $0.duration,
-                          alignmentStatus: $0.alignmentStatus)
+                          alignmentStatus: $0.alignmentStatus, wordTimingsFilename: $0.wordTimingsFilename)
         }
         let duration = learningTracks.reduce(0) { $0 + $1.duration }
         guard duration.isFinite else { throw invalid("Combined duration is invalid.") }
         return Prepared(transactionID: preview.id, itemID: preview.itemID, title: cleanTitle,
                         sourceLanguage: language, tracks: learningTracks,
-                        transcriptFilename: "transcript.txt", duration: duration,
+                        transcriptFilename: hasTranscript ? "transcript.txt" : "", duration: duration,
                         stagedBookDirectory: book)
     }
 
     func movePreparedToLibrary(_ prepared: Prepared) throws {
+        try Task.checkCancellation()
         let final = MediaImportService.directory(for: prepared.itemID)
         guard !fileManager.fileExists(atPath: final.path) else { throw invalid("Import destination already exists.") }
         let journal = ImportJournal(transactionID: prepared.transactionID, itemID: prepared.itemID, state: .prepared)
@@ -175,16 +260,19 @@ actor BookImportService {
         try? writeJournal(.init(transactionID: prepared.transactionID, itemID: prepared.itemID, state: .committed))
         cleanup(transactionID: prepared.transactionID, removeFinal: false, itemID: prepared.itemID)
         manifests[prepared.transactionID] = nil
+        vocabularyCache.removeAll()
     }
 
     func rollback(_ prepared: Prepared) {
         cleanup(transactionID: prepared.transactionID, removeFinal: true, itemID: prepared.itemID)
         manifests[prepared.transactionID] = nil
+        vocabularyCache.removeAll()
     }
 
     func cancel(_ preview: Preview) {
         cleanup(transactionID: preview.id, removeFinal: false, itemID: preview.itemID)
         manifests[preview.id] = nil
+        vocabularyCache.removeAll()
     }
 
     private func previewManifest(archive: Archive, entries: [Entry], manifestEntry: Entry,
@@ -192,7 +280,7 @@ actor BookImportService {
         let manifestData = try extractData(manifestEntry, from: archive, maximumBytes: limits.maximumManifestBytes)
         var manifest = try BookManifestValidator.decode(manifestData, limits: limits)
         let byPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
-        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle].compactMap { $0 } })
+        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle, $0.wordTimings].compactMap { $0 } })
         let unknown = entries.filter { $0.type == .file && !allowed.contains($0.path) && !isSystemMetadata($0.path) }
         guard unknown.isEmpty else { throw invalid("Strict package contains unreferenced file: \(unknown[0].path)") }
         guard let transcriptEntry = byPath[manifest.transcript], transcriptEntry.type == .file else { throw invalid("Manifest transcript is missing.") }
@@ -205,6 +293,7 @@ actor BookImportService {
         try fileManager.createDirectory(at: book.appending(path: "audio", directoryHint: .isDirectory), withIntermediateDirectories: true)
         try fileManager.createDirectory(at: book.appending(path: "subtitles", directoryHint: .isDirectory), withIntermediateDirectories: true)
         var subtitleTotal = 0
+        var wordTimingTotal = 0
         var previewTracks: [PreviewTrack] = []
         for track in manifest.tracks {
             try Task.checkCancellation()
@@ -227,9 +316,28 @@ actor BookImportService {
                 try extractFile(subtitleEntry, from: archive, to: destination, maximumBytes: UInt64(limits.maximumSubtitleBytes - 1))
                 try validateSubtitle(destination, duration: duration)
             }
+            var wordTimingsFilename: String?
+            if let path = track.wordTimings {
+                guard let entry = byPath[path], entry.type == .file,
+                      entry.uncompressedSize <= WordAudioTimingFile.maximumBytes,
+                      let subtitleFilename else { throw invalid("Missing or oversized word timings for track \(track.id).") }
+                wordTimingTotal += Int(entry.uncompressedSize)
+                guard wordTimingTotal <= WordAudioTimingFile.maximumCombinedBytes else { throw invalid("Combined word timings exceed 50 MB.") }
+                wordTimingsFilename = "word-timings/\(track.id).json"
+                let destination = book.appending(path: wordTimingsFilename!)
+                try extractFile(entry, from: archive, to: destination, maximumBytes: UInt64(WordAudioTimingFile.maximumBytes))
+                let timings = try WordAudioTimingFile.read(destination)
+                let subtitleURL = book.appending(path: subtitleFilename)
+                let document = try TranscriptParser.parse(String(contentsOf: subtitleURL, encoding: .utf8), extension: subtitleURL.pathExtension)
+                _ = try timings.applying(to: document, trackID: track.id, duration: duration)
+                guard try timings.audioSHA256 == WordAudioTimingFile.audioHash(audioDestination) else {
+                    throw invalid("Word timings do not match the audio for track \(track.id).")
+                }
+            }
             previewTracks.append(.init(id: track.id, title: track.title, sourcePath: track.audio,
                                        mediaFilename: mediaFilename, subtitleFilename: subtitleFilename,
-                                       duration: duration, alignmentStatus: track.alignmentStatus))
+                                       duration: duration, alignmentStatus: track.alignmentStatus,
+                                       wordTimingsFilename: wordTimingsFilename))
         }
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
         manifests[transactionID] = manifest
