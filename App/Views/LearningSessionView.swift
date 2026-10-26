@@ -90,31 +90,6 @@ struct LearningSessionView: View {
                     }
                 }
             }
-            .toolbar {
-                if let current {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu("Phrase actions", systemImage: "ellipsis") {
-                            CopyMenuButton(value: current.translationText ?? "", label: "Copy translation",
-                                           identifier: "learn.copy-translation")
-                            Button("Edit translation", systemImage: "pencil") {
-                                closeAudio()
-                                translationDraft = current.translationText ?? ""
-                                editingEntry = current
-                            }
-                            .accessibilityIdentifier("learn.edit")
-                            if revealed || (previewRound != nil && current.learningLevel == 1) {
-                                CopyMenuButton(value: current.text, label: "Copy original",
-                                               identifier: "learn.copy-original")
-                                if let sourceContext = current.contextText {
-                                    CopyMenuButton(value: sourceContext, label: "Copy source context",
-                                                   identifier: "learn.copy-source-context")
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("learn.actions")
-                    }
-                }
-            }
             .alert("Could not save progress", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -175,7 +150,7 @@ struct LearningSessionView: View {
                 }
                     .toggleStyle(.switch)
                     .accessibilityIdentifier("learn.ignore-cooldown")
-                Text("Cooldown intervals can be changed in app Settings.")
+                Text("Cooldown intervals can be changed in Practice settings.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Available") {
@@ -236,22 +211,45 @@ struct LearningSessionView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                Text(entry.translationText ?? "")
-                    .font(.largeTitle)
-                    .multilineTextAlignment(.center)
-                    .accessibilityIdentifier("learn.translation")
+                HStack(alignment: .center, spacing: 16) {
+                    Text(entry.translationText ?? "")
+                        .font(.largeTitle)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("learn.translation")
+                    Button {
+                        closeAudio()
+                        translationDraft = entry.translationText ?? ""
+                        editingEntry = entry
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.title2.weight(.medium))
+                            .frame(width: 48, height: 48)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Edit translation")
+                    .accessibilityIdentifier("learn.edit")
+                }
 
                 if revealed || (preview != nil && entry.learningLevel == 1) {
                     Divider()
-                    Text(entry.text)
-                        .font(.title2)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("learn.original")
+                    HStack(alignment: .center, spacing: 16) {
+                        Text(entry.text)
+                            .font(.title2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("learn.original")
+                        CopyButton(value: entry.text, label: "Copy original",
+                                   identifier: "learn.copy-original")
+                    }
                     phraseAudio(for: entry)
                     if let contextText = entry.contextText {
                         Text(highlightedContext(contextText, entry: entry))
                             .font(.body)
-                            .multilineTextAlignment(.center)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                             .accessibilityIdentifier("learn.source-context")
                     }
@@ -480,31 +478,67 @@ struct LearningSessionView: View {
         }
     }
 
-    @ViewBuilder private func phraseAudio(for entry: DictionaryEntry) -> some View {
-        if entry.phraseAudioStart != nil {
-            Picker("Audio", selection: $audioMode) {
-                ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: audioMode) { _, _ in closeAudio() }
-        }
-
-        if let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: entry.phraseAudioStart == nil ? .selection : audioMode) {
+    private func phraseAudio(for entry: DictionaryEntry) -> some View {
+        let mode: PhraseAudioMode = entry.phraseAudioStart == nil ? .selection : audioMode
+        let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: mode)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button {
-                    toggleAudio(source)
-                } label: {
-                    Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
-                          systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                Text("Audio").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Spacer()
+                if let source {
+                    PhraseAudioEditButton(entry: entry, items: sourceItems, source: source,
+                                          stopPlayback: { playback.pause() }, mode: mode)
+                        .font(.subheadline.weight(.medium))
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("learn.edit-audio")
                 }
-                .accessibilityIdentifier("learn.play-audio")
-                .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
-                PlaybackRateMenu(playback: playback)
             }
-        } else {
-            Label("Audio unavailable on this device", systemImage: "speaker.slash")
-                .foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 12) {
+                if let source {
+                    Button { toggleAudio(source) } label: {
+                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .accessibilityLabel(playback.isPlaying ? source.pauseLabel : source.playLabel)
+                    .accessibilityIdentifier("learn.play-audio")
+                }
+                if entry.phraseAudioStart != nil {
+                    Menu {
+                        Picker("Audio fragment", selection: $audioMode) {
+                            ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(audioMode.title).multilineTextAlignment(.leading)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                        }
+                        .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.subheadline.weight(.medium))
+                    .accessibilityLabel("Audio fragment")
+                    .accessibilityValue(audioMode.title)
+                    .accessibilityIdentifier("learn.audio-mode")
+                    .onChange(of: audioMode) { _, _ in closeAudio() }
+                } else if source != nil {
+                    Text("Phrase audio").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if source != nil { PlaybackRateMenu(playback: playback, compact: true) }
+            }
+            if source == nil {
+                Label("Audio unavailable on this device", systemImage: "speaker.slash")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
         }
+        .padding(12)
+        .background(Color.accentColor.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("learn.audio-panel")
     }
 
     private func editingView(_ entry: DictionaryEntry) -> some View {
