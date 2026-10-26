@@ -16,7 +16,7 @@ struct ReadingActionsMenu: View {
     private var isBook: Bool { selectedScope == .book }
 
     var body: some View {
-        Menu("Reading actions", systemImage: "ellipsis") {
+        Menu("Reading actions", systemImage: "checkmark.circle") {
             if let chapterScope { completionAction(chapterScope) }
             completionAction(.book)
         }
@@ -37,7 +37,7 @@ struct ReadingActionsMenu: View {
         } message: { proposal in
             Text(proposal.hasText
                  ? "\(proposal.added) new unique words will become studied. \(isBook ? "All chapters will be marked read; full text and available subtitles are included. " : "")This cannot be undone. The source language will be locked."
-                 : "This chapter has no subtitles. Its words will be counted when you mark the whole book read. This cannot be undone. The source language will be locked.")
+                 : "No text is attached to this selection. Completion will be saved without adding studied words. Adding text later will not mark the new text read. This cannot be undone. The source language will be locked.")
         }
         .alert("Could not mark read", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
@@ -118,6 +118,8 @@ struct VocabularyTranscriptView: View {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
+    var initialReadingOffset: Int? = nil
+    var onReadingOffsetChanged: ((Int) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
     @State private var textIndex: VocabularyTextIndex?
     @State private var indexedText: String?
@@ -158,7 +160,9 @@ struct VocabularyTranscriptView: View {
                                wordStyleRevision: vocabulary.revision,
                                differentiateWithoutColor: differentiateWithoutColor,
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
-                               knownForms: vocabulary.forms(for: language), wordStyleLanguage: language, handleSelection: handleSelection)
+                               knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
+                               initialReadingOffset: initialReadingOffset, onReadingOffsetChanged: onReadingOffsetChanged,
+                               handleSelection: handleSelection)
         }
         .task(id: document.text) {
             let text = document.text

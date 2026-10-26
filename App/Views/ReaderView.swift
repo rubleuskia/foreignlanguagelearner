@@ -19,6 +19,8 @@ struct ReaderView: View {
     @State private var translationPreview: SelectionTranslationPreview?
     @State private var followGeneration = 0
     @State private var translationCache = SelectionTranslationCache()
+    @State private var openedRevision = ""
+    @State private var selecting = false
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
     private var document: TranscriptDocument {
@@ -39,10 +41,11 @@ struct ReaderView: View {
             if item.mediaKind == "video" {
                 VideoPlayer(player: playback.player).frame(height: 200)
             }
-            if item.segments.first?.start == nil {
+            if item.hasAudio && item.hasText && item.segments.first?.start == nil {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
+            if item.hasText {
             VocabularyTranscriptView(document: document, language: item.sourceLanguageCode,
                                activeSegment: document.activeSegment(at: playback.position),
                                following: $following,
@@ -50,7 +53,9 @@ struct ReaderView: View {
                                onSelectionBegan: {
                 playback.pause()
                 following = false
-            }) { action, text, selectionRange, segment, selectionContext in
+                selecting = true
+            }, initialReadingOffset: item.readingCharacterOffset,
+                onReadingOffsetChanged: { item.readingCharacterOffset = $0 }) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
                 let audio = audioRange(for: selectionRange)
                 let normalized = DictionaryEntry.normalized(text)
@@ -69,6 +74,9 @@ struct ReaderView: View {
                 }
             }
             .id(manualChapterGeneration)
+            } else {
+                ContentUnavailableView("Listen to your book", systemImage: "headphones", description: Text("Add text from the ⋮ menu to read and save phrases."))
+            }
             if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
                     followGeneration += 1
@@ -78,11 +86,15 @@ struct ReaderView: View {
                     .padding(8)
             }
         }
-        .safeAreaInset(edge: .bottom) { playerBar }
+        .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
+        .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: item.hasText && !selecting && translationPreview == nil) }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
             }
@@ -99,11 +111,12 @@ struct ReaderView: View {
                         }
                     }
                 }
-                .disabled(item.hasReadingCompletion)
-                .help(item.hasReadingCompletion ? "The language is locked after marking a text read." : "Source language")
+                .disabled(item.isSourceLanguageLocked)
+                .help(item.isSourceLanguageLocked ? "The language is locked after marking a text read." : "Source language")
             }
         }
         .onAppear {
+            openedRevision = item.resourceRevision
             selectedPart = item.partIndex(containing: item.lastPosition)
             openCurrentPart()
         }
@@ -184,6 +197,7 @@ struct ReaderView: View {
     }
 
     private func openCurrentPart() {
+        guard item.hasAudio else { return }
         let range = currentPart.map { $0.start...$0.end }
         playback.open(url: MediaImportService.directory(for: item.id).appending(path: item.mediaFilename), position: currentPart?.lastPosition ?? item.lastPosition, range: range)
     }
@@ -205,13 +219,16 @@ struct ReaderView: View {
     }
 
     private func savePosition() {
-        item.lastPosition = playback.position
-        updatePartPosition(playback.position)
+        guard openedRevision == item.resourceRevision else { return }
+        if item.hasAudio {
+            item.lastPosition = playback.position
+            updatePartPosition(playback.position)
+        }
         try? context.save()
     }
 
     private func changeLanguage(to code: String) {
-        guard !item.hasReadingCompletion, code != item.sourceLanguageCode else { return }
+        guard !item.isSourceLanguageLocked, code != item.sourceLanguageCode else { return }
         let itemID = item.id
         do {
             let entries = try context.fetch(FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.localSourceItemID == itemID }))

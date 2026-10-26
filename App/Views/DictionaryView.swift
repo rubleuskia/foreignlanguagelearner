@@ -38,6 +38,7 @@ struct DictionaryView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
+                OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil && !importing && !exporting)
                 ReadingVocabularyStatus()
                 if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
                     Section {
@@ -95,7 +96,7 @@ struct DictionaryView: View {
                     }
                 }
                 if entries.isEmpty {
-                    ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Select text in a transcript and choose Add to Dictionary."))
+                    ContentUnavailableView("No saved phrases", systemImage: "text.book.closed", description: Text("Open a book in Library, touch and hold a word, then choose Add to Dictionary. Text without audio works too."))
                         .listRowBackground(Color.clear)
                 } else {
                     if !learningEntries.isEmpty || selectedLevel != nil || readyOnly {

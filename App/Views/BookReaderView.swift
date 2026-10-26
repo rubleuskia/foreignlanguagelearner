@@ -24,6 +24,7 @@ struct BookReaderView: View {
     @State private var trackDocuments: [String: TranscriptDocument] = [:]
     @State private var fullDocument: TranscriptDocument?
     @State private var transcriptError: String?
+    @State private var fullTextError: String?
     @State private var message: String?
     @State private var selectionPreview: SelectionTranslationPreview?
     @State private var lastSavedPosition = 0.0
@@ -31,6 +32,9 @@ struct BookReaderView: View {
     @State private var translationCache = SelectionTranslationCache()
     @State private var choosingWordTimings = false
     @State private var updatingWordTimings = false
+    @State private var openedRevision = ""
+    @State private var selecting = false
+    @State private var showAudioTip = false
     private let timingUpdates = WordTimingUpdateService()
 
     private var activeTrack: LearningTrack? { item.tracks.first { $0.id == playback.activeTrackID } }
@@ -43,11 +47,17 @@ struct BookReaderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if item.hasText && item.tracks.contains(where: { $0.alignmentStatus.hasTimedTranscript }) {
             Picker("Reading mode", selection: $mode) {
                 ForEach(ReadingMode.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .padding()
+            }
+            if item.hasText && activeTrack?.alignmentStatus.hasTimedTranscript != true {
+                Text("Read and listen independently. Add synchronization from the ⋮ menu to follow the recording.")
+                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
+            }
             transcriptContent
             if !following, mode == .track {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
@@ -59,10 +69,18 @@ struct BookReaderView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { playerBar }
+        .safeAreaInset(edge: .top) {
+            OnboardingTip(step: showAudioTip ? .synchronization : .reading,
+                allowed: item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
+                .id(showAudioTip)
+        }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
             }
@@ -87,6 +105,9 @@ struct BookReaderView: View {
             }
         }
         .onAppear {
+            openedRevision = item.resourceRevision
+            let initial = item.tracks.first(where: { $0.id == item.lastTrackID }) ?? item.tracks.first
+            mode = initial?.alignmentStatus.hasTimedTranscript == true ? .track : .full
             playback.open(item: item)
             playback.didFinishTrack = { id in completeTrack(id) }
             loadFullText()
@@ -97,6 +118,8 @@ struct BookReaderView: View {
             followGeneration += 1
             following = true
             loadTrackTranscript()
+            if activeTrack?.alignmentStatus.hasTimedTranscript != true { mode = .full }
+            showAudioTip = false
         }
         .onChange(of: mode) { _, _ in
             followGeneration += 1
@@ -105,6 +128,9 @@ struct BookReaderView: View {
         .onChange(of: playback.localPosition) { _, value in
             if abs(value - lastSavedPosition) >= 5 { savePosition(); lastSavedPosition = value }
         }
+        .onChange(of: playback.wantsToPlay) { _, value in
+            if value && mode == .track { showAudioTip = true }
+        }
         .onChange(of: scenePhase) { _, phase in if phase != .active { savePosition() } }
         .onDisappear { savePosition(); playback.close() }
         .sheet(item: $chapterPicker) { snapshot in
@@ -112,7 +138,7 @@ struct BookReaderView: View {
                 guard item.tracks.contains(where: { $0.id == id }) else { return }
                 savePosition()
                 playback.selectTrack(id)
-                mode = .track
+                mode = activeTrack?.alignmentStatus.hasTimedTranscript == true ? .track : .full
                 manualChapterGeneration += 1
                 followGeneration += 1
                 following = true
@@ -129,7 +155,10 @@ struct BookReaderView: View {
     }
 
     @ViewBuilder private var transcriptContent: some View {
-        if mode == .track, activeTrack?.alignmentStatus == .untimed {
+        if !item.hasText {
+            ContentUnavailableView("Listen to your book", systemImage: "headphones",
+                description: Text("Add text from the ⋮ menu to read and save phrases."))
+        } else if mode == .track, activeTrack?.alignmentStatus == .untimed {
             ContentUnavailableView("No timed transcript for this track", systemImage: "text.badge.xmark",
                                    description: Text("Open Full text to read the book without synchronized timing."))
         } else if let document = displayedDocument {
@@ -142,7 +171,9 @@ struct BookReaderView: View {
                                onSelectionBegan: {
                 playback.pause()
                 following = false
-            }) { action, text, selectionRange, segment, selectionContext in
+                selecting = true
+            }, initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
+                onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {
                     message = "The transcript changed. Select the text again."
                     return
@@ -163,7 +194,7 @@ struct BookReaderView: View {
                 }
             }
             .id(manualChapterGeneration)
-        } else if let transcriptError {
+        } else if let transcriptError = mode == .full ? fullTextError : transcriptError {
             ContentUnavailableView("Transcript unavailable", systemImage: "exclamationmark.triangle",
                                    description: Text(transcriptError))
         } else {
@@ -173,7 +204,7 @@ struct BookReaderView: View {
 
     private var playerBar: some View {
         VStack(spacing: 8) {
-            Text("Read: \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
+            Text("\(item.hasText ? "Read" : "Listened"): \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button(activeTrack?.title ?? "Track") {
@@ -239,11 +270,12 @@ struct BookReaderView: View {
     }
 
     private func loadFullText() {
+        guard !item.transcriptFilename.isEmpty else { loadTrackTranscript(); return }
         do {
             let url = MediaImportService.directory(for: item.id).appending(path: item.transcriptFilename)
             fullDocument = try TranscriptParser.parse(String(contentsOf: url, encoding: .utf8), extension: "txt")
-            transcriptError = nil
-        } catch { transcriptError = error.localizedDescription }
+            fullTextError = nil
+        } catch { fullTextError = error.localizedDescription }
         loadTrackTranscript()
     }
 
@@ -288,6 +320,7 @@ struct BookReaderView: View {
     }
 
     private func savePosition() {
+        guard openedRevision == item.resourceRevision else { return }
         playback.snapshot(into: item)
         try? context.save()
     }

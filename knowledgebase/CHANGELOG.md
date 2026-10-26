@@ -1,11 +1,19 @@
 # Project changelog
 
-<<<<<<< HEAD
+## 2026-10-26 — Progressive book import and first-use onboarding
+
+- Add a unified book wizard for text, audio, audio ZIP with optional TXT and complete synchronized packages. Text-only books can be read; audio-only books can be played; unsynchronized books open full text directly.
+- Add a vertical book resource menu in library rows and both readers. Missing text/audio can be attached to the same book; replacements preview their consequences. Journaled resource generations, explicit rollback snapshots and startup recovery protect existing files and dictionary data. Compatible synchronization packages verify current text and exact audio bytes.
+- Keep independent full-text reading positions. Preserve card text, translations, learning levels and historical studied forms on resource replacement while clearing unsafe old audio links.
+- Add contextual first-use tips, a help guide, a tutorial toggle/reset, and an optional original locally narrated example. Existing audio/video with SRT/VTT import remains available.
+- Verification: 186 unit tests, iPhone onboarding/import UI checks, iPad wizard/text-only reader checks and unsigned iOS Release build pass. Tutorial dismissal is also verified at the largest accessibility text size.
+- DECISIONS.md records resource identity, recovery and tutorial policies; PROJECT.md and README describe the expanded workflow. Project purpose and local/cloud boundaries are unchanged.
+
 ## 2026-10-25 — Onboarding implementation plan (documentation only)
 
 - Add `docs/ONBOARDING_IMPLEMENTATION_PLAN.md` with the proposed import wizard, partial-book states, safe resource updates, contextual onboarding, implementation sequence and acceptance checks.
 - This is a future implementation plan, not a shipped feature. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md remain unchanged. Implementation PRs must record the decisions and supported workflows they actually introduce.
-=======
+
 ## 2026-10-25 — Native Glass interface and editorial reading
 
 - Introduce permanent Library, Dictionary and Practice tabs, a featured in-progress book, explicit empty-library import actions and a dedicated practice home with quick start and saved-round access.
@@ -14,7 +22,6 @@
 - Move learning copy/edit commands into a phrase menu; source copying is available only while the original is visible. At accessibility text sizes, preview actions scroll with content instead of covering the phrase.
 - Move reading completion into the reading-actions menu, reading vocabulary into a disclosure, and advanced prompt/diagnostic tools into disclosures. Keep explicit confirmations, translation settings, audio-boundary precision and learning rules.
 - DECISIONS.md records the visual system and navigation; PROJECT.md updates the supported navigation and reading workflow. Project purpose and major data/service boundaries are unchanged.
->>>>>>> origin/main
 
 ## 2026-10-25 — Chapter completion and audio boundary controls
 

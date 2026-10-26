@@ -27,6 +27,7 @@ struct ContextualTranslationSettingsView: View {
 
     var body: some View {
         Form {
+            OnboardingHelpSection()
             Section("Phrase cooldown") {
                 ForEach(0..<3, id: \.self) { index in
                     HStack {

@@ -61,6 +61,7 @@ final class LibraryFlowTests: XCTestCase {
         for identifier in ["import.media", "import.transcript"] {
             app.launch()
             app.buttons["library.upload"].tap()
+            app.buttons["Audio or video with SRT / VTT subtitles"].tap()
             let button = app.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             button.tap()
@@ -78,12 +79,15 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Your library is empty"].waitForExistence(timeout: 10))
         app.buttons["library.upload"].tap()
+        XCTAssertTrue(app.staticTexts["What do you have?"].waitForExistence(timeout: 5))
+        app.buttons["Audio or video with SRT / VTT subtitles"].tap()
         XCTAssertTrue(app.buttons["Choose audio or video"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Choose transcript"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["import.language"].exists)
         XCTAssertTrue(app.switches["import.split"].exists)
         XCTAssertFalse(app.buttons["Import"].isEnabled)
-        app.buttons["Cancel"].tap()
+        app.navigationBars["Add material"].buttons["Cancel"].tap()
+        app.navigationBars["Add book"].buttons["Cancel"].tap()
         app.buttons["Dictionary"].tap()
         XCTAssertTrue(app.staticTexts["No saved phrases"].waitForExistence(timeout: 5))
     }

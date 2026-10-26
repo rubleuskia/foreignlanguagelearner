@@ -2,6 +2,12 @@
 
 Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media library with single-file and multi-track audiobook import, synchronized selectable transcripts, a phrase dictionary with Apple automatic translation and opt-in OpenAI contextual explanations, interactive learning rounds, portable JSON dictionary files, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
 
+## First use
+
+Choose **Add book** to start with a UTF-8 TXT, one audio file, audio tracks in a ZIP, or a complete synchronized book package. Text alone supports reading and phrase capture; audio alone supports listening. Use a book’s vertical **⋮** menu to add or replace text, audio or compatible synchronization later. Text and audio without timing work independently; the app never guesses timestamps from the text.
+
+**Try an example** creates a short original English story with locally synthesized narration, falling back to a readable text example if the device voice is unavailable. No account or API key is needed for reading/listening. Ordinary phrase translation into Russian may need Apple language packs; OpenAI contextual analysis remains optional. Settings → **Help and tutorial** contains the guide, tip toggle and reset. Resetting tips does not reset books, cards or learning progress.
+
 ## Start developing
 
 1. Install full Xcode 26.6 or later, open it once, and install an iOS simulator runtime.

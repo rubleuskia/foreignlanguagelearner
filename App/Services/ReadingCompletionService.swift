@@ -42,7 +42,8 @@ enum ReadingCompletionService {
             if item.tracks.isEmpty {
                 return [.init(text: TranscriptDocument(segments: item.segments).text, url: nil, fileExtension: "txt")]
             }
-            return [.init(text: nil, url: directory.appending(path: item.transcriptFilename), fileExtension: "txt")]
+            let full: [ReadingTextSource] = item.transcriptFilename.isEmpty ? [] : [.init(text: nil, url: directory.appending(path: item.transcriptFilename), fileExtension: "txt")]
+            return full
                 + item.tracks.compactMap(trackSource)
         case .track(let id):
             guard let track = item.tracks.first(where: { $0.id == id }) else { throw ReadingVocabularyError.missingItem }
