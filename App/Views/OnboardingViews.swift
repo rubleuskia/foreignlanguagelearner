@@ -118,7 +118,7 @@ struct OnboardingGuideView: View {
                 Text("Ordinary translation into Russian uses Apple language packs. A first request may require downloading them. Cloud contextual analysis is optional, requires your OpenAI API key and sends the selected phrase and limited context directly to OpenAI.")
             }
             Section("Your data") {
-                Text("Your books, dictionary and reading history are stored on this device. Export a dictionary backup to keep your cards and studied word forms. Dictionary backups do not contain book text, recordings or reading positions.")
+                Text("Your books, dictionary and reading history are stored on this device. Use Backup Library in Library to keep cards, studied words, reading positions and settings. Backups do not contain book text or recordings: import your book files separately before restoring on another device. Older dictionary JSON files contain cards and studied words but no book positions.")
             }
         }
         .navigationTitle("Quick guide")

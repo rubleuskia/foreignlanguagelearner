@@ -307,6 +307,34 @@ final class ProgressiveBookTests: XCTestCase {
         XCTAssertTrue(item.title.contains("Text example"))
     }
 
+    @MainActor func testLibraryBackupSupportsPartialBooksAndRestoresTextAnchor() throws {
+        let db = try database(), context = db.mainContext, text = try book(context)
+        let audioID = UUID(), directory = MediaImportService.directory(for: audioID)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: MediaImportService.directory(for: text.id))
+        }
+        _ = try audio(in: directory)
+        let recording = LearningItem(id: audioID, title: "Audio", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "", duration: 1, segments: [], tracks: [.init(id: "audio", title: "Audio", mediaFilename: "chapter.wav", duration: 1)])
+        context.insert(recording)
+        text.readingCharacterOffset = 5; text.sourceLanguageLockedByHistory = true
+        let file = try LibraryBackupService.export(context: context, cacheURL: nil)
+        let document = try LibraryBackupService.decode(file.data)
+        XCTAssertEqual(document.books.count, 2)
+        XCTAssertEqual(document.books.first { $0.id == text.id }?.readingCharacterOffset, 5)
+        text.readingCharacterOffset = 0; text.sourceLanguageLockedByHistory = false
+        try context.save()
+        let preview = try LibraryBackupService.preview(document, context: context)
+        XCTAssertTrue(preview.canRestore)
+        let suite = "PartialBookBackup.\(UUID())", defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        _ = try LibraryBackupService.restore(preview, context: context, defaults: defaults, cacheURL: nil)
+        XCTAssertEqual(text.readingCharacterOffset, 5)
+        XCTAssertTrue(text.sourceLanguageLockedByHistory)
+    }
+
     @MainActor func testUntimedReadingRestoresCharacterAnchorOnceWithoutSelectingText() {
         let text = String(repeating: "A small story with a new word.\n\n", count: 150)
         let document = TranscriptDocument(segments: [.init(start: nil, end: nil, text: text)])

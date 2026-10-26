@@ -5,8 +5,9 @@
 - Add a unified book wizard for text, audio, audio ZIP with optional TXT and complete synchronized packages. Text-only books can be read; audio-only books can be played; unsynchronized books open full text directly.
 - Add a vertical book resource menu in library rows and both readers. Missing text/audio can be attached to the same book; replacements preview their consequences. Journaled resource generations, explicit rollback snapshots and startup recovery protect existing files and dictionary data. Compatible synchronization packages verify current text and exact audio bytes.
 - Keep independent full-text reading positions. Preserve card text, translations, learning levels and historical studied forms on resource replacement while clearing unsafe old audio links.
+- Keep partial books compatible with library-state backups: audio-only identities use recording hashes, and optional reading-anchor/language-lock fields preserve text-only progress without changing older JSON decoding.
 - Add contextual first-use tips, a help guide, a tutorial toggle/reset, and an optional original locally narrated example. Existing audio/video with SRT/VTT import remains available.
-- Verification: 189 unit tests, iPhone onboarding/import UI checks, iPad wizard/text-only reader checks and unsigned iOS Release build pass. Tutorial dismissal is also verified at the largest accessibility text size.
+- Verification: 196 unit tests, iPhone onboarding/import UI checks, iPad wizard/text-only reader checks and unsigned iOS Release build pass. Tutorial dismissal is also verified at the largest accessibility text size.
 - DECISIONS.md records resource identity, recovery and tutorial policies; PROJECT.md and README describe the expanded workflow. Project purpose and local/cloud boundaries are unchanged.
 
 ## 2026-10-25 — Onboarding implementation plan (documentation only)

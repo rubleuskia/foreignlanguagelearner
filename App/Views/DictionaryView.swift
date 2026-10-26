@@ -31,7 +31,7 @@ struct DictionaryView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
-                OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil && !importing && !exporting)
+                OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil)
                 ReadingVocabularyStatus()
                 if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
                     Section {
