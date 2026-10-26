@@ -1,5 +1,18 @@
 # Project changelog
 
+## 2026-10-26 — Preserve chapter progress when leaving the reader
+
+- Ignore progress callbacks after playback closes so Back and reopening resume the current chapter instead of saving the teardown position or stale track snapshots. Apply the same live-player guard to the single-file reader.
+- Stop the audiobook position observer when its sleep is cancelled; do not refresh from a closed player. Explicit chapter selection continues to start at zero.
+- Add regressions for closed snapshots, cancelled observation, and Back/reopen in both readers, followed by explicit chapter selection. This restores the existing progress contract; no architectural/product decision or supported workflow changed, so DECISIONS.md and PROJECT.md need no update.
+
+## 2026-10-25 — Editable word explanation prompt
+
+- Settings now offers a separate Word explanation prompt editor with save, validation and reset to the default. It applies to detailed explanations opened by tapping a word in Meaning in context.
+- Default examples are complete sentences (aiming for 8–20 words) in independent situations, with full translations. They must not quote, paraphrase or reuse the source situation or its characters and events.
+- Cache keys include the effective word prompt and its version so changing the prompt avoids previous-prompt results on new requests. Structured output and input safety rules remain mandatory.
+- DECISIONS.md records the prompt customization policy. Project purpose, supported workflow and major boundaries are unchanged; PROJECT.md needs no update.
+
 ## 2026-10-25 — Dedicated practice settings
 
 - Move phrase cooldown intervals out of general Settings into a dedicated Practice settings screen opened from the Practice tab. General Settings retains contextual translation, API configuration, prompt and diagnostics.
@@ -11,6 +24,7 @@
 - Replace the practice card’s phrase-actions menu with a larger icon-only translation edit action at the right of the translation, and a vertically centered copy action at the right of the revealed original. Remove translation copying and context copying from practice cards.
 - Place playback below the original in a dedicated audio panel. Replace the full-width word/phrase segmented control with a compact fragment menu and simplify the playback-speed control. A visible Edit audio action opens the existing validated boundary editor without a long press. Dictionary audio controls remain unchanged.
 - Add UI coverage for text-action alignment, answer hiding, copying, fragment switching and explicit editing of independent word/phrase ranges. DECISIONS.md records the updated practice-card interaction. Project purpose, supported workflows and major boundaries are unchanged; PROJECT.md requires no update.
+
 
 ## 2026-10-25 — Native Glass interface and editorial reading
 
