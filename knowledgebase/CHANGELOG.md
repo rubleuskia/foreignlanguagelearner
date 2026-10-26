@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-25 — Dedicated practice settings
+
+- Move phrase cooldown intervals out of general Settings into a dedicated Practice settings screen opened from the Practice tab. General Settings retains contextual translation, API configuration, prompt and diagnostics.
+- Preserve saved cooldown values, validation and explicit Save cooldowns behavior; update the round-setup guidance to point to Practice settings.
+- Update DECISIONS.md and PROJECT.md for the new settings entry point. Project purpose and major boundaries are unchanged.
+
 ## 2026-10-25 — Practice preview text and audio actions
 
 - Replace the practice card’s phrase-actions menu with a larger icon-only translation edit action at the right of the translation, and a vertically centered copy action at the right of the revealed original. Remove translation copying and context copying from practice cards.

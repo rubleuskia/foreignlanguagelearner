@@ -1,5 +1,9 @@
 # Architectural and product decisions
 
+## Practice settings are separate from app configuration
+
+Phrase cooldown intervals belong to a dedicated Practice settings screen reached from the Practice tab. General Settings contains translation/API configuration, prompt customization and diagnostics. The extraction preserves the existing UserDefaults keys, interval validation and explicit Save cooldowns action; leaving without saving discards edits. Round setup points learners to Practice settings.
+
 ## Practice card actions beside their content
 
 Practice preview and revealed-answer cards place the translation editor directly beside the translation as an icon-only action, and original copying beside the visible source text. Translation copying and source-context copying are omitted from these cards. The original copy action and audio controls remain hidden until the original is shown. Playback sits below the original, with a compact word/phrase menu, speed control and visible Edit audio action. This action reuses the existing boundary editor and its validation, without changing ranges, learning rules or dictionary long-press controls.

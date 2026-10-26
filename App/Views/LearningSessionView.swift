@@ -150,7 +150,7 @@ struct LearningSessionView: View {
                 }
                     .toggleStyle(.switch)
                     .accessibilityIdentifier("learn.ignore-cooldown")
-                Text("Cooldown intervals can be changed in app Settings.")
+                Text("Cooldown intervals can be changed in Practice settings.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Available") {
