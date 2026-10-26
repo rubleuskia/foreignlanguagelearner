@@ -14,6 +14,19 @@
 - Add `docs/ONBOARDING_IMPLEMENTATION_PLAN.md` with the proposed import wizard, partial-book states, safe resource updates, contextual onboarding, implementation sequence and acceptance checks.
 - This is a future implementation plan, not a shipped feature. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md remain unchanged. Implementation PRs must record the decisions and supported workflows they actually introduce.
 
+## 2026-10-26 — Preserve chapter progress when leaving the reader
+
+- Ignore progress callbacks after playback closes so Back and reopening resume the current chapter instead of saving the teardown position or stale track snapshots. Apply the same live-player guard to the single-file reader.
+- Stop the audiobook position observer when its sleep is cancelled; do not refresh from a closed player. Explicit chapter selection continues to start at zero.
+- Add regressions for closed snapshots, cancelled observation, and Back/reopen in both readers, followed by explicit chapter selection. This restores the existing progress contract; no architectural/product decision or supported workflow changed, so DECISIONS.md and PROJECT.md need no update.
+
+## 2026-10-25 — Editable word explanation prompt
+
+- Settings now offers a separate Word explanation prompt editor with save, validation and reset to the default. It applies to detailed explanations opened by tapping a word in Meaning in context.
+- Default examples are complete sentences (aiming for 8–20 words) in independent situations, with full translations. They must not quote, paraphrase or reuse the source situation or its characters and events.
+- Cache keys include the effective word prompt and its version so changing the prompt avoids previous-prompt results on new requests. Structured output and input safety rules remain mandatory.
+- DECISIONS.md records the prompt customization policy. Project purpose, supported workflow and major boundaries are unchanged; PROJECT.md needs no update.
+
 ## 2026-10-25 — Native Glass interface and editorial reading
 
 - Introduce permanent Library, Dictionary and Practice tabs, a featured in-progress book, explicit empty-library import actions and a dedicated practice home with quick start and saved-round access.

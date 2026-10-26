@@ -209,7 +209,7 @@ Progress rows select a level filter, including level 4, in the word list below. 
 
 ## Inline word explanations
 
-Detailed word explanations are a second, explicitly requested level of Meaning in context, shared by the selection preview, dictionary card and revealed learning card. Expanding a word opens content in place, not a new screen. Only one row expands at a time; cancellation and failures never replace the concise translation. The dedicated structured response contains a simple definition, contextual meaning, and one or two illustrative phrases with translations. It uses the existing cloud opt-in, Keychain credential and model selection, with a separate fixed prompt rather than the configurable concise-translation prompt.
+Detailed word explanations are a second, explicitly requested level of Meaning in context, shared by the selection preview, dictionary card and revealed learning card. Expanding a word opens content in place, not a new screen. Only one row expands at a time; cancellation and failures never replace the concise translation. The dedicated structured response contains a simple definition, contextual meaning, and one or two illustrative phrases with translations. It uses the existing cloud opt-in, Keychain credential and model selection, with a separate configurable word explanation prompt, independent of the concise-translation prompt (see the 2026-10-25 decision).
 
 The existing persisted `source — lemma — meaning` breakdown is decoded only when every line can be matched in order to the exact selected source tokens. Occurrence-specific UTF-16 ranges disambiguate repeated words. Unsupported legacy output is displayed unchanged; no guessed word lookup is issued. A missing surrounding context can use the selected phrase, matching the existing learning fallback.
 
@@ -287,3 +287,10 @@ Reading fraction equals completed valid chapter audio duration divided by total 
 - Automatic selected-word/context and whole-phrase playback adds 0.5 seconds before and after the resolved source range, clamped to the source media. Padding is applied at resolution, leaving stored timestamps and alignment matching exact, avoiding repeated padding after backup or timing updates. Manual overrides are exact and receive no padding.
 - Audio editing has two handles on a shared timeline, snapping dragged boundaries to tenths of a second with at least 0.1 seconds between them. The initial scale covers the phrase plus five seconds on either side; whole-track and zoom controls expose the full legal range. Existing numeric adjustments remain available in a collapsible section so preview and reset are visible alongside the sliders.
 - Active playback holds the iOS idle timer disabled so synchronized text stays visible. A weak registry of players and observed playback state release it on pause, end, interruption or player closure, while respecting another active player.
+
+
+## 2026-10-25 — Word explanation prompt customization
+
+The detailed Meaning in context request has its own Settings editor, with explicit Save and Reset to Default, trimmed nonempty input and the existing 8,000 UTF-16-unit prompt limit. Store overrides locally and read the effective prompt at the beginning of each request; the same snapshot goes into the request and cache key. Prompt version v2 invalidates the previous default results. Existing displayed explanations remain until a new request is made.
+
+The default requests 1–2 complete, natural sentences (aiming for 8–20 words each) and full translations. Each demonstrates the same word sense in an independent everyday situation, without quoting, paraphrasing, continuing or retelling the source or reusing its characters, events or distinctive details. Each example also differs from the other. Editable teaching instructions are followed by mandatory input-as-data and structured-response rules; the strict JSON schema remains fixed.
