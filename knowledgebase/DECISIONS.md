@@ -9,6 +9,14 @@
 - Onboarding uses explicit, locally persisted per-step completion, a global skip, a visibility preference and a reset generation. A step is not completed merely by presentation. Reset affects tutorial history only and preserves the enabled preference. Contextual popovers are limited to the relevant visible screen; guide and settings remain available. No analytics or backend was added.
 - The optional example contains original English text and narration synthesized locally by the device. An unavailable or timed-out device voice falls back to a readable text example. It creates no dictionary or studied-word records. Translation still follows the existing Russian-target language-pack and explicit cloud opt-in boundaries.
 
+## Practice settings are separate from app configuration
+
+Phrase cooldown intervals belong to a dedicated Practice settings screen reached from the Practice tab. General Settings contains translation/API configuration, prompt customization and diagnostics. The extraction preserves the existing UserDefaults keys, interval validation and explicit Save cooldowns action; leaving without saving discards edits. Round setup points learners to Practice settings.
+
+## Practice card actions beside their content
+
+Practice preview and revealed-answer cards place the translation editor directly beside the translation as an icon-only action, and original copying beside the visible source text. Translation copying and source-context copying are omitted from these cards. The original copy action and audio controls remain hidden until the original is shown. Playback sits below the original, with a compact word/phrase menu, speed control and visible Edit audio action. This action reuses the existing boundary editor and its validation, without changing ranges, learning rules or dictionary long-press controls.
+
 ## Native Glass navigation with editorial reading
 
 Library, Dictionary and Practice are peer destinations in a native TabView, each with its own navigation stack. Practice presents the existing learning session, preserving its resumable state machine. Recovery and automatic translation remain attached to the app root so tab selection does not cancel them. Readers hide the tab bar and retain chapter controls in a floating player; manual completion is available in a reading-actions menu with its existing confirmation.

@@ -55,9 +55,10 @@ struct PracticeHomeView: View {
                     Button("Set up a round", systemImage: "slider.horizontal.3") { launch = .setup }
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("practice.setup")
-                    NavigationLink { ContextualTranslationSettingsView() } label: {
+                    NavigationLink { PracticeSettingsView() } label: {
                         Label("Practice settings", systemImage: "gearshape")
                     }
+                    .accessibilityIdentifier("practice.settings")
                 } footer: {
                     Text("Preview expressions first, then practise recalling them. Your progress is saved after every answer.")
                 }

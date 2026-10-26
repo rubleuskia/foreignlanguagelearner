@@ -75,7 +75,7 @@ final class NativeDesignFlowTests: XCTestCase {
         XCTAssertTrue(check.isHittable)
     }
 
-    @MainActor func testPhraseActionsKeepAnswerHiddenAndPresentTranslationEditor() {
+    @MainActor func testInlinePhraseActionsKeepAnswerHiddenAndPresentTranslationEditor() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
@@ -83,16 +83,57 @@ final class NativeDesignFlowTests: XCTestCase {
         app.tabBars.buttons["Practice"].tap()
         app.buttons["practice.quick-start"].tap()
         app.buttons["learn.preview-learn"].tap()
-        app.buttons["learn.actions"].tap()
-        XCTAssertTrue(app.buttons["learn.copy-translation"].exists)
+        let translation = app.staticTexts["learn.translation"]
+        let edit = app.buttons["learn.edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Edit translation"].exists)
+        XCTAssertFalse(app.buttons["learn.copy-translation"].exists)
         XCTAssertFalse(app.buttons["learn.copy-original"].exists)
-        app.buttons["learn.edit"].tap()
+        XCTAssertGreaterThanOrEqual(edit.frame.minX, translation.frame.maxX)
+        XCTAssertEqual(edit.frame.midY, translation.frame.midY, accuracy: 2)
+        edit.tap()
         XCTAssertTrue(app.textViews.firstMatch.waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         app.buttons["learn.check"].tap()
-        app.buttons["learn.actions"].tap()
-        XCTAssertTrue(app.buttons["learn.copy-original"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["learn.copy-source-context"].exists)
+        let original = app.staticTexts["learn.original"]
+        let copy = app.buttons["learn.copy-original"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(copy.frame.minX, original.frame.maxX)
+        XCTAssertEqual(copy.frame.midY, original.frame.midY, accuracy: 2)
+        XCTAssertFalse(app.buttons["learn.copy-source-context"].exists)
+        copy.tap()
+        XCTAssertEqual(copy.value as? String, "Copied")
+        capture(app, "Practice card — Inline text actions")
+    }
+
+    @MainActor func testPreviewAudioModesHaveAnExplicitEditor() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--audio-boundary-fixture", "--dual-audio-fixture"]
+        app.launch()
+        app.tabBars.buttons["Practice"].tap()
+        app.buttons["practice.quick-start"].tap()
+        let mode = app.buttons["learn.audio-mode"]
+        let edit = app.buttons["learn.edit-audio"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        XCTAssertEqual(mode.value as? String, "Selected word")
+        XCTAssertGreaterThanOrEqual(app.buttons["learn.play-audio"].frame.minY,
+                                    app.staticTexts["learn.original"].frame.maxY)
+        mode.tap()
+        app.buttons["Whole phrase"].tap()
+        XCTAssertEqual(mode.value as? String, "Whole phrase")
+        capture(app, "Practice preview — Audio panel")
+        edit.tap()
+        let range = app.staticTexts["audio-editor.range"]
+        XCTAssertTrue(range.waitForExistence(timeout: 5))
+        XCTAssertTrue(range.label.replacingOccurrences(of: ",", with: ".").contains("0.50"))
+        app.buttons["Cancel"].tap()
+        mode.tap()
+        app.buttons["Selected word"].tap()
+        edit.tap()
+        XCTAssertTrue(range.waitForExistence(timeout: 5))
+        XCTAssertTrue(range.label.replacingOccurrences(of: ",", with: ".").contains("1.50"))
+        app.buttons["Cancel"].tap()
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
