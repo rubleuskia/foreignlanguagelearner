@@ -1,6 +1,23 @@
 # Dictionary backup and restoration
 
-Use **Dictionary → Transfer → Export Dictionary Backup** to save a JSON snapshot. Keep the file outside the app's storage. New exports use schema version 3 and always include saved source context.
+Use **Library → Backup Library → Backup Library** to save a library-state JSON snapshot outside the app's storage. This restores progress after reimporting the same books on another phone, without embedding their files.
+
+## Library backup and new-phone restore
+
+1. On the old phone, choose **Library → Backup Library → Backup Library** and save the JSON to Files or another location outside the app.
+2. On the new phone, import the same book packages (or the same single media/transcript pairs). Local book IDs and titles may differ.
+3. Choose **Library → Backup Library → Import Library**, select the backup, review the matched books and press Restore.
+4. Enter your OpenAI API key separately in Settings if needed.
+
+The library backup includes all dictionary v3 data listed below, studied reading words, book/chapter/part completion flags and playback positions, active track, original book titles/dates/languages, a resumable training round including retries, both editable prompt texts, model/cloud settings, level cooldowns and up to 200 cached detailed word explanations. Original word levels and change dates preserve learning cooldowns. API keys stay in Keychain. Book text/audio/subtitles/alignment files and derived vocabulary indexes are excluded; saved phrase context is included in dictionary data.
+
+Books match by normalized source text and ordered track IDs/durations rather than their new local UUID or title. Phrase-audio links are remapped to matched local books; their file paths and timing sidecars stay those of the newly imported package. Use the same edition/package and track layout. If a book is missing or ambiguous, or a dictionary identity conflicts, the preview lists the issue and disables Restore. Resolve it, cancel and import the backup again. Do not remove duplicate books that have local data you need; save their backup first. The format does not apply partial book restores or store pending unmatched progress.
+
+Restore replaces matching saved states, settings, cached explanations and the training checkpoint; unrelated local books/entries are retained and studied words are merged. Importing the same backup again is safe. Model-save failure rolls back dictionary, book and vocabulary changes and restores the previous cache; settings are applied only after successful model save. Keep the source JSON until you have verified restoration. This is a portable state backup, not a replacement for keeping the original book packages.
+
+## Older dictionary JSON backups
+
+**Library → Backup Library → Import Library** also accepts dictionary JSON v1–v3 as Restore backup. **Import Dictionary JSON** provides Restore backup, Merge dictionary and Update translations only. These older files contain only the dictionary/reading-vocabulary subset, not book progress or settings. The sections below describe that embedded/legacy dictionary format.
 
 ## Included data
 
@@ -19,7 +36,7 @@ Active requests and their internal revision counters are not restored. Dates acc
 
 ## Restore
 
-Choose **Dictionary → Transfer → Import Dictionary → Restore backup**, select the JSON file, review the counts and press Apply.
+Choose **Library → Backup Library → Import Dictionary JSON → Restore backup**, select the JSON file, review the counts and press Apply.
 
 New IDs are added. Matching IDs with the same original text and languages have their saved fields and progress restored, even when their translation has not changed. An ID with different original text or languages is treated as a conflict and kept local. Other local entries are retained. A failed database save rolls back the import.
 
@@ -33,7 +50,7 @@ Schema v1 files still restore their available text, translations, origins, conte
 
 ## Audio boundary
 
-This is a dictionary backup, not an audiobook/library archive. It does not embed recordings, subtitles, library records, chapter/book completion marks, playback positions, API keys or app settings. Reading vocabulary survives deleting or reimporting a book; a reimported book starts with new completion marks. Keep original media packages separately.
+The legacy/embedded dictionary payload is a dictionary backup, not an audiobook/library archive. It does not embed recordings, subtitles, library records, chapter/book completion marks, playback positions, API keys or app settings. Reading vocabulary survives deleting or reimporting a book; a reimported book starts with new completion marks. Keep original media packages separately.
 
 Audio metadata survives restoration, but Play phrase requires the original library item UUID, track ID and local audio file. Reimporting the same audiobook creates a new library identity and does not automatically reconnect old dictionary entries. With no matching local book, the phrase and all other dictionary data remain usable and audio is shown as unavailable.
 

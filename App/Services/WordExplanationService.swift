@@ -6,12 +6,30 @@ protocol WordExplanationServing: Sendable {
 }
 
 actor WordExplanationCache {
-    private struct Record: Codable {
+    struct Record: Codable, Sendable {
         let key: String
         let value: WordExplanation
     }
     private var records: [Record] = []
     private let file: URL?
+
+    static var defaultFile: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("WordExplanations-v1.json")
+    }
+
+    nonisolated static func backupRecords(at file: URL?) throws -> [Record] {
+        guard let file, FileManager.default.fileExists(atPath: file.path) else { return [] }
+        return Array(try JSONDecoder().decode([Record].self, from: Data(contentsOf: file)).suffix(200)).filter {
+            (try? $0.value.validated()) != nil
+        }
+    }
+
+    nonisolated static func restoreRecords(_ records: [Record], at file: URL?) throws {
+        guard let file else { return }
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(records).write(to: file, options: .atomic)
+    }
 
     init(directory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first) {
         file = directory?.appendingPathComponent("WordExplanations-v1.json")
@@ -30,9 +48,14 @@ actor WordExplanationCache {
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 
-    func value(for key: String) -> WordExplanation? { records.first { $0.key == key }?.value }
+    func value(for key: String) -> WordExplanation? {
+        // Restore can replace the file while the app's service actor is already alive.
+        if let file, let saved = try? Self.backupRecords(at: file) { records = saved }
+        return records.first { $0.key == key }?.value
+    }
 
     func store(_ value: WordExplanation, for key: String) throws {
+        if let file, let saved = try? Self.backupRecords(at: file) { records = saved }
         let value = try value.validated()
         records.removeAll { $0.key == key }
         records.append(.init(key: key, value: value))
