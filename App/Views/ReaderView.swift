@@ -117,6 +117,7 @@ struct ReaderView: View {
             SelectionTranslationView(coordinator: translationCache.coordinator(for: $0), saveOnOpen: $0.saveOnOpen)
         }
         .onChange(of: playback.position) { _, position in
+            guard playback.player.currentItem != nil else { return }
             if abs(item.lastPosition - position) >= 5 {
                 item.lastPosition = position
                 updatePartPosition(position)
@@ -205,6 +206,7 @@ struct ReaderView: View {
     }
 
     private func savePosition() {
+        guard playback.player.currentItem != nil else { return }
         item.lastPosition = playback.position
         updatePartPosition(playback.position)
         try? context.save()
