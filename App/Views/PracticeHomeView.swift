@@ -14,6 +14,7 @@ struct PracticeHomeView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
+                OnboardingTip(step: .practice, allowed: !entries.isEmpty && launch == nil)
                 Section {
                     VStack(alignment: .leading, spacing: 16) {
                         Image(systemName: "rectangle.on.rectangle")
@@ -24,6 +25,16 @@ struct PracticeHomeView: View {
                         let count = entries.count(where: \.isReadyForReview)
                         Text("\(count) ready to repeat").font(.headline)
                             .accessibilityIdentifier("practice.ready-count")
+                        if count == 0 {
+                            Text(entries.isEmpty
+                                ? "Save a phrase from a book and add a Russian translation to start."
+                                : "Cards need a ready Russian translation and an expired waiting period. Check each card in Dictionary for its remaining time.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            if let next = entries.filter(\.isLearningEligible).compactMap({ LearningCooldown.remainingTime($0) }).filter({ $0 > 0 }).min() {
+                                Text("Next phrase ready in \(LearningCooldown.remainingDescription(seconds: next))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                         Button { launch = .quick } label: {
                             Label("Quick start", systemImage: "play.fill").frame(maxWidth: .infinity)
                         }

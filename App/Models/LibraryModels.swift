@@ -71,7 +71,7 @@ struct BookMediaDescriptor: Equatable, Sendable {
     let isLegacy: Bool
 
     @MainActor init(item: LearningItem) {
-        if item.tracks.isEmpty {
+        if item.tracks.isEmpty && item.hasAudio {
             tracks = [.init(id: "legacy", title: item.title, mediaFilename: item.mediaFilename,
                             subtitleFilename: item.transcriptFilename, duration: item.duration,
                             alignmentStatus: item.segments.first?.start == nil ? .untimed : .aligned)]
@@ -145,6 +145,24 @@ struct TranscriptDocument: Sendable {
 }
 
 @Model final class LearningItem {
+    // Defaults keep existing stores readable. Empty filenames represent absent resources.
+    var resourceRevision: String = ""
+    var readingCharacterOffset: Int = 0
+    var sourceLanguageLockedByHistory: Bool = false
+    var isSourceLanguageLocked: Bool { sourceLanguageLockedByHistory || hasReadingCompletion }
+    var hasAudio: Bool { !mediaFilename.isEmpty || !tracks.isEmpty }
+    var hasText: Bool { !transcriptFilename.isEmpty || !segments.isEmpty || tracks.contains { $0.subtitleFilename != nil } }
+    var resourceStatus: String {
+        if !hasAudio { return "Text only" }
+        if !hasText { return "Audio only" }
+        if tracks.isEmpty { return segments.contains { $0.start != nil } ? "Synchronized" : "Without synchronization" }
+        switch BookSynchronizationState.resolve(tracks) {
+        case .synced: return "Synchronized"
+        case .reviewRequired: return "Synchronization needs review"
+        case .partlySynced(let review): return review ? "Partly synchronized · needs review" : "Partly synchronized"
+        case .untimed: return "Without synchronization"
+        }
+    }
     var isBookCompleted: Bool = false
     var readingVocabularyMigrationVersion: Int = 0
 

@@ -47,6 +47,8 @@ struct TranscriptTextView: UIViewRepresentable {
     var vocabularyIndex: VocabularyTextIndex? = nil
     var knownForms: Set<String> = []
     var wordStyleLanguage: String = ""
+    var initialReadingOffset: Int? = nil
+    var onReadingOffsetChanged: ((Int) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
     static func makeTextView(frame: CGRect = .zero) -> LayoutAwareTextView {
@@ -75,6 +77,7 @@ struct TranscriptTextView: UIViewRepresentable {
         context.coordinator.apply(to: view)
         view.didLayout = { [weak view, weak coordinator = context.coordinator] in
             guard let view, let coordinator else { return }
+            coordinator.restoreReadingPosition(in: view)
             coordinator.applyFollow(to: view)
             coordinator.updateWordStyles(in: view)
         }
@@ -151,6 +154,7 @@ struct TranscriptTextView: UIViewRepresentable {
         private var applyingWordStyles = false
         private var applyingFollow = false
         private var wasFollowing: Bool
+        private var pendingReadingOffset: Int?
 
         func resetFollow(in view: UITextView) {
             if !view.isDragging && !view.isDecelerating {
@@ -189,6 +193,7 @@ struct TranscriptTextView: UIViewRepresentable {
                 followKey = nil
                 documentRevision += 1
                 documentIdentity = identity
+                pendingReadingOffset = parent.initialReadingOffset
             }
 
             if parent.followGeneration != lastFollowGeneration {
@@ -266,7 +271,29 @@ struct TranscriptTextView: UIViewRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            if let view = scrollView as? UITextView { updateWordStyles(in: view) }
+            if let view = scrollView as? UITextView {
+                updateWordStyles(in: view)
+                guard !isApplyingProgrammaticUpdate, pendingReadingOffset == nil,
+                      view.isDragging || view.isDecelerating else { return }
+                let point = CGPoint(x: view.textContainerInset.left + 1,
+                                    y: view.contentOffset.y + view.adjustedContentInset.top + view.textContainerInset.top + 1)
+                if let position = view.closestPosition(to: point) {
+                    parent.onReadingOffsetChanged?(view.offset(from: view.beginningOfDocument, to: position))
+                }
+            }
+        }
+
+        func restoreReadingPosition(in view: UITextView) {
+            guard let offset = pendingReadingOffset, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            pendingReadingOffset = nil
+            guard offset > 0, offset < view.textStorage.length,
+                  let rect = Self.firstVisualLineRect(for: NSRange(location: offset, length: 1), in: view) else { return }
+            isApplyingProgrammaticUpdate = true
+            view.layoutManager.ensureLayout(forBoundingRect: CGRect(x: 0, y: rect.minY, width: view.bounds.width, height: view.bounds.height), in: view.textContainer)
+            let height = view.layoutManager.usedRect(for: view.textContainer).maxY + view.textContainerInset.top + view.textContainerInset.bottom
+            view.contentSize.height = max(view.contentSize.height, height)
+            view.setContentOffset(CGPoint(x: 0, y: min(max(0, rect.minY - view.textContainerInset.top), max(0, view.contentSize.height - view.bounds.height))), animated: false)
+            isApplyingProgrammaticUpdate = false
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {

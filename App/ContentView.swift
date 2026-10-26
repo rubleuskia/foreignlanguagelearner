@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showingImport = false
     @State private var showingBookImport = false
     @State private var errorMessage: String?
+    @State private var makingExample = false
 
     var body: some View {
         TabView {
@@ -30,6 +31,8 @@ struct ContentView: View {
             } catch { errorMessage = error.localizedDescription }
             seedLearningUXFixtureIfNeeded()
             #if DEBUG
+            do { try ProgressiveBookUIFixture.seed(context: context) }
+            catch { errorMessage = error.localizedDescription }
             do { try ReadingVocabularyUIFixture.seed(context: context) }
             catch { errorMessage = error.localizedDescription }
             #endif
@@ -45,7 +48,7 @@ struct ContentView: View {
         }
         .translationTask(translationCoordinator.configuration,
                          action: translationCoordinator.perform(session:))
-        .alert("Could not delete item", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
+        .alert("Library", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
     }
 
     private var library: some View {
@@ -55,17 +58,20 @@ struct ContentView: View {
                     ContentUnavailableView {
                         Label("Your library is empty", systemImage: "books.vertical")
                     } description: {
-                        Text("Add audio and a transcript, or bring an entire audiobook.")
+                        Text("Read a text, listen to audio, or bring an entire audiobook. Add missing files later.")
                     } actions: {
-                        Button("Add audio or video", systemImage: "plus") { showingImport = true }
+                        Button("Add book", systemImage: "plus") { showingBookImport = true }
                             .nativePrimaryAction()
                             .accessibilityIdentifier("library.upload")
-                        Button("Import audiobook", systemImage: "book.closed") { showingBookImport = true }
+                        Button("Try an example", systemImage: "sparkles") { addExample() }
                             .nativeSecondaryAction()
+                            .disabled(makingExample)
+                            .accessibilityIdentifier("library.example")
+                        if makingExample { ProgressView("Preparing example…") }
                     }
                 } else {
                     List {
-                        if let recent = items.first(where: { !$0.isBookCompleted && ($0.lastPosition > 0 || $0.lastTrackID != nil) }) {
+                        if let recent = items.first(where: { !$0.isBookCompleted && ($0.lastPosition > 0 || $0.lastTrackID != nil || $0.readingCharacterOffset > 0) }) {
                             Section("Continue reading") {
                                 VStack(alignment: .leading, spacing: 16) {
                                     NavigationLink { reader(for: recent) } label: {
@@ -74,15 +80,19 @@ struct ContentView: View {
                                             VStack(alignment: .leading, spacing: 6) {
                                                 Text(recent.title).font(.title2.weight(.semibold))
                                                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                                                BookVocabularyBadge(item: recent)
+                                                if recent.hasText { BookVocabularyBadge(item: recent) }
                                             }
                                         }
                                     }
                                     .buttonStyle(.plain)
+                                    if recent.hasAudio {
                                     ProgressView(value: recent.readingProgress)
                                         .accessibilityLabel("Reading progress")
                                     Text("Read: \(recent.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
                                         .font(.caption).foregroundStyle(.secondary)
+                                    } else {
+                                        Text("Continue from your saved place").font(.caption).foregroundStyle(.secondary)
+                                    }
                                     Button { featuredReader = recent } label: {
                                         Label("Continue reading", systemImage: "play.fill")
                                             .frame(maxWidth: .infinity)
@@ -95,18 +105,24 @@ struct ContentView: View {
                         }
                         Section("All materials") {
                             ForEach(items) { item in
+                                HStack {
                                 NavigationLink { reader(for: item) } label: {
                                     HStack(spacing: 14) {
                                         NativeBookCover(item: item)
                                         VStack(alignment: .leading, spacing: 5) {
                                             Text(item.title).font(.headline).foregroundStyle(.primary)
-                                            BookVocabularyBadge(item: item)
-                                            Text("Read: \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
+                                            if item.hasText { BookVocabularyBadge(item: item) }
+                                            Text(item.hasAudio
+                                                 ? "\(item.hasText ? "Read" : "Listened"): \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))"
+                                                 : item.isBookCompleted ? "Read" : "Ready to read")
                                                 .font(.caption).foregroundStyle(.secondary)
                                             Text(summary(for: item)).font(.caption).foregroundStyle(.secondary)
                                         }
                                         .padding(.vertical, 4)
                                     }
+                                }
+                                BookResourceMenu(item: item)
+                                    .buttonStyle(.borderless)
                                 }
                             }
                             .onDelete(perform: deleteItems)
@@ -129,11 +145,7 @@ struct ContentView: View {
                     }
                     .accessibilityIdentifier("library.settings")
 
-                    Menu("Add material", systemImage: "plus") {
-                        Button("Single audio or video") { showingImport = true }
-                        Button("Audiobook ZIP") { showingBookImport = true }
-                            .accessibilityIdentifier("library.upload-book")
-                    }
+                    Button("Add book", systemImage: "plus") { showingBookImport = true }
                     .accessibilityIdentifier("library.add-menu")
                 }
             }
@@ -144,8 +156,8 @@ struct ContentView: View {
     }
 
     @ViewBuilder private func reader(for item: LearningItem) -> some View {
-        if item.tracks.isEmpty { ReaderView(item: item) }
-        else { BookReaderView(item: item) }
+        if item.tracks.isEmpty { ReaderView(item: item).id(item.resourceRevision) }
+        else { BookReaderView(item: item).id(item.resourceRevision) }
     }
 
     private var vocabularyIndexIdentity: String {
@@ -175,19 +187,22 @@ struct ContentView: View {
     }
 
     private func summary(for item: LearningItem) -> String {
+        if !item.hasAudio { return item.resourceStatus }
         guard !item.tracks.isEmpty else {
             return item.parts.isEmpty
-                ? "\(Int(item.duration / 60)) min · \(item.segments.count) transcript segments"
+                ? "\(Int(item.duration / 60)) min · \(item.resourceStatus)"
                 : "\(item.parts.count) parts · \(item.segments.count) transcript segments"
         }
-        let state: String
-        switch BookSynchronizationState.resolve(item.tracks) {
-        case .synced: state = "Synced"
-        case .reviewRequired: state = "Review required"
-        case .partlySynced(let review): state = review ? "Partly synced · review" : "Partly synced"
-        case .untimed: state = "Untimed"
+        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(item.resourceStatus)"
+    }
+
+    private func addExample() {
+        makingExample = true
+        Task {
+            defer { makingExample = false }
+            do { featuredReader = try await DemoBookService.add(context: context) }
+            catch { errorMessage = error.localizedDescription }
         }
-        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(state)"
     }
 
     private func seedLearningUXFixtureIfNeeded() {

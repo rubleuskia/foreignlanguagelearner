@@ -24,6 +24,8 @@ struct LibraryBackupDocument: Codable {
         let migrationVersion: Int
         let parts: [LearningPart]
         let tracks: [Track]
+        var readingCharacterOffset: Int? = nil
+        var sourceLanguageLockedByHistory: Bool? = nil
     }
     struct Track: Codable {
         let id: String
@@ -82,7 +84,14 @@ enum LibraryBackupError: LocalizedError {
     /// audio layout; no source text, subtitle, audio or word-timing file is exported here.
     static func fingerprint(_ item: LearningItem) throws -> String {
         let text: String
-        if item.tracks.isEmpty {
+        if !item.hasText {
+            let root = MediaImportService.directory(for: item.id)
+            let files = item.tracks.isEmpty ? [item.mediaFilename] : item.tracks.map(\.mediaFilename)
+            text = "audio-only:" + (try files.map { name in
+                try BookManifestValidator.validatePath(name)
+                return try WordAudioTimingFile.audioHash(root.appending(path: name))
+            }).joined(separator: ":")
+        } else if item.tracks.isEmpty {
             text = item.segments.map(\.text).joined(separator: " ")
         } else {
             let root = MediaImportService.directory(for: item.id)
@@ -118,7 +127,8 @@ enum LibraryBackupError: LocalizedError {
                 isCompleted: item.isBookCompleted, migrationVersion: item.readingVocabularyMigrationVersion,
                 parts: item.parts, tracks: item.tracks.map {
                     .init(id: $0.id, lastPosition: $0.lastPosition, isCompleted: $0.isCompleted)
-                })
+                }, readingCharacterOffset: item.readingCharacterOffset,
+                sourceLanguageLockedByHistory: item.sourceLanguageLockedByHistory)
         }
         let savedRound = LearningRoundCheckpoint.load(defaults: defaults)
         let round = savedRound.flatMap {
@@ -162,6 +172,7 @@ enum LibraryBackupError: LocalizedError {
         for book in document.books {
             guard validHash(book.fingerprint), !book.title.isEmpty, !book.sourceLanguage.isEmpty,
                   book.lastPosition.isFinite, book.lastPosition >= 0,
+                  (book.readingCharacterOffset ?? 0) >= 0,
                   (0...1).contains(book.migrationVersion),
                   Set(book.tracks.map(\.id)).count == book.tracks.count,
                   book.lastTrackID == nil || book.tracks.contains(where: { $0.id == book.lastTrackID }),
@@ -235,7 +246,8 @@ enum LibraryBackupError: LocalizedError {
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         let rollback = items.map { item in
             (item, item.title, item.createdAt, item.sourceLanguageCode, item.lastPosition, item.lastTrackID,
-             item.isBookCompleted, item.readingVocabularyMigrationVersion, item.parts, item.tracks)
+             item.isBookCompleted, item.readingVocabularyMigrationVersion, item.parts, item.tracks,
+             item.readingCharacterOffset, item.sourceLanguageLockedByHistory)
         }
         let oldCache = try cacheURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? try Data(contentsOf: $0) : nil }
         let incomingIDs = Set(fresh.dictionary.entries.map(\.id))
@@ -250,6 +262,8 @@ enum LibraryBackupError: LocalizedError {
                     item.sourceLanguageCode = book.sourceLanguage; item.lastPosition = book.lastPosition
                     item.lastTrackID = book.lastTrackID; item.isBookCompleted = book.isCompleted
                     item.readingVocabularyMigrationVersion = book.migrationVersion
+                    if let offset = book.readingCharacterOffset { item.readingCharacterOffset = offset }
+                    if let locked = book.sourceLanguageLockedByHistory { item.sourceLanguageLockedByHistory = locked }
                     item.parts = book.parts
                     item.tracks = item.tracks.map { track in
                         var value = track
@@ -270,10 +284,11 @@ enum LibraryBackupError: LocalizedError {
             return pending
         } catch {
             context.rollback()
-            for (item, title, created, language, position, track, complete, migration, parts, tracks) in rollback {
+            for (item, title, created, language, position, track, complete, migration, parts, tracks, offset, locked) in rollback {
                 item.title = title; item.createdAt = created; item.sourceLanguageCode = language
                 item.lastPosition = position; item.lastTrackID = track; item.isBookCompleted = complete
                 item.readingVocabularyMigrationVersion = migration; item.parts = parts; item.tracks = tracks
+                item.readingCharacterOffset = offset; item.sourceLanguageLockedByHistory = locked
             }
             if let cacheURL {
                 if let oldCache { try? oldCache.write(to: cacheURL, options: .atomic) }

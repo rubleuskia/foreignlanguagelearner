@@ -22,6 +22,7 @@ struct ContextualTranslationSettingsView: View {
 
     var body: some View {
         Form {
+            OnboardingHelpSection()
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
                 Picker("Model", selection: selectedModelBinding) {
