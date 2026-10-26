@@ -46,12 +46,17 @@ final class LibraryFlowTests: XCTestCase {
     }
 
     @MainActor
-    func testGlobalCooldownSettingsRequireSave() {
+    func testPracticeSettingsAreSeparateAndRequireExplicitSave() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
         app.buttons["library.settings"].tap()
+        XCTAssertFalse(app.textFields["settings.cooldown.level.1"].exists)
+        XCTAssertTrue(app.secureTextFields["OpenAI API key"].exists)
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        app.tabBars.buttons["Practice"].tap()
+        app.buttons["practice.settings"].tap()
         let field = app.textFields["settings.cooldown.level.1"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         let original = field.value as! String
@@ -61,14 +66,14 @@ final class LibraryFlowTests: XCTestCase {
                                   count: (field.value as? String ?? "").count) + text)
         }
         replace("25.5")
-        app.navigationBars["Settings"].buttons.firstMatch.tap()
-        app.buttons["library.settings"].tap()
+        app.navigationBars["Practice settings"].buttons.firstMatch.tap()
+        app.buttons["practice.settings"].tap()
         XCTAssertEqual(field.value as? String, original, "Unsaved edits must be discarded")
         replace("25.5")
         app.buttons["settings.cooldown.save"].tap()
         XCTAssertTrue(app.staticTexts["Cooldown settings saved."].exists)
-        app.navigationBars["Settings"].buttons.firstMatch.tap()
-        app.buttons["library.settings"].tap()
+        app.navigationBars["Practice settings"].buttons.firstMatch.tap()
+        app.buttons["practice.settings"].tap()
         XCTAssertEqual(field.value as? String, "25.5")
         replace(original)
         app.buttons["settings.cooldown.save"].tap()

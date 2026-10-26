@@ -42,6 +42,14 @@ import SwiftData
             }.joined(separator: "\n")
             try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
         }
+        if ProcessInfo.processInfo.arguments.contains("--legacy-reader-fixture") {
+            item.tracks = []
+            item.lastTrackID = nil
+            item.mediaFilename = "media.wav"
+            item.duration = 20
+            item.segments = [.init(start: 0, end: 20, text: "Kot i kot.")]
+            item.parts = [.init(start: 0, end: 20)]
+        }
         item.readingVocabularyMigrationVersion = 1
         context.insert(item)
         if ProcessInfo.processInfo.arguments.contains("--audio-boundary-fixture") {

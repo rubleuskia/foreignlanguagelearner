@@ -44,7 +44,7 @@ The shipped app has no project-operated backend endpoint or analytics. Media, sa
 
 Prefer local-first, reversible, testable changes. Keep generated Xcode output and personal media out of source control. Treat timing, Unicode/UTF-16 selection ranges, file-provider imports, and accessibility as correctness concerns, not presentation details.
 
-Practice rounds respect configurable phrase cooldowns after level changes (defaults: level 1 = 24 hours, level 2 = 72 hours, level 3 = 96 hours). App Settings edits global intervals with an explicit Save cooldowns action; the start screen can ignore cooldown for a session. Retries within an active round remain available.
+Practice rounds respect configurable phrase cooldowns after level changes (defaults: level 1 = 24 hours, level 2 = 72 hours, level 3 = 96 hours). Practice → Practice settings edits global intervals with an explicit Save cooldowns action; the start screen can ignore cooldown for a session. Retries within an active round remain available.
 
 Saved phrase audio boundaries can be adjusted locally from dictionary and learning cards through the audio button's context menu, previewed, saved, or reset to automatic timing. Manual ranges survive alignment updates and dictionary backup/restore.
 

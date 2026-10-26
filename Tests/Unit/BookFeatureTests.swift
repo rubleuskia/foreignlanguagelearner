@@ -79,6 +79,34 @@ final class BookFeatureTests: XCTestCase {
         XCTAssertEqual(item.tracks[0].lastPosition, 20)
     }
 
+    @MainActor func testClosingBookDoesNotRefreshFromClearedPlayerOrOverwriteSavedProgress() async throws {
+        let item = LearningItem(id: UUID(), title: "Book", mediaKind: "audio", mediaFilename: "",
+            transcriptFilename: "book.txt", duration: 40, segments: [], tracks: [
+                .init(id: "one", title: "One", mediaFilename: "one.wav", duration: 20),
+                .init(id: "two", title: "Two", mediaFilename: "two.wav", duration: 20, lastPosition: 12)
+            ], lastTrackID: "two")
+        let controller = BookPlaybackController()
+        controller.open(item: item)
+        controller.snapshot(into: item)
+        controller.close()
+        // Let the cancelled position observer resume, as happens after navigating Back.
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.localPosition, 12)
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[1].lastPosition, 12)
+        XCTAssertEqual(item.lastTrackID, "two")
+        XCTAssertEqual(item.lastPosition, 32)
+        controller.open(item: item)
+        XCTAssertEqual(controller.activeTrackID, "two")
+        XCTAssertEqual(controller.localPosition, 12)
+        controller.selectTrack("two")
+        XCTAssertEqual(controller.localPosition, 0, "Only an explicit chapter choice restarts the chapter")
+        controller.snapshot(into: item)
+        controller.close()
+        controller.snapshot(into: item)
+        XCTAssertEqual(item.tracks[1].lastPosition, 0, "A closed snapshot must not restore the stale pre-selection position")
+    }
+
     func testTimelineUsesHalfOpenBoundariesAndExactTotal() throws {
         let timeline = try BookTimeline(tracks: [("one", 60), ("two", 90), ("three", 30)])
         XCTAssertEqual(try timeline.location(at: 0), .init(index: 0, trackID: "one", localTime: 0))

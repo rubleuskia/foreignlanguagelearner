@@ -62,8 +62,12 @@ final class PhraseAudioBoundaryFlowTests: XCTestCase {
         func openEditor(_ identifier: String) {
             let play = app.buttons[identifier]
             XCTAssertTrue(play.waitForExistence(timeout: 5))
-            play.press(forDuration: 1)
-            app.buttons["Edit audio boundaries"].tap()
+            if identifier == "learn.play-audio" {
+                app.buttons["learn.edit-audio"].tap()
+            } else {
+                play.press(forDuration: 1)
+                app.buttons["Edit audio boundaries"].tap()
+            }
             app.buttons["Move boundary"].tap()
             XCTAssertTrue(app.buttons["audio-editor.apply"].waitForExistence(timeout: 5))
         }
