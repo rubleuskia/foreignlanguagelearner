@@ -2,6 +2,28 @@ import XCTest
 
 final class LibraryFlowTests: XCTestCase {
     @MainActor
+    func testBackupMenuLivesOnLibraryAndOpensImportPicker() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+        let backup = app.buttons["library.backup"]
+        XCTAssertTrue(backup.waitForExistence(timeout: 10))
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: backup)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed)
+        backup.tap()
+        XCTAssertTrue(app.buttons["Backup Library"].firstMatch.waitForExistence(timeout: 5))
+        let importButton = app.buttons["Import Library"]
+        XCTAssertTrue(importButton.exists)
+        importButton.tap()
+        XCTAssertTrue(app.buttons["Browse"].firstMatch.waitForExistence(timeout: 20))
+        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["Dictionary"].tap()
+        XCTAssertFalse(app.buttons["library.backup"].exists)
+        XCTAssertFalse(app.buttons["Transfer"].exists)
+    }
+
+    @MainActor
     func testQuickStartAndReadyFilter() {
         continueAfterFailure = false
         let app = XCUIApplication()

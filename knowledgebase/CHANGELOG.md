@@ -1,5 +1,14 @@
 # Project changelog
 
+## 2026-10-26 — Portable library state backup
+
+- Move the dictionary transfer toolbar menu to Library as Backup Library / Import Library. Keep older dictionary JSON restore, merge and translation-only imports accessible from Library.
+- Export a versioned library JSON backup containing dictionary details and learning levels, studied reading vocabulary, book/chapter/part completion and playback positions, an unfinished training round, settings, both prompts and the bounded detailed-word explanation cache. Book text, audio, subtitles and alignments are excluded; the device-only Keychain API credential and rebuildable indexes are not exported.
+- On a new phone, import the same book packages first, then import the library backup. Match by normalized source text plus ordered track IDs/durations, independently of titles and local UUIDs. Restore saved states and reconnect dictionary phrase-audio references to the new local book IDs without moving book files.
+- Preview missing, ambiguous or incompatible books and conflicting dictionary identities before restoring. Block application until these are resolved; recheck matches at Apply time. Existing unrelated books, entries and studied words are retained. Model changes save atomically and a failed save restores the previous cache and progress.
+- DECISIONS.md records the format and matching policy; PROJECT.md and the backup guide describe the new cross-device workflow. Project purpose and major boundaries are unchanged.
+
+
 ## 2026-10-25 — Editable word explanation prompt
 
 - Settings now offers a separate Word explanation prompt editor with save, validation and reset to the default. It applies to detailed explanations opened by tapping a word in Meaning in context.
