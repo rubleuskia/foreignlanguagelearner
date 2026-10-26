@@ -1,6 +1,40 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testBackAndReopenPreservesBookChapterProgress() {
+        verifyBackAndReopenPreservesProgress(legacy: false)
+    }
+
+    @MainActor func testBackAndReopenPreservesLegacyChapterProgress() {
+        verifyBackAndReopenPreservesProgress(legacy: true)
+    }
+
+    @MainActor private func verifyBackAndReopenPreservesProgress(legacy: Bool) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"]
+        if legacy { app.launchArguments.append("--legacy-reader-fixture") }
+        app.launch()
+        let story = app.staticTexts["Reading vocabulary story"].firstMatch
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        let slider = app.sliders.firstMatch
+        XCTAssertTrue(slider.waitForExistence(timeout: 10))
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 5)); story.tap()
+        XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5), "Back must preserve the saved chapter position")
+        app.buttons["reader.choose-chapter"].tap()
+        if legacy {
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "reader.chapter.")).firstMatch.tap()
+        } else {
+            app.buttons["reader.chapter.one"].tap()
+        }
+        XCTAssertTrue(app.staticTexts["0:00"].waitForExistence(timeout: 5), "Explicit selection still restarts the chapter")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 5)); story.tap()
+        XCTAssertTrue(app.staticTexts["0:00"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testNaturalTransitionMarksPreviousChapterReadAndManualSelectionRestarts() {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-end-fixture"]

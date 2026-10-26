@@ -75,12 +75,13 @@ import Observation
     }
 
     func snapshot(into item: LearningItem) {
+        // Teardown callbacks must not overwrite the last live snapshot with stale track positions.
+        guard let id = activeTrackID, let index = item.tracks.firstIndex(where: { $0.id == id }) else { return }
         for saved in tracks {
             if let index = item.tracks.firstIndex(where: { $0.id == saved.id }) {
                 item.tracks[index].lastPosition = min(max(0, saved.lastPosition), item.tracks[index].duration)
             }
         }
-        guard let id = activeTrackID, let index = item.tracks.firstIndex(where: { $0.id == id }) else { return }
         item.tracks[index].lastPosition = min(max(0, localPosition), item.tracks[index].duration)
         item.lastTrackID = id
         item.duration = item.tracks.reduce(0) { $0 + $1.duration }
@@ -147,15 +148,17 @@ import Observation
         positionTask?.cancel()
         positionTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(200))
+                do { try await Task.sleep(for: .milliseconds(200)) }
+                catch { return }
+                guard !Task.isCancelled else { return }
                 self?.refreshPosition()
             }
         }
     }
 
     private func refreshPosition() {
-        localPosition = playback.position
         guard let id = activeTrackID else { return }
+        localPosition = playback.position
         globalPosition = (try? timeline?.globalTime(trackID: id, localTime: localPosition)) ?? 0
         if let message = playback.errorMessage, let title = activeTrack?.title {
             errorMessage = "\(title): \(message)"

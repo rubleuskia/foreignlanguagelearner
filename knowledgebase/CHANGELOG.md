@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-26 — Preserve chapter progress when leaving the reader
+
+- Ignore progress callbacks after playback closes so Back and reopening resume the current chapter instead of saving the teardown position or stale track snapshots. Apply the same live-player guard to the single-file reader.
+- Stop the audiobook position observer when its sleep is cancelled; do not refresh from a closed player. Explicit chapter selection continues to start at zero.
+- Add regressions for closed snapshots, cancelled observation, and Back/reopen in both readers, followed by explicit chapter selection. This restores the existing progress contract; no architectural/product decision or supported workflow changed, so DECISIONS.md and PROJECT.md need no update.
+
 ## 2026-10-25 — Editable word explanation prompt
 
 - Settings now offers a separate Word explanation prompt editor with save, validation and reset to the default. It applies to detailed explanations opened by tapping a word in Meaning in context.
