@@ -137,6 +137,7 @@ struct ContentView: View {
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    LibraryBackupMenu()
                     NavigationLink {
                         ContextualTranslationSettingsView()
                     } label: {

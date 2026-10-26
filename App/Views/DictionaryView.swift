@@ -1,11 +1,9 @@
 import SwiftUI
 import SwiftData
 import Translation
-import UniformTypeIdentifiers
 
 struct DictionaryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var entries: [DictionaryEntry]
@@ -19,11 +17,6 @@ struct DictionaryView: View {
         case setup, quickStart
         var id: Self { self }
     }
-    @State private var exporting = false
-    @State private var exportFile: DictionaryJSONFile?
-    @State private var importing = false
-    @State private var importMode: DictionaryImportMode = .merge
-    @State private var importPreview: DictionaryImportPreview?
     @State private var errorMessage: String?
 
     private var learningEntries: [DictionaryEntry] {
@@ -131,27 +124,12 @@ struct DictionaryView: View {
                 Button("Learn", systemImage: "brain.head.profile") { learningLaunch = .setup }
                     .disabled(!entries.contains(where: \.isLearningEligible))
                     .accessibilityIdentifier("dictionary.learn")
-                Menu("Transfer", systemImage: "arrow.up.arrow.down") {
-                    Button("Export Dictionary Backup", systemImage: "square.and.arrow.up") { prepareExport() }
-                    Menu("Import Dictionary") {
-                        Button(DictionaryImportMode.restore.rawValue) { importMode = .restore; importing = true }
-                        Button(DictionaryImportMode.merge.rawValue) { importMode = .merge; importing = true }
-                        Button(DictionaryImportMode.translations.rawValue) { importMode = .translations; importing = true }
-                    }
-                }
             }
         }
         .sheet(item: $selectedEntry) { DictionaryEntryDetailView(entry: $0) }
         .sheet(item: $learningLaunch) { launch in
             LearningSessionView(quickStart: launch == .quickStart)
         }
-        .sheet(item: $importPreview) { DictionaryImportPreviewView(preview: $0) }
-        .fileExporter(isPresented: $exporting, document: exportFile, contentType: .json,
-                      defaultFilename: "dictionary-\(Self.dayStamp).json") { result in
-            if case .failure(let error) = result { errorMessage = error.localizedDescription }
-            exportFile = nil
-        }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in handleImport(result) }
         .alert("Dictionary error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
@@ -172,27 +150,6 @@ struct DictionaryView: View {
             }
             try context.save()
         } catch { context.rollback(); errorMessage = error.localizedDescription }
-    }
-
-    private func prepareExport() {
-        do {
-            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
-            exportFile = try DictionaryTransferService.export(entries: entries, includeContext: true, readingWords: try ReadingKnowledge.words(context: context)); exporting = true }
-        catch { errorMessage = error.localizedDescription }
-    }
-
-    private func handleImport(_ result: Result<URL, Error>) {
-        do {
-            let url = try result.get()
-            let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard vocabulary.ready else { throw ReadingVocabularyError.notReady }
-            let document = try DictionaryTransferService.decode(Data(contentsOf: url, options: .mappedIfSafe))
-            importPreview = DictionaryTransferService.preview(document: document, mode: importMode, existing: entries, existingVocabulary: try ReadingKnowledge.words(context: context))
-        } catch { errorMessage = error.localizedDescription }
-    }
-
-    private static var dayStamp: String {
-        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; return formatter.string(from: .now)
     }
 }
 
@@ -568,7 +525,7 @@ private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
-private struct DictionaryImportPreviewView: View {
+struct DictionaryImportPreviewView: View {
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
