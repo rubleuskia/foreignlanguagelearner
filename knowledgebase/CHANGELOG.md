@@ -6,7 +6,7 @@
 - Add a vertical book resource menu in library rows and both readers. Missing text/audio can be attached to the same book; replacements preview their consequences. Journaled resource generations, explicit rollback snapshots and startup recovery protect existing files and dictionary data. Compatible synchronization packages verify current text and exact audio bytes.
 - Keep independent full-text reading positions. Preserve card text, translations, learning levels and historical studied forms on resource replacement while clearing unsafe old audio links.
 - Add contextual first-use tips, a help guide, a tutorial toggle/reset, and an optional original locally narrated example. Existing audio/video with SRT/VTT import remains available.
-- Verification: 186 unit tests, iPhone onboarding/import UI checks, iPad wizard/text-only reader checks and unsigned iOS Release build pass. Tutorial dismissal is also verified at the largest accessibility text size.
+- Verification: 189 unit tests, iPhone onboarding/import UI checks, iPad wizard/text-only reader checks and unsigned iOS Release build pass. Tutorial dismissal is also verified at the largest accessibility text size.
 - DECISIONS.md records resource identity, recovery and tutorial policies; PROJECT.md and README describe the expanded workflow. Project purpose and local/cloud boundaries are unchanged.
 
 ## 2026-10-25 — Onboarding implementation plan (documentation only)

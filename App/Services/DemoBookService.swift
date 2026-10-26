@@ -5,11 +5,18 @@ import SwiftData
 /// Original demonstration text. Narration is synthesized locally on the user's
 /// device, rather than distributing a recording of a system voice.
 @MainActor enum DemoBookService {
-    static let id = UUID(uuidString: "BE0D2CB3-D884-45F2-AC42-73138FA8B9D9")!
+    static let id: UUID = {
+        #if DEBUG
+        // UI tests reset their in-memory database on launch but keep sandbox files.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") { return UUID() }
+        #endif
+        return UUID(uuidString: "BE0D2CB3-D884-45F2-AC42-73138FA8B9D9")!
+    }()
     static let text = "A new day begins. Anna opens a book and reads a short story. She finds a new word and saves it. Every small step helps her learn."
 
-    static func add(context: ModelContext, narration: ((URL) async throws -> Void)? = nil) async throws -> LearningItem {
-        if let existing = try context.fetch(FetchDescriptor<LearningItem>()).first(where: { $0.id == id }) { return existing }
+    static func add(context: ModelContext, itemID: UUID? = nil, narration: ((URL) async throws -> Void)? = nil) async throws -> LearningItem {
+        let demoID = itemID ?? id
+        if let existing = try context.fetch(FetchDescriptor<LearningItem>()).first(where: { $0.id == demoID }) { return existing }
         let temporary = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporary) }
@@ -32,12 +39,12 @@ import SwiftData
                 let subtitle = "WEBVTT\n\n00:00:00.000 --> \(timestamp(duration))\n\(text)\n"
                 try Data(subtitle.utf8).write(to: prepared.stagedBookDirectory.appending(path: "example.vtt"))
             }
-            let final = BookImportService.Prepared(transactionID: prepared.transactionID, itemID: id,
+            let final = BookImportService.Prepared(transactionID: prepared.transactionID, itemID: demoID,
                 title: prepared.title, sourceLanguage: "en", tracks: prepared.tracks.map {
                     var track = $0; track.subtitleFilename = "example.vtt"; track.alignmentStatus = .aligned; return track
                 }, transcriptFilename: prepared.transcriptFilename, duration: duration, stagedBookDirectory: prepared.stagedBookDirectory)
             try await service.movePreparedToLibrary(final)
-            let item = LearningItem(id: id, title: final.title, mediaKind: hasNarration ? "audio" : "text", mediaFilename: "",
+            let item = LearningItem(id: demoID, title: final.title, mediaKind: hasNarration ? "audio" : "text", mediaFilename: "",
                 transcriptFilename: final.transcriptFilename, duration: final.duration,
                 segments: hasNarration ? [] : [.init(start: nil, end: nil, text: text)],
                 sourceLanguageCode: "en", tracks: final.tracks, lastTrackID: final.tracks.first?.id)

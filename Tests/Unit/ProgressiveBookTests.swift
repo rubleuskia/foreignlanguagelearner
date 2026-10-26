@@ -276,20 +276,21 @@ final class ProgressiveBookTests: XCTestCase {
 
     @MainActor func testDemoIsIdempotentAndDoesNotCreateLearningData() async throws {
         let db = try database()
+        let demoID = UUID()
         let temporary = try temporaryDirectory()
         defer {
             try? FileManager.default.removeItem(at: temporary)
-            try? FileManager.default.removeItem(at: MediaImportService.directory(for: DemoBookService.id))
+            try? FileManager.default.removeItem(at: MediaImportService.directory(for: demoID))
         }
         let source = try audio(in: temporary)
-        let item = try await DemoBookService.add(context: db.mainContext, narration: { destination in
+        let item = try await DemoBookService.add(context: db.mainContext, itemID: demoID, narration: { destination in
             try FileManager.default.copyItem(at: source, to: destination)
         })
         XCTAssertTrue(item.hasAudio); XCTAssertTrue(item.hasText)
         XCTAssertEqual(item.resourceStatus, "Synchronized")
         let track = try XCTUnwrap(item.tracks.first)
         XCTAssertEqual(try TrackTranscriptLoader.load(track: track, directory: MediaImportService.directory(for: item.id)).text, DemoBookService.text)
-        let repeated = try await DemoBookService.add(context: db.mainContext, narration: { _ in XCTFail("Narration must not run twice") })
+        let repeated = try await DemoBookService.add(context: db.mainContext, itemID: demoID, narration: { _ in XCTFail("Narration must not run twice") })
         XCTAssertEqual(repeated.id, item.id)
         XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<LearningItem>()), 1)
         XCTAssertEqual(try db.mainContext.fetchCount(FetchDescriptor<DictionaryEntry>()), 0)
@@ -298,8 +299,9 @@ final class ProgressiveBookTests: XCTestCase {
 
     @MainActor func testDemoWorksAsTextWhenDeviceVoiceIsUnavailable() async throws {
         let db = try database()
-        defer { try? FileManager.default.removeItem(at: MediaImportService.directory(for: DemoBookService.id)) }
-        let item = try await DemoBookService.add(context: db.mainContext, narration: { _ in throw CocoaError(.featureUnsupported) })
+        let demoID = UUID()
+        defer { try? FileManager.default.removeItem(at: MediaImportService.directory(for: demoID)) }
+        let item = try await DemoBookService.add(context: db.mainContext, itemID: demoID, narration: { _ in throw CocoaError(.featureUnsupported) })
         XCTAssertTrue(item.hasText); XCTAssertFalse(item.hasAudio)
         XCTAssertEqual(item.segments.first?.text, DemoBookService.text)
         XCTAssertTrue(item.title.contains("Text example"))
