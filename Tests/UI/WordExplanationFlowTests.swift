@@ -21,8 +21,8 @@ final class WordExplanationFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Простыми словами"].exists)
         word.tap()
         XCTAssertTrue(app.staticTexts["Простыми словами"].waitForExistence(timeout: 5))
-        if !app.staticTexts["Типовые фразы"].isHittable { app.swipeUp() }
-        XCTAssertTrue(app.staticTexts["Типовые фразы"].exists)
+        if !app.staticTexts["Примеры предложений"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.staticTexts["Примеры предложений"].exists)
         XCTAssertTrue(app.staticTexts["miłego dnia"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Inline word explanation"

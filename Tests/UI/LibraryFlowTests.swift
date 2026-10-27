@@ -334,7 +334,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["learn.preview-learn"].tap()
         app.buttons["learn.check"].tap()
         app.buttons["learn.wrong"].tap()
-        app.navigationBars["Learn"].swipeDown()
+        app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH %@", "Learn")).firstMatch.swipeDown()
         XCTAssertTrue(app.buttons["learn.check"].exists)
         app.buttons["Close"].tap()
         XCTAssertTrue(app.buttons["Save and close"].waitForExistence(timeout: 5))
