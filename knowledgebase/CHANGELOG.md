@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-27 — Book-based language filter with flags
+
+- Show country flags beside source languages in Dictionary and Practice. Offer only languages present in the library's books; a single-language library shows a fixed labelled flag instead of a picker. When the library is empty, retain access to dictionary entries by their saved language.
+- Automatically select an available language when books are added or removed. No new architecture or project boundary changed; DECISIONS.md records the selector's book-based availability rule and PROJECT.md reflects the workflow.
+- Verification: targeted language-group unit test and Dictionary/Practice UI checks on iPhone Simulator pass; `git diff --check` passes.
+
+
 ## 2026-10-27 — Six source languages and isolated learning groups
 
 - Support English, French, Spanish, German, Italian and Polish for new books with Russian translations. Import uses one registry independent of Apple pair availability, confirms a separately remembered language, honors supported package metadata and rejects unsupported new packages explicitly.

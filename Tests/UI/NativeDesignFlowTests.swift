@@ -162,7 +162,7 @@ extension NativeDesignFlowTests {
         }
         func choose(_ language: String) {
             app.buttons["source-language.picker"].tap()
-            app.buttons[language].firstMatch.tap()
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", language)).firstMatch.tap()
         }
         destination("Dictionary")
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
@@ -173,12 +173,25 @@ extension NativeDesignFlowTests {
         destination("Practice")
         XCTAssertTrue(app.staticTexts["practice.ready-count"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["practice.ready-count"].label, "10 ready to repeat")
-        choose("Italian")
-        XCTAssertEqual(app.staticTexts["practice.ready-count"].label, "0 ready to repeat")
-        XCTAssertFalse(app.buttons["practice.quick-start"].isEnabled)
+        app.buttons["source-language.picker"].tap()
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Italian")).firstMatch.exists,
+                       "Languages without books must not be selectable")
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Polish")).firstMatch.tap()
         destination("Dictionary")
-        XCTAssertTrue(app.staticTexts["No saved phrases"].waitForExistence(timeout: 5))
         choose("Polish")
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testSinglePolishBookShowsFixedFlagInDictionaryAndPractice() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        for tab in ["Dictionary", "Practice"] {
+            app.tabBars.buttons[tab].tap()
+            let current = app.descendants(matching: .any)["source-language.current"]
+            XCTAssertTrue(current.waitForExistence(timeout: 5))
+            XCTAssertTrue(current.label.contains("🇵🇱"))
+            XCTAssertFalse(app.buttons["source-language.picker"].exists)
+        }
     }
 }

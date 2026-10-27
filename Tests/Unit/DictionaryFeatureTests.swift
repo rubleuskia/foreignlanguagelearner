@@ -479,6 +479,17 @@ extension DictionaryFeatureTests {
         XCTAssertTrue(SourceLanguage.groups(["pt-BR"]).contains { $0.code == "pt-br" })
     }
 
+    func testFilterLanguagesFollowBooksAndSingleLanguageResolvesSelection() {
+        let polishOnly = SourceLanguage.filterGroups(bookCodes: ["pl", "PL-pl"], entryCodes: ["en", "it"])
+        XCTAssertEqual(polishOnly.map(\.code), ["pl"])
+        XCTAssertEqual(polishOnly[0].flag, "🇵🇱")
+        XCTAssertEqual(SourceLanguage.resolvedActive("en", available: polishOnly), "pl")
+        let books = SourceLanguage.filterGroups(bookCodes: ["fr-CA", "pl"], entryCodes: ["it"])
+        XCTAssertEqual(books.map(\.code), ["fr", "pl"])
+        XCTAssertEqual(SourceLanguage.resolvedActive("pl", available: books), "pl")
+        XCTAssertEqual(SourceLanguage.filterGroups(bookCodes: [], entryCodes: ["en"]).map(\.code), ["en"])
+    }
+
     @MainActor func testTwoTenEntryGroupsUsePersistedEntryLanguageAndSeparatePracticePools() throws {
         let book = LearningItem(id: UUID(), title: "Source", mediaKind: "audio", mediaFilename: "", transcriptFilename: "", duration: 0, segments: [])
         let entries = (0..<20).map { index in

@@ -7,13 +7,14 @@ struct DictionaryView: View {
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var allEntries: [DictionaryEntry]
+    @Query private var books: [LearningItem]
     @AppStorage(LearningRoundCheckpoint.key) private var savedRoundData = Data()
     @AppStorage(SourceLanguage.activeKey) private var activeLanguage = "pl"
     private var entries: [DictionaryEntry] {
         SourceLanguage.entries(allEntries, language: activeLanguage)
     }
     private var languages: [SourceLanguage] {
-        SourceLanguage.groups(allEntries.map(\.sourceLanguageCode) + [activeLanguage])
+        SourceLanguage.filterGroups(bookCodes: books.map(\.sourceLanguageCode), entryCodes: allEntries.map(\.sourceLanguageCode))
     }
     @State private var selectedLevel: Int?
     @State private var readyOnly = false
@@ -39,10 +40,22 @@ struct DictionaryView: View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
                 Section {
-                    Picker("Source language", selection: $activeLanguage) {
-                        ForEach(languages) { Text($0.name).tag($0.code) }
+                    if languages.count > 1 {
+                        Picker("Source language", selection: $activeLanguage) {
+                            ForEach(languages) { Text($0.flaggedName).tag($0.code) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("source-language.picker")
+                    } else {
+                        HStack {
+                            Text("Source language")
+                            Spacer()
+                            Text(languages.first?.flaggedName ?? SourceLanguage.polish.flaggedName)
+                                .foregroundStyle(.secondary)
+                        }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("source-language.current")
                     }
-                    .accessibilityIdentifier("source-language.picker")
                 }
                 OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil)
                 ReadingVocabularyStatus()
@@ -132,7 +145,10 @@ struct DictionaryView: View {
         .scrollContentBackground(.hidden)
         .background(NativeDesign.page)
         .navigationTitle("Dictionary")
-        .task { SourceLanguage.initializeActive(codes: allEntries.map(\.sourceLanguageCode)) }
+        .task { activeLanguage = SourceLanguage.resolvedActive(activeLanguage, available: languages) }
+        .onChange(of: languages.map(\.code)) { _, _ in
+            activeLanguage = SourceLanguage.resolvedActive(activeLanguage, available: languages)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Learn", systemImage: "brain.head.profile") { learningLaunch = .setup }
