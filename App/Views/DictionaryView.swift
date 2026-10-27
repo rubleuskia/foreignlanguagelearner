@@ -6,8 +6,15 @@ struct DictionaryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
-    @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var entries: [DictionaryEntry]
+    @Query(sort: \DictionaryEntry.createdAt, order: .reverse) private var allEntries: [DictionaryEntry]
     @AppStorage(LearningRoundCheckpoint.key) private var savedRoundData = Data()
+    @AppStorage(SourceLanguage.activeKey) private var activeLanguage = "pl"
+    private var entries: [DictionaryEntry] {
+        SourceLanguage.entries(allEntries, language: activeLanguage)
+    }
+    private var languages: [SourceLanguage] {
+        SourceLanguage.groups(allEntries.map(\.sourceLanguageCode) + [activeLanguage])
+    }
     @State private var selectedLevel: Int?
     @State private var readyOnly = false
     @State private var selectedEntry: DictionaryEntry?
@@ -31,9 +38,15 @@ struct DictionaryView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
+                Section {
+                    Picker("Source language", selection: $activeLanguage) {
+                        ForEach(languages) { Text($0.name).tag($0.code) }
+                    }
+                    .accessibilityIdentifier("source-language.picker")
+                }
                 OnboardingTip(step: .dictionary, allowed: !entries.isEmpty && selectedEntry == nil && learningLaunch == nil)
                 ReadingVocabularyStatus()
-                if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
+                if !savedRoundData.isEmpty, LearningRoundCheckpoint.peek(language: activeLanguage, entries: allEntries) != nil {
                     Section {
                         Button("Continue unfinished training", systemImage: "play.circle") { learningLaunch = .setup }
                             .accessibilityIdentifier("dictionary.resume")
@@ -119,6 +132,7 @@ struct DictionaryView: View {
         .scrollContentBackground(.hidden)
         .background(NativeDesign.page)
         .navigationTitle("Dictionary")
+        .task { SourceLanguage.initializeActive(codes: allEntries.map(\.sourceLanguageCode)) }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Learn", systemImage: "brain.head.profile") { learningLaunch = .setup }
@@ -128,7 +142,7 @@ struct DictionaryView: View {
         }
         .sheet(item: $selectedEntry) { DictionaryEntryDetailView(entry: $0) }
         .sheet(item: $learningLaunch) { launch in
-            LearningSessionView(quickStart: launch == .quickStart)
+            LearningSessionView(sourceLanguage: activeLanguage, quickStart: launch == .quickStart)
         }
         .alert("Dictionary error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }

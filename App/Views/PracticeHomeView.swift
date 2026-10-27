@@ -2,8 +2,15 @@ import SwiftData
 import SwiftUI
 
 struct PracticeHomeView: View {
-    @Query private var entries: [DictionaryEntry]
+    @Query private var allEntries: [DictionaryEntry]
     @AppStorage(LearningRoundCheckpoint.key) private var savedRoundData = Data()
+    @AppStorage(SourceLanguage.activeKey) private var activeLanguage = "pl"
+    private var entries: [DictionaryEntry] {
+        SourceLanguage.entries(allEntries, language: activeLanguage)
+    }
+    private var languages: [SourceLanguage] {
+        SourceLanguage.groups(allEntries.map(\.sourceLanguageCode) + [activeLanguage])
+    }
     @State private var launch: Launch?
 
     private enum Launch: String, Identifiable {
@@ -14,6 +21,12 @@ struct PracticeHomeView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { _ in
             List {
+                Section {
+                    Picker("Source language", selection: $activeLanguage) {
+                        ForEach(languages) { Text($0.name).tag($0.code) }
+                    }
+                    .accessibilityIdentifier("source-language.picker")
+                }
                 OnboardingTip(step: .practice, allowed: !entries.isEmpty && launch == nil)
                 Section {
                     VStack(alignment: .leading, spacing: 16) {
@@ -44,7 +57,7 @@ struct PracticeHomeView: View {
                     }
                     .padding(.vertical, 12)
                 }
-                if !savedRoundData.isEmpty, LearningRoundCheckpoint.load() != nil {
+                if !savedRoundData.isEmpty, LearningRoundCheckpoint.peek(language: activeLanguage, entries: allEntries) != nil {
                     Section {
                         Button("Continue unfinished training", systemImage: "arrow.clockwise") { launch = .setup }
                             .frame(minHeight: 44)
@@ -67,6 +80,7 @@ struct PracticeHomeView: View {
             .background(NativeDesign.page)
         }
         .navigationTitle("Practice")
-        .sheet(item: $launch) { LearningSessionView(quickStart: $0 == .quick) }
+        .task { SourceLanguage.initializeActive(codes: allEntries.map(\.sourceLanguageCode)) }
+        .sheet(item: $launch) { LearningSessionView(sourceLanguage: activeLanguage, quickStart: $0 == .quick) }
     }
 }

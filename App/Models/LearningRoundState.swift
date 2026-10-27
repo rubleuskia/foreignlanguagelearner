@@ -28,6 +28,7 @@ enum LearningRoundSelection: String, CaseIterable, Identifiable, Codable, Sendab
 }
 
 struct LearningRoundState: Codable, Equatable, Sendable {
+    var sourceLanguage: String? = nil
     var initialLevels: [UUID: Int]? = nil
     private(set) var wrongAttemptsByEntry: [UUID: Int]? = nil
     let selection: LearningRoundSelection
@@ -39,9 +40,10 @@ struct LearningRoundState: Codable, Equatable, Sendable {
     private(set) var currentPresentationID: UUID
 
     init(selection: LearningRoundSelection, selectedIDs: [UUID],
-         presentationID: UUID = UUID()) {
+         presentationID: UUID = UUID(), sourceLanguage: String? = nil) {
         var seen = Set<UUID>()
         let unique = selectedIDs.filter { seen.insert($0).inserted }
+        self.sourceLanguage = sourceLanguage.map(SourceLanguage.canonical)
         self.selection = selection
         self.selectedIDs = unique
         self.pendingIDs = unique
@@ -116,7 +118,8 @@ enum LearningAnswerTransaction {
         guard round.currentID == expectedEntryID,
               round.currentPresentationID == presentationID,
               entry.id == expectedEntryID,
-              entry.isLearningEligible else { return false }
+              entry.isLearningEligible,
+              round.sourceLanguage == nil || SourceLanguage.canonical(entry.sourceLanguageCode) == round.sourceLanguage else { return false }
         let previousLevel = entry.learningLevel
         let previousDate = entry.levelChangedAt
         let promotionBlocked = right && (round.wrongAttemptsByEntry?[entry.id] ?? 0) >= 4
@@ -155,15 +158,17 @@ enum LearningPreviewAction: Equatable, Sendable {
 }
 
 struct LearningPreviewState: Equatable, Sendable {
+    var sourceLanguage: String? = nil
     let selection: LearningRoundSelection
     let selectedIDs: [UUID]
     private(set) var pendingIDs: [UUID]
     private(set) var learningIDs: [UUID] = []
     private(set) var currentPresentationID: UUID
 
-    init(selection: LearningRoundSelection, selectedIDs: [UUID], presentationID: UUID = UUID()) {
+    init(selection: LearningRoundSelection, selectedIDs: [UUID], presentationID: UUID = UUID(), sourceLanguage: String? = nil) {
         var seen = Set<UUID>()
         let unique = selectedIDs.filter { seen.insert($0).inserted }
+        self.sourceLanguage = sourceLanguage.map(SourceLanguage.canonical)
         self.selection = selection
         self.selectedIDs = unique
         self.pendingIDs = unique
@@ -190,7 +195,8 @@ enum LearningPreviewTransaction {
                                  presentationID: UUID, action: LearningPreviewAction,
                                  save: () throws -> Void) throws -> Bool {
         guard preview.currentID == entry.id, preview.currentPresentationID == presentationID,
-              entry.isLearningEligible else { return false }
+              entry.isLearningEligible,
+              preview.sourceLanguage == nil || SourceLanguage.canonical(entry.sourceLanguageCode) == preview.sourceLanguage else { return false }
         let oldLevel = entry.learningLevel
         let oldDate = entry.levelChangedAt
         switch action {
@@ -244,6 +250,7 @@ struct LearningAnswerUndo {
         guard now < expiresAt, entry.id == entryID,
               entry.learningLevel == savedLevel,
               savedLevelChangedAt == nil || entry.levelChangedAt == savedLevelChangedAt,
+              round.sourceLanguage == nil || SourceLanguage.canonical(entry.sourceLanguageCode) == round.sourceLanguage,
               round == answeredRound else { return false }
         let savedDate = entry.levelChangedAt
         entry.learningLevel = previousLevel
@@ -264,22 +271,83 @@ struct LearningAnswerUndo {
 /// Local checkpoint; word levels are saved separately on every accepted answer.
 enum LearningRoundCheckpoint {
     static let key = "learning.unfinished-round.v1"
+    static let recoveryKey = "learning.unfinished-round.recovery"
+
+    static func all(defaults: UserDefaults = .standard) -> [String: LearningRoundState] {
+        guard let data = defaults.data(forKey: key) else { return [:] }
+        return (try? JSONDecoder().decode([String: LearningRoundState].self, from: data)) ?? [:]
+    }
 
     static func load(defaults: UserDefaults = .standard) -> LearningRoundState? {
-        guard let data = defaults.data(forKey: key),
-              let round = try? JSONDecoder().decode(LearningRoundState.self, from: data),
-              round.canResume else { return nil }
-        return round
+        guard let data = defaults.data(forKey: key) else { return nil }
+        if let legacy = try? JSONDecoder().decode(LearningRoundState.self, from: data), legacy.canResume { return legacy }
+        return all(defaults: defaults)[defaults.string(forKey: SourceLanguage.activeKey) ?? "pl"]
     }
 
-    static func save(_ round: LearningRoundState?, defaults: UserDefaults = .standard) {
-        guard let round, round.canResume,
-              let data = try? JSONEncoder().encode(round) else {
-            defaults.removeObject(forKey: key)
-            return
-        }
-        defaults.set(data, forKey: key)
+    @MainActor static func validated(_ round: LearningRoundState, entries: [DictionaryEntry]) -> LearningRoundState? {
+        validated(round, languagesByID: Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.sourceLanguageCode) }))
     }
+
+    static func validated(_ round: LearningRoundState, languagesByID: [UUID: String]) -> LearningRoundState? {
+        guard round.canResume else { return nil }
+        let referenced = round.selectedIDs.compactMap { languagesByID[$0] }
+        let languages = Set(referenced.map(SourceLanguage.canonical))
+        guard referenced.count == round.selectedIDs.count, languages.count == 1,
+              let language = languages.first,
+              round.sourceLanguage == nil || round.sourceLanguage == language else { return nil }
+        var result = round
+        result.sourceLanguage = language
+        return result
+    }
+
+    /// Pure view query; migration/repair is deferred until session setup.
+    @MainActor static func peek(language: String, entries: [DictionaryEntry], defaults: UserDefaults = .standard) -> LearningRoundState? {
+        let code = SourceLanguage.canonical(language)
+        let candidate: LearningRoundState?
+        if let data = defaults.data(forKey: key), let legacy = try? JSONDecoder().decode(LearningRoundState.self, from: data) {
+            candidate = legacy
+        } else { candidate = all(defaults: defaults)[code] }
+        guard let candidate, let valid = validated(candidate, entries: entries), valid.sourceLanguage == code else { return nil }
+        return valid
+    }
+
+    @MainActor static func load(language: String, entries: [DictionaryEntry], defaults: UserDefaults = .standard) -> LearningRoundState? {
+        var rounds = all(defaults: defaults)
+        if let data = defaults.data(forKey: key),
+           let legacy = try? JSONDecoder().decode(LearningRoundState.self, from: data) {
+            if let valid = validated(legacy, entries: entries), let code = valid.sourceLanguage { rounds[code] = valid }
+            else { defaults.set("An older unfinished round could not be resumed because its phrases are missing or use different source languages. Your saved learning levels are unchanged.", forKey: recoveryKey) }
+            replace(rounds, defaults: defaults)
+        }
+        if let data = defaults.data(forKey: key), !data.isEmpty,
+           (try? JSONDecoder().decode([String: LearningRoundState].self, from: data)) == nil,
+           (try? JSONDecoder().decode(LearningRoundState.self, from: data)) == nil {
+            defaults.set("The unfinished round was unreadable. Your saved learning levels are unchanged.", forKey: recoveryKey)
+            replace(rounds, defaults: defaults)
+        }
+        let code = SourceLanguage.canonical(language)
+        guard let round = rounds[code] else { return nil }
+        guard let valid = validated(round, entries: entries), valid.sourceLanguage == code else {
+            defaults.set("The unfinished round could not be resumed because its phrases changed. Your saved learning levels are unchanged.", forKey: recoveryKey)
+            rounds.removeValue(forKey: code)
+            replace(rounds, defaults: defaults)
+            return nil
+        }
+        return valid
+    }
+
+    static func replace(_ rounds: [String: LearningRoundState], defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(rounds) { defaults.set(data, forKey: key) }
+    }
+
+    static func save(_ round: LearningRoundState?, language: String? = nil, defaults: UserDefaults = .standard) {
+        var rounds = all(defaults: defaults)
+        let code = SourceLanguage.canonical(language ?? round?.sourceLanguage ?? defaults.string(forKey: SourceLanguage.activeKey) ?? "pl")
+        if let round, round.canResume { rounds[code] = round }
+        else { rounds.removeValue(forKey: code) }
+        replace(rounds, defaults: defaults)
+    }
+
 }
 
 /// Cooldown applies when selecting a new round, never to retries inside an active round.

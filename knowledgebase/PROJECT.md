@@ -1,5 +1,14 @@
 # Foreign Language Learner
 
+## Supported source-language workflow
+
+New books may use English, French, Spanish, German, Italian or Polish, with Russian translations and explanations. Import confirms a separately remembered book language; supported package metadata takes precedence. Reading is available without an Apple translation pair. Historical books/backup languages outside this list remain readable and appear as existing dictionary/practice groups.
+
+Dictionary and Practice share one remembered source-language dropdown. Counts, levels, eligible phrases, quick starts, learnt reviews and resumable rounds stay within that language. Each saved entry retains its own source language after its book is deleted. Reading knowledge is shared across books in the same canonical language and isolated across languages; dictionary phrases and reading forms remain separate metrics. Library backup carries all independent unfinished rounds and language preferences.
+
+Local and backend alignment accept the six lowercase source codes. Deployment remains gated on measured task limits and the six-language real-audio benchmark matrix; no deployment accompanies this change.
+
+
 ## Purpose
 
 Foreign Language Learner is a native SwiftUI iPhone and iPad application for learning from spoken content. A learner imports local audio or video, or a ZIP containing a multi-track audiobook, reads matching full text and available per-track subtitles, selects words or phrases, saves them to a personal dictionary, and practices them later.

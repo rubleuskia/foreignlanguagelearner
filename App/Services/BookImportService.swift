@@ -172,12 +172,20 @@ actor BookImportService {
         return value
     }
 
+    private func supportedManifestLanguage(_ language: String) throws -> String {
+        guard SourceLanguage.isSupported(language) else {
+            throw invalid("This new package uses an unsupported source language (\(language)). Supported: en, fr, es, de, it, pl.")
+        }
+        return SourceLanguage.canonical(language)
+    }
+
     func prepare(_ preview: Preview, title: String, sourceLanguage: String? = nil,
                  orderedTracks: [PreviewTrack], transcriptPath: String?,
                  externalTranscript: URL?) throws -> Prepared {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanTitle.isEmpty, cleanTitle.unicodeScalars.count <= 500 else { throw invalid("Book title must contain 1–500 Unicode scalars.") }
-        let language = sourceLanguage ?? preview.sourceLanguage
+        let language = SourceLanguage.canonical(sourceLanguage ?? preview.sourceLanguage)
+        guard SourceLanguage.isSupported(language) else { throw invalid("Choose English, French, Spanish, German, Italian or Polish as the source language.") }
         guard language.range(of: "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$", options: .regularExpression) != nil,
               language.utf8.count <= 64 else { throw invalid("Source language must be an ASCII language tag.") }
         guard Set(orderedTracks.map(\.id)) == Set(preview.tracks.map(\.id)),
@@ -221,6 +229,7 @@ actor BookImportService {
         if var manifest = manifests[preview.id] {
             try BookManifestValidator.validate(manifest, transcriptData: transcriptData, limits: limits)
             manifest.title = cleanTitle
+            manifest.sourceLanguage = language
             try writeManifest(manifest, to: book.appending(path: "manifest.json"))
         } else if hasTranscript && !orderedTracks.isEmpty {
             let tracks = orderedTracks.map {
@@ -342,7 +351,7 @@ actor BookImportService {
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
         manifests[transactionID] = manifest
         return .init(id: transactionID, itemID: UUID(), title: manifest.title,
-                     sourceLanguage: manifest.sourceLanguage, tracks: previewTracks,
+                     sourceLanguage: try supportedManifestLanguage(manifest.sourceLanguage), tracks: previewTracks,
                      transcriptCandidates: [manifest.transcript], selectedTranscript: manifest.transcript,
                      isManifestPackage: true, ignoredFileCount: entries.filter { isSystemMetadata($0.path) }.count)
     }

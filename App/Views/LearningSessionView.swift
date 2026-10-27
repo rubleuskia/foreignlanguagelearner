@@ -3,21 +3,30 @@ import SwiftUI
 
 struct LearningSessionView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var sourceLanguage: String
     var quickStart = false
+    init(sourceLanguage: String = UserDefaults.standard.string(forKey: SourceLanguage.activeKey) ?? "pl", quickStart: Bool = false) {
+        _sourceLanguage = State(initialValue: SourceLanguage.canonical(sourceLanguage))
+        self.quickStart = quickStart
+    }
     @State private var didQuickStart = false
     @State private var initialLevels: [UUID: Int] = [:]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
-    @Query private var allEntries: [DictionaryEntry]
+    @Query private var storedEntries: [DictionaryEntry]
+    private var allEntries: [DictionaryEntry] {
+        SourceLanguage.entries(storedEntries, language: sourceLanguage)
+    }
     @Query private var sourceItems: [LearningItem]
     @State private var contextual = ContextualTranslationCoordinator()
     @State private var ignoreCooldown = false
     @State private var selection: LearningRoundSelection = .ten
     @State private var round: LearningRoundState?
     @State private var previewRound: LearningPreviewState?
-    @State private var savedRound = LearningRoundCheckpoint.load()
+    @State private var recoveryMessage: String?
+    @State private var savedRound: LearningRoundState?
     @State private var confirmingClose = false
     @State private var revealed = false
     @State private var pendingUndo: LearningAnswerUndo?
@@ -80,7 +89,7 @@ struct LearningSessionView: View {
                 }
             }
             .background(NativeDesign.page)
-            .navigationTitle(previewRound == nil ? "Learn" : "Preview")
+            .navigationTitle("\(previewRound == nil ? "Learn" : "Preview") · \(SourceLanguage.name(for: sourceLanguage))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -96,6 +105,9 @@ struct LearningSessionView: View {
             )) { Button("OK") {} } message: { Text(errorMessage ?? "") }
         }
         .task {
+            savedRound = LearningRoundCheckpoint.load(language: sourceLanguage, entries: storedEntries)
+            recoveryMessage = UserDefaults.standard.string(forKey: LearningRoundCheckpoint.recoveryKey)
+            UserDefaults.standard.removeObject(forKey: LearningRoundCheckpoint.recoveryKey)
             do { try LearningCooldown.backfill(allEntries, save: { try context.save() }) }
             catch { errorMessage = error.localizedDescription }
             if quickStart && !didQuickStart {
@@ -122,6 +134,8 @@ struct LearningSessionView: View {
 
     private var setupView: some View {
         Form {
+            LabeledContent("Source language", value: SourceLanguage.name(for: sourceLanguage))
+            if let recoveryMessage { Text(recoveryMessage).foregroundStyle(.secondary) }
             if let savedRound {
                 Section("Unfinished round") {
                     Text("Completed \(savedRound.rightAttemptCount) of \(savedRound.totalSelectedCount)")
@@ -565,7 +579,7 @@ struct LearningSessionView: View {
     }
 
     private func startRound() {
-        LearningRoundCheckpoint.save(nil)
+        LearningRoundCheckpoint.save(nil, language: sourceLanguage)
         savedRound = nil
         closeAudio()
         pendingUndo = nil
@@ -574,7 +588,7 @@ struct LearningSessionView: View {
         let snapshot = pool.map(\.id)
         round = nil
         updatePreview(LearningPreviewState(selection: selection,
-                                           selectedIDs: snapshot))
+                                           selectedIDs: snapshot, sourceLanguage: sourceLanguage))
         revealed = false
     }
 
@@ -601,7 +615,7 @@ struct LearningSessionView: View {
         contextual.cancelCurrentRequest()
         revealed = false
         if updated.isComplete {
-            round = LearningRoundState(selection: updated.selection, selectedIDs: updated.learningIDs)
+            round = LearningRoundState(selection: updated.selection, selectedIDs: updated.learningIDs, sourceLanguage: sourceLanguage)
             round?.initialLevels = initialLevels
             previewRound = nil
         } else {

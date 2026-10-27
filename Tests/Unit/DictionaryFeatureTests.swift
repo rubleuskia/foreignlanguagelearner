@@ -468,3 +468,81 @@ extension DictionaryFeatureTests {
         XCTAssertNil(pending.first?.translationOrigin)
     }
 }
+
+extension DictionaryFeatureTests {
+    func testSupportedLanguageRegionalGroupingAndHistoricalIdentity() {
+        XCTAssertEqual(SourceLanguage.supportedCodes, ["en", "fr", "es", "de", "it", "pl"])
+        for (input, expected) in [(" EN_us ", "en"), ("fr-CA", "fr"), ("PL_pl", "pl"), ("pt-BR", "pt-br")] {
+            XCTAssertEqual(SourceLanguage.canonical(input), expected)
+        }
+        XCTAssertFalse(SourceLanguage.isSupported("pt-BR"))
+        XCTAssertTrue(SourceLanguage.groups(["pt-BR"]).contains { $0.code == "pt-br" })
+    }
+
+    @MainActor func testTwoTenEntryGroupsUsePersistedEntryLanguageAndSeparatePracticePools() throws {
+        let book = LearningItem(id: UUID(), title: "Source", mediaKind: "audio", mediaFilename: "", transcriptFilename: "", duration: 0, segments: [])
+        let entries = (0..<20).map { index in
+            let entry = DictionaryEntry(text: "same phrase \(index % 10)", item: book, segmentIndex: 0,
+                context: nil, audioStart: nil, audioEnd: nil)
+            entry.sourceLanguageCode = index < 10 ? "en-US" : "pl"
+            entry.translationText = "перевод"; entry.translationStatus = .ready
+            entry.levelChangedAt = .distantPast
+            return entry
+        }
+        book.sourceLanguageCode = "de"
+        for language in ["en", "pl"] {
+            let scoped = SourceLanguage.entries(entries, language: language)
+            XCTAssertEqual(scoped.count, 10)
+            XCTAssertEqual(LearningRoundPool.entries(from: scoped).count, 10)
+            XCTAssertTrue(scoped.allSatisfy { SourceLanguage.canonical($0.sourceLanguageCode) == language })
+        }
+        XCTAssertTrue(SourceLanguage.entries(entries, language: "it").isEmpty)
+    }
+
+    @MainActor func testCheckpointsRemainIndependentAndMixedLegacyDoesNotResume() throws {
+        let suite = "Languages.\(UUID())", defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let book = LearningItem(id: UUID(), title: "Source", mediaKind: "audio", mediaFilename: "", transcriptFilename: "", duration: 0, segments: [])
+        let english = DictionaryEntry(text: "same", item: book, segmentIndex: 0, context: nil, audioStart: nil, audioEnd: nil)
+        let polish = DictionaryEntry(text: "same", item: book, segmentIndex: 0, context: nil, audioStart: nil, audioEnd: nil)
+        english.sourceLanguageCode = "en"; polish.sourceLanguageCode = "pl"
+        func unfinished(_ entry: DictionaryEntry, language: String?) -> LearningRoundState {
+            var round = LearningRoundState(selection: .five, selectedIDs: [entry.id], sourceLanguage: language)
+            round.recordAnswer(entryID: entry.id, presentationID: round.currentPresentationID, right: false)
+            return round
+        }
+        let enRound = unfinished(english, language: "en"), plRound = unfinished(polish, language: "pl")
+        LearningRoundCheckpoint.save(enRound, defaults: defaults)
+        LearningRoundCheckpoint.save(plRound, defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(language: "en", entries: [english, polish], defaults: defaults), enRound)
+        XCTAssertEqual(LearningRoundCheckpoint.load(language: "pl", entries: [english, polish], defaults: defaults), plRound)
+        LearningRoundCheckpoint.save(nil, language: "en", defaults: defaults)
+        XCTAssertEqual(LearningRoundCheckpoint.load(language: "pl", entries: [english, polish], defaults: defaults), plRound)
+        var mixed = LearningRoundState(selection: .five, selectedIDs: [english.id, polish.id])
+        mixed.recordAnswer(entryID: english.id, presentationID: mixed.currentPresentationID, right: false)
+        defaults.set(try JSONEncoder().encode(mixed), forKey: LearningRoundCheckpoint.key)
+        XCTAssertNil(LearningRoundCheckpoint.load(language: "en", entries: [english, polish], defaults: defaults))
+        XCTAssertNotNil(defaults.string(forKey: LearningRoundCheckpoint.recoveryKey))
+        XCTAssertEqual(english.learningLevel, 1)
+        let legacy = unfinished(polish, language: nil)
+        let legacyData = try JSONEncoder().encode(legacy)
+        defaults.set(legacyData, forKey: LearningRoundCheckpoint.key)
+        XCTAssertEqual(LearningRoundCheckpoint.peek(language: "pl", entries: [english, polish], defaults: defaults)?.sourceLanguage, "pl")
+        XCTAssertEqual(defaults.data(forKey: LearningRoundCheckpoint.key), legacyData, "A view query must not mutate defaults")
+        XCTAssertEqual(LearningRoundCheckpoint.load(language: "pl", entries: [english, polish], defaults: defaults)?.sourceLanguage, "pl")
+        defaults.set(Data("unreadable".utf8), forKey: LearningRoundCheckpoint.key)
+        XCTAssertNil(LearningRoundCheckpoint.load(language: "pl", entries: [english, polish], defaults: defaults))
+        XCTAssertNotNil(defaults.string(forKey: LearningRoundCheckpoint.recoveryKey))
+    }
+
+    @MainActor func testBoundRoundRejectsEntryWhoseLanguageChangedWithoutSaving() throws {
+        let book = LearningItem(id: UUID(), title: "Source", mediaKind: "audio", mediaFilename: "", transcriptFilename: "", duration: 0, segments: [])
+        let entry = DictionaryEntry(text: "same", item: book, segmentIndex: 0, context: nil, audioStart: nil, audioEnd: nil)
+        entry.sourceLanguageCode = "pl"; entry.translationText = "перевод"; entry.translationStatus = .ready
+        var round = LearningRoundState(selection: .five, selectedIDs: [entry.id], sourceLanguage: "en")
+        var saved = false
+        let applied = try LearningAnswerTransaction.apply(entry: entry, round: &round,
+            expectedEntryID: entry.id, presentationID: round.currentPresentationID, right: true, save: { saved = true })
+        XCTAssertFalse(applied); XCTAssertFalse(saved); XCTAssertEqual(entry.learningLevel, 1)
+    }
+}

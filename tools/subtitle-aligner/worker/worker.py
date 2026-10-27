@@ -204,6 +204,7 @@ class Worker:
             manifest = {
                 "schema_version": 1, "job_id": job_id, "attempt": 1,
                 "profile_id": specification["profile_id"], "image_digest": self.image_digest,
+                "language": specification["language"],
                 "inputs": {
                     "audio": {"version_id": specification["audio"]["version_id"],
                               "sha256": specification["audio"]["sha256"]},

@@ -63,7 +63,7 @@ def load_manifest(path):
     if not isinstance(manifest.get("title"), str) or not manifest["title"].strip():
         raise ValueError("Manifest title is required.")
     language = manifest.get("sourceLanguage")
-    if not isinstance(language, str) or not language or not language.isascii() or len(language) > 64:
+    if not isinstance(language, str) or language not in align.SUPPORTED_LANGUAGES:
         raise ValueError("sourceLanguage must be nonempty ASCII under 65 bytes.")
     transcript_path = safe_path(root, manifest.get("transcript"), {".txt"})
     if not transcript_path.is_file() or not 0 < transcript_path.stat().st_size <= 10_000_000:
@@ -282,6 +282,7 @@ def run(args, model_loader=None, aligner=perform_alignment):
     args.language = args.language or manifest["sourceLanguage"]
     if args.language != manifest["sourceLanguage"]:
         raise ValueError("--language must match manifest sourceLanguage for reproducible reruns.")
+    align.validate_language_model(args.language, args.model)
     track_ids = [track["manifest"]["id"] for track in prepared]
     if (args.previous_output is None) != (args.track_id is None):
         raise ValueError("--previous-output and --track-id must be supplied together.")

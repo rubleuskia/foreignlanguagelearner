@@ -1,5 +1,22 @@
 # Project changelog
 
+## 2026-10-27 — Six source languages and isolated learning groups
+
+- Support English, French, Spanish, German, Italian and Polish for new books with Russian translations. Import uses one registry independent of Apple pair availability, confirms a separately remembered language, honors supported package metadata and rejects unsupported new packages explicitly.
+- Add a shared persisted Dictionary/Practice language dropdown. Lists, level/readiness totals, quick starts, previews, retries, learnt reviews and results stay within the entry's own source language; historical groups remain available. An open round keeps its original language.
+- Keep independent unfinished rounds per language with conservative legacy migration and recovery messages. Library backups round-trip all valid checkpoints and typed language preferences, preserve orphan-entry and regional metadata, retain unrelated local rounds, and reject cross-language book matches.
+- Group supported regional reading-history tags without rewriting old exports or changing tokenizer/timing versions. Retain same-language knowledge sharing and cross-language isolation. Add Italian function-word handling, neutral mandatory prompt text (v5), source hints for selection tokenization, and explicit rollback for book language changes.
+- Align backend/OpenAPI/local tools on the six lowercase source codes. Pin language through idempotency, worker input and new result manifests; reject output-language mismatches and English-only local models for other languages. Quotas, authorization and deployment gate are unchanged.
+- Verification: 204 Swift unit tests pass; the new dropdown synchronization/empty-group UI check passes on iPhone 17 Pro Max and iPad Pro 13-inch (M5). Unsigned iOS Release build passes. Backend 15 tests, local aligner 26 tests, worker 3 tests and TypeScript/CDK assertions pass. The full existing UI suite was interrupted during development; only the focused new UI checks are claimed here.
+- Real-audio quality benchmarks were not run for any of the six release-matrix languages: no matching fixtures/model weights were present. `docs/ALIGNMENT_BENCHMARKS.md` records provenance, measurement and listening requirements; no deployment or merge occurred.
+- DECISIONS.md records language normalization, checkpoint/backup compatibility and alignment contracts; PROJECT.md and affected workflow docs describe the expanded supported workflow. Project purpose and local/cloud boundaries are unchanged.
+
+
+## 2026-10-27 — Multilingual source implementation plan (documentation only)
+
+- Add `docs/MULTILINGUAL_SOURCE_IMPLEMENTATION_PLAN.md` for six book source languages with Russian translations, shared Dictionary/Practice language filtering, isolated counts and training progress, backup compatibility and local/cloud alignment scope.
+- This records the approved implementation scope, not shipped behavior. No implemented architectural decision or current supported workflow changes in this documentation step; DECISIONS.md and PROJECT.md will be updated with the implementation.
+
 ## 2026-10-26 — Progressive book import and first-use onboarding
 
 - Add a unified book wizard for text, audio, audio ZIP with optional TXT and complete synchronized packages. Text-only books can be read; audio-only books can be played; unsynchronized books open full text directly.

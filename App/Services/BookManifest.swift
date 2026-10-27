@@ -33,7 +33,7 @@ struct BookManifest: Codable, Equatable, Sendable {
     let format: String
     let schemaVersion: Int
     var title: String
-    let sourceLanguage: String
+    var sourceLanguage: String
     let transcript: String
     let tracks: [Track]
     let textMapping: TextMapping?

@@ -16,6 +16,23 @@ def word(text, start, end):
 
 
 class SubtitleTests(unittest.TestCase):
+    def test_six_language_contract_and_multilingual_models(self):
+        texts = {"en": "Don't re-enter.", "fr": "L’homme est arrivé.", "es": "¡El niño volvió!",
+                 "de": "Die Straße ist schön.", "it": "L'amico è qui.", "pl": "Zażółć gęślą jaźń."}
+        for language, text in texts.items():
+            with self.subTest(language=language):
+                align.validate_language_model(language, "base")
+                words = [word((" " if i else "") + token, i, i + .5) for i, token in enumerate(text.split())]
+                align.validate_words({"segments": [{"words": words}]}, text)
+                self.assertEqual(" ".join(c["text"] for c in align.make_cues(words)), text)
+                if language != "en":
+                    with self.assertRaises(ValueError):
+                        align.validate_language_model(language, "base.en")
+        for language in ("ru", "pt", "EN", "en-US", ""):
+            with self.assertRaises(ValueError):
+                align.validate_language_model(language, "base")
+        align.validate_language_model("en", "base.en")
+
     def test_engine_duplicate_repair_preserves_intentional_repetition(self):
         words = [word(" Tak", 0, 1), word(" Tak", 1, 2), word(" jest.", 2, 3)]
         data = {"segments": [{"words": words}]}

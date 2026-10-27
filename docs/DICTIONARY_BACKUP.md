@@ -1,5 +1,12 @@
 # Dictionary backup and restoration
 
+## Source languages and independent training rounds
+
+Dictionary source language is persisted per entry, including orphan entries whose book was deleted. Identical text in different languages remains separate; restore never infers source from the active screen selection. Regional tags on historical records round-trip unchanged, while app groups recognize supported base languages (for example `en-US` and `en`). Reading-vocabulary v3 tags and tokenizer v1 remain compatible.
+
+Library backup schema v1 has optional `rounds` (canonical source code → round) and optional `settings.activeSourceLanguage` / `settings.newBookSourceLanguage`. Each new round includes optional `sourceLanguage`; the existing `round` field remains for older consumers. Export includes every valid language checkpoint. Restore validates references/language, merges each language independently, and retains unrelated local checkpoints. Older backups lacking preferences preserve local defaults. A legacy single round is inferred only when all IDs resolve to one language; invalid or mixed rounds are discarded without altering the restored card levels. Book fingerprint matches also require the same canonical source language.
+
+
 Use **Library → Backup Library → Backup Library** to save a library-state JSON snapshot outside the app's storage. This restores progress after reimporting the same books on another phone, without embedding their files.
 
 ## Library backup and new-phone restore

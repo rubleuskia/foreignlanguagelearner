@@ -26,7 +26,7 @@ import SwiftData
     }
 
     func forms(for language: String) -> Set<String> {
-        guard let language = try? VocabularyTokenizer.language(language) else { return [] }
+        guard let language = try? VocabularyTokenizer.groupLanguage(language) else { return [] }
         return known[language] ?? []
     }
 
@@ -64,7 +64,7 @@ import SwiftData
                     for track in item.tracks where track.isCompleted { sources += try ReadingCompletionService.sources(item: item, scope: .track(track.id)) }
                     for part in item.parts where part.isCompleted { sources += try ReadingCompletionService.sources(item: item, scope: .part(part.id)) }
                 }
-                let language = sources.isEmpty ? "" : try VocabularyTokenizer.language(item.sourceLanguageCode)
+                let language = sources.isEmpty ? "" : try VocabularyTokenizer.groupLanguage(item.sourceLanguageCode)
                 let result = try await index.analyze(sources, language: language)
                 try Task.checkCancellation()
                 guard item.modelContext != nil else { continue }
@@ -96,12 +96,12 @@ import SwiftData
     func prepare(item: LearningItem, scope: ReadingScope) async throws -> ReadingCompletionProposal {
         guard ready else { throw ReadingVocabularyError.notReady }
         let itemID = item.id
-        let language = try VocabularyTokenizer.language(item.sourceLanguageCode)
+        let language = try VocabularyTokenizer.groupLanguage(item.sourceLanguageCode)
         let sources = try ReadingCompletionService.sources(item: item, scope: scope)
         let result = try await index.analyze(sources, language: language)
         try Task.checkCancellation()
         guard item.modelContext != nil,
-              try VocabularyTokenizer.language(item.sourceLanguageCode) == language,
+              try VocabularyTokenizer.groupLanguage(item.sourceLanguageCode) == language,
               try ReadingCompletionService.sources(item: item, scope: scope) == sources else { throw ReadingVocabularyError.changed }
         return .init(itemID: itemID, language: language, scope: scope, words: result.words,
                      fingerprint: result.fingerprint, added: statistics(result.words, language: language).new, hasText: !sources.isEmpty)
@@ -124,7 +124,7 @@ import SwiftData
         let blobs = try await encoding.value
         try Task.checkCancellation()
         guard knowledgeRevision == revision, item.modelContext != nil,
-              try VocabularyTokenizer.language(item.sourceLanguageCode) == fresh.language,
+              try VocabularyTokenizer.groupLanguage(item.sourceLanguageCode) == fresh.language,
               try ReadingCompletionService.sources(item: item, scope: proposal.scope) == sourceSnapshot else { throw ReadingVocabularyError.changed }
         if Self.completed(item, scope: proposal.scope) { return }
         // No await from this point through commit: playback and UI edits use this same context.
@@ -205,7 +205,7 @@ import SwiftData
                 if indexedCatalog[id] == catalogKey, bookSummaries[id] != nil, bookErrors[id] == nil { continue }
                 do {
                     let sources = try ReadingCompletionService.sources(item: item, scope: .book)
-                    let summary = try await index.indexBook(id: id, language: VocabularyTokenizer.language(language), sources: sources)
+                    let summary = try await index.indexBook(id: id, language: VocabularyTokenizer.groupLanguage(language), sources: sources)
                     try Task.checkCancellation()
                     guard revision == expectedRevision, generation == refreshGeneration, item.modelContext != nil, Self.catalogKey(item) == catalogKey else { return }
                     bookSummaries[id] = summary

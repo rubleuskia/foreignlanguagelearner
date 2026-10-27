@@ -20,7 +20,7 @@ actor URLSessionContextAnalysisHTTPClient: ContextAnalysisHTTPClient {
 
 struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
     static let endpoint = URL(string: "https://api.openai.com/v1/responses")!
-    static let promptVersion = "context-analysis-v4"
+    static let promptVersion = "context-analysis-v5"
     static let defaultPrompt = """
     You are a concise contextual translator.
     For each word in words_to_explain, return its dictionary form (lemma) in source_language and its
@@ -34,7 +34,7 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
     Return exactly one word_explanations item for every entry in words_to_explain,
     in the supplied order, including repeated words. Copy each source_word exactly from that list.
     The application has excluded conjunctions, prepositions and connecting function words
-    (for example Polish ale, i, z, przed, na). Do not add them back to the word breakdown.
+    for the requested source language. Do not add them back to the word breakdown.
     If words_to_explain is empty, return an empty word_explanations array.
     Always translate ALL of selected_text in phrase_translation, including the omitted function words.
     Each item must contain source_word, lemma, and meaning. The lemma is only the base form;

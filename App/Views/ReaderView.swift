@@ -231,8 +231,12 @@ struct ReaderView: View {
     private func changeLanguage(to code: String) {
         guard !item.isSourceLanguageLocked, code != item.sourceLanguageCode else { return }
         let itemID = item.id
+        let oldLanguage = item.sourceLanguageCode
+        var snapshots: [(DictionaryEntry, DictionaryEntryRollbackSnapshot)] = []
         do {
-            let entries = try context.fetch(FetchDescriptor<DictionaryEntry>(predicate: #Predicate { $0.localSourceItemID == itemID }))
+            if context.hasChanges { try context.save() }
+            let entries = try context.fetch(FetchDescriptor<DictionaryEntry>()).filter { ($0.localSourceItemID ?? $0.sourceItemID) == itemID }
+            snapshots = entries.map { ($0, DictionaryEntryRollbackSnapshot($0)) }
             item.sourceLanguageCode = code
             for entry in entries {
                 translationCoordinator.cancel(entry.id)
@@ -248,6 +252,11 @@ struct ReaderView: View {
             }
             try context.save()
             for entry in entries where !entry.hasTranslation { translationCoordinator.enqueue(entry, context: context) }
-        } catch { message = error.localizedDescription }
+        } catch {
+            context.rollback()
+            item.sourceLanguageCode = oldLanguage
+            for (entry, snapshot) in snapshots { snapshot.restore(entry) }
+            message = error.localizedDescription
+        }
     }
 }

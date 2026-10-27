@@ -202,7 +202,7 @@ components:
       additionalProperties: false
       required: [language, profile_id, allow_untimed_words, audio, text]
       properties:
-        language: { const: pl }
+        language: { type: string, enum: [en, fr, es, de, it, pl] }
         profile_id: { const: base-guided-v1 }
         allow_untimed_words: { type: boolean }
         audio:

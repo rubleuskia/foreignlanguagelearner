@@ -268,6 +268,7 @@ private final class VocabularyDatabase {
         return result
     }
     func word(_ language: String, _ form: String) throws -> Int64 {
+        let language = SourceLanguage.canonical(language)
         try run("INSERT OR IGNORE INTO word(language,form) VALUES (?,?)", [.text(language), .text(form)])
         return Int64(try rows("SELECT id FROM word WHERE language=? AND form=?", [.text(language), .text(form)])[0][0])!
     }

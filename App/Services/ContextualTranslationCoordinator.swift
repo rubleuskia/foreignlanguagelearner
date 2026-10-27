@@ -9,13 +9,14 @@ struct ContextSentence: Equatable, Sendable {
 }
 
 enum WordSelectionExpander {
-    static func expandedRange(in text: String, selection: NSRange) -> NSRange {
+    static func expandedRange(in text: String, selection: NSRange, language: String? = nil) -> NSRange {
         let source = text as NSString
         guard selection.location != NSNotFound, selection.length > 0,
               NSMaxRange(selection) <= source.length,
               Range(selection, in: text) != nil else { return selection }
 
         let tokenizer = NLTokenizer(unit: .word)
+        if let language, !language.isEmpty { tokenizer.setLanguage(NLLanguage(rawValue: SourceLanguage.canonical(language))) }
         tokenizer.string = text
         var expanded = selection
         tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in

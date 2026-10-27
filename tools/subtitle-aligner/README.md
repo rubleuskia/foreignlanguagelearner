@@ -1,5 +1,10 @@
 # TXT/EPUB + audio → synchronized subtitles
 
+## Supported source languages
+
+The CLI and batch manifest support exactly lowercase `en`, `fr`, `es`, `de`, `it`, `pl`. Batch `--language`, when provided, must match `sourceLanguage`. Single-file `--language` defaults to Polish (`pl`) for existing scripts and is printed before work starts; pass it explicitly for reproducible multilingual runs. English-only `.en`/`.en.pt` models are rejected for non-English input; the cloud `base-guided-v1` profile uses multilingual `base`. Apostrophes, accented text, hyphens and punctuation are preserved in the existing whitespace timing format. Contract tests cover all six codes; real-audio quality is still unmeasured for this release matrix. See [benchmark gate](../../docs/ALIGNMENT_BENCHMARKS.md).
+
+
 A local command-line utility for turning a **matching UTF-8 book transcript and an audio recording** (with a separate EPUB-to-text preparation step) into **SRT and WebVTT** files that Foreign Language Learner can import. Alignment estimates when the supplied words are spoken; no timestamps are required in the TXT.
 
 For experiments, failures, fixes, and limits, see the [Polish sample conversion report](../../docs/SUBTITLE_CONVERSION_REPORT.md) and the [39-track Lalka EPUB preparation report](../../docs/LALKA_SUBTITLE_PREPARATION.md).

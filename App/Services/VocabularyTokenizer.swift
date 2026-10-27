@@ -15,6 +15,10 @@ enum VocabularyTokenizer {
         return value
     }
 
+    static func groupLanguage(_ input: String) throws -> String {
+        SourceLanguage.canonical(try language(input))
+    }
+
     static func normalized(_ text: String) -> String {
         text.precomposedStringWithCanonicalMapping.replacingOccurrences(of: "’", with: "'")
             .lowercased(with: Locale(identifier: "en_US_POSIX")).precomposedStringWithCanonicalMapping

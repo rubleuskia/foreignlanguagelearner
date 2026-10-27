@@ -32,7 +32,7 @@ struct BookImportView: View {
     @State private var preview: BookImportService.Preview?
     @State private var selectedTranscript: String?
     @State private var title = ""
-    @State private var language = "pl"
+    @State private var language = UserDefaults.standard.string(forKey: SourceLanguage.importKey) ?? "pl"
     @State private var expectedRevision = ""
     @State private var working = false
     @State private var error: String?
@@ -227,7 +227,7 @@ struct BookImportView: View {
     }
 
     private var readingLanguages: [SourceLanguage] {
-        var values = Locale.LanguageCode.isoLanguageCodes.map { SourceLanguage(code: $0.identifier, name: SourceLanguage.name(for: $0.identifier)) }
+        var values = SourceLanguage.supported
         if !values.contains(where: { $0.code == language }) { values.append(.init(code: language, name: SourceLanguage.name(for: language))) }
         return values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -255,7 +255,7 @@ struct BookImportView: View {
                 else { value = try await service.previewFiles(audio: audioURL, text: textURL) }
                 guard !Task.isCancelled else { await service.cancel(value); return }
                 preview = value; selectedTranscript = value.selectedTranscript
-                if item == nil { if title.isEmpty { title = value.title }; if value.isManifestPackage { language = value.sourceLanguage } }
+                if item == nil { if title.isEmpty { title = value.title }; if value.isManifestPackage { language = SourceLanguage.canonical(value.sourceLanguage) } }
                 if action == .synchronization && !value.isManifestPackage { throw BookManifestError.invalid("Synchronization requires a complete package with a manifest, text and audio.") }
                 step = 2
             } catch { self.error = error.localizedDescription }
@@ -274,6 +274,7 @@ struct BookImportView: View {
                     wordPreview = reviewed; wordPreviewKey = previewKey
                     throw ReadingVocabularyError.changed
                 }
+                if item == nil { UserDefaults.standard.set(language, forKey: SourceLanguage.importKey) }
                 let prepared = try await service.prepare(preview, title: title, sourceLanguage: language,
                     orderedTracks: preview.tracks, transcriptPath: selectedTranscript,
                     externalTranscript: usesArchive ? textURL : nil)

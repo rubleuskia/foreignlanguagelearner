@@ -14,7 +14,7 @@ struct ImportItemView: View {
     @State private var errorMessage: String?
     @State private var splitIntoParts = false
     @State private var partMinutes = 10
-    @State private var sourceLanguageCode = "pl"
+    @State private var sourceLanguageCode = UserDefaults.standard.string(forKey: SourceLanguage.importKey) ?? "pl"
     @State private var sourceLanguages = [SourceLanguage.polish]
 
     @State private var wordPreview: VocabularyImportPreview?
@@ -99,6 +99,7 @@ struct ImportItemView: View {
         errorMessage = nil
         defer { importing = false }
         do {
+            UserDefaults.standard.set(sourceLanguageCode, forKey: SourceLanguage.importKey)
             let language = try VocabularyTokenizer.language(sourceLanguageCode)
             let latest = try await Task.detached { try VocabularyImportPreview.file(transcript) }.value
             guard latest.fingerprint == wordPreview?.fingerprint else {

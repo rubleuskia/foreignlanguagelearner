@@ -150,6 +150,7 @@
           "maxLength": 65536
         },
         "sourceLanguage": {
+          "description": "Persisted entry language, independent of its book and active screen filter. Historical regional/unsupported tags are preserved; supported base languages group together in the app.",
           "type": "string",
           "minLength": 1,
           "maxLength": 64
