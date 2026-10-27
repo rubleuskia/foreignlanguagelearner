@@ -93,26 +93,22 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu("Language", systemImage: "character.book.closed") {
-                    ForEach(displayedLanguages) { language in
-                        Button {
-                            changeLanguage(to: language.code)
-                        } label: {
-                            if item.sourceLanguageCode == language.code { Label(language.name, systemImage: "checkmark") }
-                            else { Text(language.name) }
+                HStack(spacing: 8) {
+                    ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
+                    Menu("Language", systemImage: "character.book.closed") {
+                        ForEach(displayedLanguages) { language in
+                            Button {
+                                changeLanguage(to: language.code)
+                            } label: {
+                                if item.sourceLanguageCode == language.code { Label(SourceLanguage.name(for: language.code), systemImage: "checkmark") }
+                                else { Text(SourceLanguage.name(for: language.code)) }
+                            }
                         }
                     }
+                    .disabled(item.isSourceLanguageLocked)
+                    .help(AppLanguage.text(item.isSourceLanguageLocked ? "The language is locked after marking a text read." : "Source language"))
+                    BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
                 }
-                .disabled(item.isSourceLanguageLocked)
-                .help(item.isSourceLanguageLocked ? "The language is locked after marking a text read." : "Source language")
             }
         }
         .onAppear {
@@ -145,16 +141,17 @@ struct ReaderView: View {
         } message: { Text(message ?? "") }
         .alert("Playback error", isPresented: Binding(get: { playback.errorMessage != nil }, set: { if !$0 { playback.errorMessage = nil } })) {
             Button("OK") { playback.errorMessage = nil }
-        } message: { Text(playback.errorMessage ?? "") }
+        } message: { Text(AppLanguage.text(playback.errorMessage ?? "")) }
     }
 
     private var playerBar: some View {
         VStack(spacing: 8) {
             if !item.parts.isEmpty {
                 HStack {
-                    Button("Part \(selectedPart + 1) of \(item.parts.count)") {
+                    Button(AppLanguage.format("Part %d of %d", selectedPart + 1, item.parts.count)) {
                         chapterPicker = .init(chapters: item.parts.enumerated().map { index, part in
-                            .init(id: part.id.uuidString, title: "Part \(index + 1)", completed: part.isCompleted)
+                            .init(id: part.id.uuidString, title: "Part \(index + 1)", completed: part.isCompleted,
+                                  duration: part.end - part.start)
                         }, selectedID: currentPart?.id.uuidString)
                     }
                     .accessibilityIdentifier("reader.choose-chapter")
@@ -177,7 +174,18 @@ struct ReaderView: View {
             NativeTransportControls(isPlaying: playback.isPlaying, back: {
                 playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true
             }, toggle: {
-                playback.toggle(); if playback.isPlaying { followGeneration += 1; following = true }
+                let wasPlaying = playback.isPlaying
+                playback.toggle()
+                if !wasPlaying {
+                    let previous = item.lastPlayedAt
+                    item.lastPlayedAt = .now
+                    do { try context.save() }
+                    catch { item.lastPlayedAt = previous; message = error.localizedDescription }
+                }
+                if playback.isPlaying {
+                    followGeneration += 1
+                    following = true
+                }
             }, forward: {
                 playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true
             })

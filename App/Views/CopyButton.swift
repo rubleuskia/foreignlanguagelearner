@@ -12,12 +12,12 @@ struct CopyButton: View {
         Button {
             copy()
         } label: {
-            Label(label, systemImage: confirmationToken == nil ? "doc.on.doc" : "checkmark")
+            Label(AppLanguage.text(label), systemImage: confirmationToken == nil ? "doc.on.doc" : "checkmark")
                 .labelStyle(.iconOnly)
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(label)
+        .accessibilityLabel(AppLanguage.text(label))
         .accessibilityValue(confirmationToken == nil ? "" : "Copied")
         .accessibilityIdentifier(identifier)
         .help(label)
@@ -85,6 +85,6 @@ struct PlaybackRateMenu: View {
                     .frame(minHeight: 44)
             }
         }
-        .accessibilityLabel("Playback speed, \(playback.selectedRate.title)")
+        .accessibilityLabel(AppLanguage.format("Playback speed, %@", playback.selectedRate.title))
     }
 }

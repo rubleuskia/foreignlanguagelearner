@@ -15,7 +15,7 @@ struct PracticeSettingsView: View {
             Section("Phrase cooldown") {
                 ForEach(0..<3, id: \.self) { index in
                     HStack {
-                        Text("Level \(index + 1) · hours")
+                        Text(AppLanguage.format("Level %d · hours", index + 1))
                         TextField("Hours", text: $cooldownDrafts[index])
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
@@ -37,7 +37,7 @@ struct PracticeSettingsView: View {
                         .font(.caption).foregroundStyle(.red)
                 }
                 if let cooldownMessage {
-                    Text(cooldownMessage).font(.caption).foregroundStyle(.secondary)
+                    Text(AppLanguage.text(cooldownMessage)).font(.caption).foregroundStyle(.secondary)
                 }
                 Text("Global settings for new practice rounds. Set 0 to disable a level’s cooldown. Changes apply after Save cooldowns.")
                     .font(.caption).foregroundStyle(.secondary)

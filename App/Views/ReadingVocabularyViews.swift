@@ -16,7 +16,7 @@ struct ReadingActionsMenu: View {
     private var isBook: Bool { selectedScope == .book }
 
     var body: some View {
-        Menu("Reading actions", systemImage: "checkmark.circle") {
+        Menu("Complete", systemImage: "checkmark.circle") {
             if let chapterScope { completionAction(chapterScope) }
             completionAction(.book)
         }
@@ -36,18 +36,19 @@ struct ReadingActionsMenu: View {
             .accessibilityIdentifier("reader.confirm-completion")
         } message: { proposal in
             Text(proposal.hasText
-                 ? "\(proposal.added) new unique words will become studied. \(isBook ? "All chapters will be marked read; full text and available subtitles are included. " : "")This cannot be undone. The source language will be locked."
-                 : "No text is attached to this selection. Completion will be saved without adding studied words. Adding text later will not mark the new text read. This cannot be undone. The source language will be locked.")
+                 ? AppLanguage.format("%d new unique words will become studied. %@This cannot be undone. The source language will be locked.",
+                                      proposal.added, isBook ? AppLanguage.text("All chapters will be marked read; full text and available subtitles are included. ") : "")
+                 : AppLanguage.text("No text is attached to this selection. Completion will be saved without adding studied words. Adding text later will not mark the new text read. This cannot be undone. The source language will be locked."))
         }
         .alert("Could not mark read", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
-        } message: { Text(error ?? "") }
+        } message: { Text(AppLanguage.text(error ?? "")) }
     }
 
     private func completionAction(_ scope: ReadingScope) -> some View {
         let completed = ReadingVocabularyStore.completed(item, scope: scope)
         let book = scope == .book
-        return Button(completed ? (book ? "Book read" : "Read") : (book ? "Mark whole book read" : "Mark chapter read"),
+        return Button(AppLanguage.text(completed ? (book ? "Book read" : "Read") : (book ? "Mark whole book read" : "Mark chapter read")),
                       systemImage: completed ? "checkmark.circle.fill" : "circle") {
             selectedScope = scope
             working = true
@@ -68,7 +69,7 @@ struct ReadingVocabularyStatus: View {
     var body: some View {
         if !vocabulary.ready {
             if let error = vocabulary.errorMessage {
-                VStack { Text(error).foregroundStyle(.red); Button("Retry vocabulary update") { Task { await vocabulary.start(context: context) } } }
+                VStack { Text(AppLanguage.text(error)).foregroundStyle(.red); Button("Retry vocabulary update") { Task { await vocabulary.start(context: context) } } }
             } else { ProgressView("Updating reading vocabulary…") }
         }
     }
@@ -89,12 +90,12 @@ struct VocabularyStatisticsView: View {
 
     var body: some View {
         Group {
-            if let error { Text(error).foregroundStyle(.secondary) }
+            if let error { Text(AppLanguage.text(error)).foregroundStyle(.secondary) }
             else if vocabulary.ready, let stats, words != nil {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Unique words: \(stats.total) · New: \(stats.new) · Studied: \(stats.known)")
+                    Text(AppLanguage.format("Unique words: %d · New: %d · Studied: %d", stats.total, stats.new, stats.known))
                         .accessibilityIdentifier("vocabulary.statistics")
-                    Text("Studied from read texts (\(language)): \(totalStudied)")
+                    Text(AppLanguage.format("Studied from read texts (%@): %d", language, totalStudied))
                         .accessibilityIdentifier("vocabulary.total")
                 }
                 .font(.caption).foregroundStyle(.secondary)
@@ -193,10 +194,14 @@ struct BookVocabularyBadge: View {
                 .accessibilityHint(error)
             } else if let summary = vocabulary.bookSummaries[item.id] {
                 HStack(spacing: 4) {
-                    Text(item.isBookCompleted ? "Words: \(summary.total)" : "New words: \(summary.new)")
+                    Text(item.isBookCompleted
+                         ? AppLanguage.format("Words: %d", summary.total)
+                         : AppLanguage.format("New words: %d", summary.new))
                     if vocabulary.summariesUpdating { Text("· Updating…") }
                 }
-                .accessibilityLabel(item.isBookCompleted ? "Unique word forms: \(summary.total)" : "New unique word forms: \(summary.new)")
+                .accessibilityLabel(item.isBookCompleted
+                    ? AppLanguage.format("Unique word forms: %d", summary.total)
+                    : AppLanguage.format("New unique word forms: %d", summary.new))
             } else {
                 Text("Counting words…")
             }

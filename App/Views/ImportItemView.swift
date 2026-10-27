@@ -26,14 +26,14 @@ struct ImportItemView: View {
         NavigationStack {
             Form {
                 Section("Media") {
-                    Button(media?.lastPathComponent ?? "Choose audio or video") { pickingMedia = true }
+                    Button(media?.lastPathComponent ?? AppLanguage.text("Choose audio or video")) { pickingMedia = true }
                         .accessibilityIdentifier("import.media")
                         .fileImporter(isPresented: $pickingMedia, allowedContentTypes: [.audio, .movie]) { result in
                             switch result { case .success(let url): media = url; case .failure(let error): errorMessage = error.localizedDescription }
                         }
                 }
                 Section {
-                    Button(transcript?.lastPathComponent ?? "Choose transcript") { pickingTranscript = true }
+                    Button(transcript?.lastPathComponent ?? AppLanguage.text("Choose transcript")) { pickingTranscript = true }
                         .accessibilityIdentifier("import.transcript")
                         .fileImporter(isPresented: $pickingTranscript, allowedContentTypes: [.plainText, UTType(filenameExtension: "srt") ?? .data, UTType(filenameExtension: "vtt") ?? .data]) { result in
                             switch result { case .success(let url): transcript = url; case .failure(let error): errorMessage = error.localizedDescription }
@@ -43,7 +43,7 @@ struct ImportItemView: View {
                 }
                 Section {
                     Picker("Source language", selection: $sourceLanguageCode) {
-                        ForEach(sourceLanguages) { language in Text(language.name).tag(language.code) }
+                        ForEach(sourceLanguages) { language in Text(SourceLanguage.name(for: language.code)).tag(language.code) }
                     }.accessibilityIdentifier("import.language")
                 } header: { Text("Language") } footer: { Text("Used to translate saved phrases into Russian.") }
                 Section {
@@ -59,7 +59,7 @@ struct ImportItemView: View {
                     }
                 }
                 if importing { ProgressView("Importing…") }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+                if let errorMessage { Text(AppLanguage.text(errorMessage)).foregroundStyle(.red) }
             }
             .nativeForm()
             .navigationTitle("Add material")

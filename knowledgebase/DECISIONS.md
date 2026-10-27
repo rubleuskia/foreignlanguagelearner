@@ -1,5 +1,15 @@
 # Architectural and product decisions
 
+## Continue Reading follows explicit playback (2026-10-27)
+
+Each book stores the time of the last user Play tap. Continue Reading shows the unfinished book with the newest such event, regardless of playback position or import order. Seeking, opening a reader, automatic chapter transitions and passive progress saves do not change this order. Old libraries without play timestamps continue to use the previous saved-progress selection until a book is played. The timestamp is optional in library-state backups so older files remain readable.
+
+
+## Interface language (2026-10-27)
+
+The app interface defaults to Russian and offers Russian and English in Settings. This preference is independent of the source language of books and dictionary entries; translations and explanations still target Russian. SwiftUI locale changes at the app root so ordinary interface strings update without restarting. Saved book text, phrases, user notes and editable OpenAI prompts are content and are never translated when the interface changes. The preference is an optional typed field in library-state backup settings; older backups preserve the device's current interface language.
+
+
 ## Six source languages with language-bound learning
 
 New books support English, French, Spanish, German, Italian and Polish; translation and explanations target Russian. The app's canonical registry is independent of Apple Translation availability. Supported regional tags group by their base language (case and underscore insensitive); unrelated historical tags remain separate and readable. Existing book/entry metadata and portable reading-history tags are preserved. Tokenizer v1 semantics and timing/package versions remain unchanged.

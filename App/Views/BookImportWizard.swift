@@ -71,8 +71,8 @@ struct BookImportView: View {
             Form {
                 if let result {
                     Section {
-                        Label(item == nil ? "Book added" : "Book updated", systemImage: "checkmark.circle.fill")
-                        Text(result.resourceStatus)
+                        Label(AppLanguage.text(item == nil ? "Book added" : "Book updated"), systemImage: "checkmark.circle.fill")
+                        Text(AppLanguage.text(result.resourceStatus))
                         NavigationLink(result.hasText ? "Start reading" : "Start listening") {
                             if result.tracks.isEmpty { ReaderView(item: result).id(result.resourceRevision) }
                             else { BookReaderView(item: result).id(result.resourceRevision) }
@@ -88,8 +88,8 @@ struct BookImportView: View {
                             } label: {
                                 Label {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(value.rawValue).foregroundStyle(.primary)
-                                        Text(value.detail).font(.caption).foregroundStyle(.secondary)
+                                        Text(AppLanguage.text(value.rawValue)).foregroundStyle(.primary)
+                                        Text(AppLanguage.text(value.detail)).font(.caption).foregroundStyle(.secondary)
                                     }.padding(.vertical, 6)
                                 } icon: { Image(systemName: value.symbol).foregroundStyle(.tint) }
                             }
@@ -120,9 +120,9 @@ struct BookImportView: View {
                             fileButton(textURL?.lastPathComponent ?? "Add separate TXT (optional)", choice: .text)
                         }
                     } header: { Text("Step 1 of 2 · Choose files") } footer: {
-                        Text(action == .synchronization
+                        Text(AppLanguage.text(action == .synchronization
                             ? "Choose a complete synchronized book package made from the same recordings and text. Audio is checked in the displayed track order."
-                            : "Text: UTF-8 TXT under 10 MB. ZIP: up to 4 GiB and 100 MP3, M4A or WAV tracks. Synchronization is optional; SRT/VTT in raw ZIPs are not linked automatically.")
+                            : "Text: UTF-8 TXT under 10 MB. ZIP: up to 4 GiB and 100 MP3, M4A or WAV tracks. Synchronization is optional; SRT/VTT in raw ZIPs are not linked automatically."))
                     }
                     Button("Check files") { checkFiles() }
                         .disabled(!canCheck || working)
@@ -141,9 +141,9 @@ struct BookImportView: View {
                         }
                         LabeledContent("Text", value: textURL?.lastPathComponent ?? selectedTranscript ?? "Add later")
                         LabeledContent("Audio tracks", value: "\(value.tracks.count)")
-                        Text(value.tracks.contains { $0.alignmentStatus.hasTimedTranscript }
-                             ? "Synchronization included. Tracks marked for review may need timing corrections."
-                             : "No synchronization. You can read and listen independently, and add synchronization later.")
+                        Text(AppLanguage.text(value.tracks.contains { $0.alignmentStatus.hasTimedTranscript }
+                            ? "Synchronization included. Tracks marked for review may need timing corrections."
+                            : "No synchronization. You can read and listen independently, and add synchronization later."))
                             .font(.caption).foregroundStyle(.secondary)
                         if !value.isManifestPackage && !value.tracks.isEmpty {
                             Text("Check the track order. Drag rows to reorder.").font(.caption)
@@ -162,7 +162,7 @@ struct BookImportView: View {
                             }.moveDisabled(value.isManifestPackage)
                         }
                     }
-                    if value.ignoredFileCount > 0 { Text("\(value.ignoredFileCount) unrelated files will be ignored.") }
+                    if value.ignoredFileCount > 0 { Text(AppLanguage.format("%d unrelated files will be ignored.", value.ignoredFileCount)) }
                     if hasPreviewText && action != .audio {
                         Section("Reading vocabulary") {
                             ReadingVocabularyStatus()
@@ -170,8 +170,8 @@ struct BookImportView: View {
                             if wordError != nil { Button("Retry word count") { Task { await countWords() } } }
                         }
                     }
-                    if let action { Section("Effect on this book") { Text(consequences(action)) } }
-                    Button(item == nil ? "Add book" : "Save changes") {
+                    if let action { Section("Effect on this book") { Text(AppLanguage.text(consequences(action))) } }
+                    Button(AppLanguage.text(item == nil ? "Add book" : "Save changes")) {
                         if replacing { confirming = true } else { commit() }
                     }
                     .disabled(working || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -182,17 +182,17 @@ struct BookImportView: View {
                 if working { ProgressView("Checking and preparing files…") }
                 if let error {
                     Section {
-                        Text(error).foregroundStyle(.red).accessibilityIdentifier("import.error")
+                        Text(AppLanguage.text(error)).foregroundStyle(.red).accessibilityIdentifier("import.error")
                         if step == 2 { Button("Check files again") { step = 1; self.error = nil } }
                     }
                 }
             }
             .environment(\.editMode, .constant(step == 2 ? .active : .inactive))
             .disabled(working)
-            .navigationTitle(item == nil ? "Add book" : "Update book")
+            .navigationTitle(AppLanguage.text(item == nil ? "Add book" : "Update book"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(result == nil ? "Cancel" : "Done") { close() }
+                    Button(AppLanguage.text(result == nil ? "Cancel" : "Done")) { close() }
                 }
                 if step > (action == nil ? 0 : 1) && result == nil {
                     ToolbarItem(placement: .topBarLeading) {
@@ -212,7 +212,7 @@ struct BookImportView: View {
             .confirmationDialog("Replace existing files?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Replace and save", role: .destructive) { commit() }
                 Button("Cancel", role: .cancel) { }
-            } message: { Text(action.map(consequences) ?? "") }
+            } message: { Text(action.map { AppLanguage.text(consequences($0)) } ?? "") }
             .sheet(isPresented: $legacyImport) { ImportItemView() }
             .task(id: previewKey) { await countWords() }
             .onAppear {
@@ -233,7 +233,7 @@ struct BookImportView: View {
     }
 
     private func fileButton(_ label: String, choice: FileChoice) -> some View {
-        Button(label) { self.choice = choice; picking = true }
+        Button(AppLanguage.text(label)) { self.choice = choice; picking = true }
     }
 
     private func consequences(_ action: BookResourceAction) -> String {

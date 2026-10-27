@@ -3,6 +3,7 @@ import SwiftData
 
 @main
 struct ForeignLanguageLearnerApp: App {
+    @AppStorage(AppLanguage.key) private var selectedLanguage = "ru"
     @State private var readingVocabulary = ReadingVocabularyStore(indexURL: ProcessInfo.processInfo.arguments.contains("--uitesting") ? nil : VocabularyIndex.defaultURL)
     @State private var translationCoordinator = DictionaryTranslationCoordinator()
     private let contextAnalysisService = ContextAnalysisService()
@@ -17,8 +18,19 @@ struct ForeignLanguageLearnerApp: App {
     }
     private let liveWordExplanationService = WordExplanationService()
 
+    init() {
+        if ProcessInfo.processInfo.arguments.contains("--reset-interface-language") {
+            UserDefaults.standard.set("ru", forKey: AppLanguage.key)
+        }
+    }
+
     var body: some Scene {
-        WindowGroup { ContentView() }
+        WindowGroup {
+            ContentView().environment(\.locale, Locale(identifier:
+                ProcessInfo.processInfo.arguments.contains("--uitesting") &&
+                !ProcessInfo.processInfo.arguments.contains("--test-russian-ui")
+                    ? "en" : AppLanguage.resolved(selectedLanguage)))
+        }
             .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
             .environment(translationCoordinator)
             .environment(readingVocabulary)

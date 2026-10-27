@@ -17,9 +17,12 @@ The project also contains a standalone local subtitle-aligner utility. It extrac
 
 ## Current scope
 
+The interface defaults to Russian and can be switched to English in Settings without changing the language of a book or dictionary entry. The chosen interface language is saved locally and included in library-state backups.
+
+
 - Progressive book onboarding: a unified import wizard accepts TXT-only, audio-only, raw audio ZIPs with optional external TXT, or complete packages. Books can be supplemented or updated through their resource menu with journaled file publication and database rollback. Unsynchronized books open full text directly; text position is independent of audio position. Contextual tutorial popovers, a guide, an isolated tutorial reset and a locally narrated original example support first use.
 
-- Native Library / Dictionary / Practice navigation, a dedicated practice home and a featured in-progress book; shared native action hierarchy with Liquid Glass on iOS 26 and iOS 18 fallbacks. Both readers use scalable editorial serif typography and a comfortable iPad text measure, with floating playback controls and disclosed reading options.
+- Native Library / Dictionary / Practice navigation, a dedicated practice home and a featured unfinished book chosen by the most recent Play tap; shared native action hierarchy with Liquid Glass on iOS 26 and iOS 18 fallbacks. Both readers use scalable editorial serif typography and a comfortable iPad text measure, with floating playback controls and disclosed reading options.
 
 - iOS 18+; Swift 6; SwiftUI; iPhone and iPad.
 - Local media library backed by SwiftData and Application Support files. Library offers portable state backups without book assets: reimport matching books on a new phone, then restore dictionary/reading and training progress, playback positions, settings and prompts, reconnecting phrase audio to the new local books. API credentials remain device-local.

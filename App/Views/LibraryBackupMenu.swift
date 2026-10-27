@@ -23,7 +23,7 @@ struct LibraryBackupMenu: View {
             .accessibilityIdentifier("library.backup.import")
             Menu("Import Dictionary JSON") {
                 ForEach(DictionaryImportMode.allCases) { mode in
-                    Button(mode.rawValue) { legacyMode = mode; importing = true }
+                    Button(AppLanguage.text(mode.rawValue)) { legacyMode = mode; importing = true }
                 }
             }
         }
@@ -39,7 +39,7 @@ struct LibraryBackupMenu: View {
         .sheet(item: $dictionaryPreview) { DictionaryImportPreviewView(preview: $0) }
         .alert("Library backup", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+        } message: { Text(AppLanguage.text(errorMessage ?? "")) }
     }
 
     private func export() {
@@ -121,7 +121,7 @@ private struct LibraryBackupPreviewView: View {
             }
             .alert("Restore failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
+            } message: { Text(AppLanguage.text(errorMessage ?? "")) }
         }
     }
 

@@ -49,7 +49,7 @@ struct BookReaderView: View {
         VStack(spacing: 0) {
             if item.hasText && item.tracks.contains(where: { $0.alignmentStatus.hasTimedTranscript }) {
             Picker("Reading mode", selection: $mode) {
-                ForEach(ReadingMode.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(ReadingMode.allCases) { Text(AppLanguage.text($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .padding()
@@ -79,29 +79,18 @@ struct BookReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
+                HStack(spacing: 8) {
+                    ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
+                    BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() },
+                        onUpdatePhraseAudio: { choosingWordTimings = true },
+                        isUpdatingPhraseAudio: updatingWordTimings)
+                }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    choosingWordTimings = true
-                } label: {
-                    if updatingWordTimings { ProgressView() }
-                    else { Label("Update phrase audio", systemImage: "waveform.badge.plus") }
-                }
-                .labelStyle(.iconOnly)
-                .disabled(updatingWordTimings)
-                .accessibilityIdentifier("reader.update-phrase-audio")
-                .fileImporter(isPresented: $choosingWordTimings, allowedContentTypes: [.zip]) { result in
-                    switch result {
-                    case .success(let url): updateWordTimings(from: url)
-                    case .failure(let error): message = error.localizedDescription
-                    }
-                }
+        .fileImporter(isPresented: $choosingWordTimings, allowedContentTypes: [.zip]) { result in
+            switch result {
+            case .success(let url): updateWordTimings(from: url)
+            case .failure(let error): message = error.localizedDescription
             }
         }
         .onAppear {
@@ -151,7 +140,7 @@ struct BookReaderView: View {
         .alert("Playback error", isPresented: Binding(get: { playback.errorMessage != nil }, set: { if !$0 { playback.dismissError() } })) {
             Button("Retry") { playback.retry() }
             Button("Stop", role: .cancel) { playback.pause(); playback.dismissError() }
-        } message: { Text(playback.errorMessage ?? "") }
+        } message: { Text(AppLanguage.text(playback.errorMessage ?? "")) }
     }
 
     @ViewBuilder private var transcriptContent: some View {
@@ -196,7 +185,7 @@ struct BookReaderView: View {
             .id(manualChapterGeneration)
         } else if let transcriptError = mode == .full ? fullTextError : transcriptError {
             ContentUnavailableView("Transcript unavailable", systemImage: "exclamationmark.triangle",
-                                   description: Text(transcriptError))
+                                   description: Text(AppLanguage.text(transcriptError)))
         } else {
             ProgressView("Loading transcript…")
         }
@@ -204,12 +193,13 @@ struct BookReaderView: View {
 
     private var playerBar: some View {
         VStack(spacing: 8) {
-            Text("\(item.hasText ? "Read" : "Listened"): \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
+            Text(AppLanguage.format("%@: %@", AppLanguage.text(item.hasText ? "Read" : "Listened"),
+                                    item.readingProgress.formatted(.percent.precision(.fractionLength(0)))))
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button(activeTrack?.title ?? "Track") {
                     chapterPicker = .init(chapters: item.tracks.map {
-                        .init(id: $0.id, title: $0.title, completed: $0.isCompleted)
+                        .init(id: $0.id, title: $0.title, completed: $0.isCompleted, duration: $0.duration)
                     }, selectedID: playback.activeTrackID)
                 }
                 .accessibilityIdentifier("reader.choose-chapter")
@@ -233,7 +223,18 @@ struct BookReaderView: View {
             NativeTransportControls(isPlaying: playback.wantsToPlay, back: {
                 playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true
             }, toggle: {
-                playback.toggle(); if playback.wantsToPlay { followGeneration += 1; following = true }
+                let wasPlaying = playback.wantsToPlay
+                playback.toggle()
+                if !wasPlaying {
+                    let previous = item.lastPlayedAt
+                    item.lastPlayedAt = .now
+                    do { try context.save() }
+                    catch { item.lastPlayedAt = previous; message = error.localizedDescription }
+                }
+                if playback.wantsToPlay {
+                    followGeneration += 1
+                    following = true
+                }
             }, forward: {
                 playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true
             })

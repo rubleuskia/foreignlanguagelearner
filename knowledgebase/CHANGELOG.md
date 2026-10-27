@@ -1,5 +1,18 @@
 # Project changelog
 
+## 2026-10-27 — Russian and English interface languages
+
+- Use Russian as the default interface language and add an immediate Russian/English switch in Settings. Localize navigation, import, reading, dictionary, practice, backup and configuration screens without changing book text or the fixed Russian translation target.
+- Center Quick start text in Dictionary and Practice at both interface languages and large text sizes.
+- Order listening-screen toolbar actions as Complete, optional source language, then the rightmost ⋮ menu. Full audio replacement remains in ⋮; move the separate phrase-audio timing update there too, removing its standalone toolbar button.
+- Show Translate in Context, Add to Dictionary and Copy as matching icon-and-text actions in the text-selection menu, without grouped dividers. Copy keeps the exact highlighted text.
+- Choose Continue Reading from the unfinished book whose Play button was pressed most recently, even when it has no saved progress yet. Existing libraries use their saved-progress order until the first Play tap.
+- Show each chapter's audio duration in the chapter picker, including virtual parts of older single-file books.
+- Show a horizontal progress bar and numeric percentage for each book in Library and its Continue Reading card, replacing the text progress label.
+- Preserve the chosen interface language on this device and in new library-state backups. Older backups without the setting keep the device's current choice.
+- DECISIONS.md records the interface-language boundary; PROJECT.md describes the updated workflow.
+
+
 ## 2026-10-27 — Book-based language filter with flags
 
 - Show country flags beside source languages in Dictionary and Practice. Offer only languages present in the library's books; a single-language library shows a fixed labelled flag instead of a picker. When the library is empty, retain access to dictionary entries by their saved language.
