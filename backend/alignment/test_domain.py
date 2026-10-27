@@ -1,5 +1,7 @@
 import base64
 import hashlib
+from pathlib import Path
+import re
 import unittest
 
 from backend.alignment.domain import (
@@ -34,6 +36,21 @@ class DomainTests(unittest.TestCase):
         with self.assertRaises(AlignmentError):
             validate_create({**valid, "audio": {**valid["audio"], "size_bytes": 1_000_000_001}})
 
+    def test_six_source_languages_and_strict_base_code_policy(self):
+        body = {"language": "pl", "profile_id": "base-guided-v1", "allow_untimed_words": False,
+                "audio": {"extension": "mp3", "size_bytes": 100, "sha256": "a" * 64},
+                "text": {"size_bytes": 20, "sha256": "b" * 64}}
+        for language in ("en", "fr", "es", "de", "it", "pl"):
+            with self.subTest(language=language):
+                self.assertEqual(validate_create({**body, "language": language})["language"], language)
+        contract = Path(__file__).with_name("openapi.yaml").read_text()
+        codes = re.search(r"language: \{ type: string, enum: \[([^]]+)\] \}", contract)
+        self.assertIsNotNone(codes)
+        self.assertEqual(set(codes.group(1).replace(" ", "").split(",")), {"en", "fr", "es", "de", "it", "pl"})
+        for language in ("ru", "pt", "EN", "en-US", "", None, [], {}):
+            with self.subTest(language=language), self.assertRaises(AlignmentError):
+                validate_create({**body, "language": language})
+
     def test_multipart_part_sizes(self):
         total = PART_SIZE * 2 + 123
         self.assertEqual(part_count(total), 3)
@@ -67,6 +84,12 @@ class DomainTests(unittest.TestCase):
         }
         result = validate_manifest(manifest, job=job, manifest_key="manifest", manifest_version_id="m1")
         self.assertTrue(result.requires_review)
+        for language in ("en", "fr", "es", "de", "it", "pl"):
+            validate_manifest({**manifest, "language": language}, job={**job, "language": language},
+                              manifest_key="manifest", manifest_version_id="m1")
+        with self.assertRaises(AlignmentError):
+            validate_manifest({**manifest, "language": "en"}, job={**job, "language": "pl"},
+                              manifest_key="manifest", manifest_version_id="m1")
         altered = {**manifest, "inputs": {**manifest["inputs"],
                                            "audio": {"version_id": "latest", "sha256": "a" * 64}}}
         with self.assertRaises(AlignmentError):

@@ -102,6 +102,21 @@ class ServiceTests(unittest.TestCase):
             self.service.create(request(), bearer(1), str(uuid.uuid4()))
         self.assertEqual(captured.exception.code, "TOKEN_ALREADY_USED")
 
+    def test_language_is_pinned_in_job_and_worker_input_and_idempotency(self):
+        for language in ("en", "fr", "es", "de", "it", "pl"):
+            with self.subTest(language=language):
+                self.setUp()
+                body = {**request(), "language": language}
+                key = str(uuid.uuid4())
+                _, created = self.service.create(body, bearer(1), key)
+                job_id = created["job_id"]
+                self.assertEqual(self.repo.get_job(job_id)["language"], language)
+                with self.assertRaises(Conflict):
+                    self.service.create({**body, "language": "pl" if language != "pl" else "en"}, bearer(1), key)
+                self.complete(job_id)
+                self.service.start(job_id, {}, bearer(1))
+                self.assertIn('"language":"' + language + '"', self.repo.get_job(job_id)["canonical_execution_input"])
+
     def test_cross_job_capability_is_indistinguishable_from_unknown_job(self):
         (_, created), _ = self.create()
         for job_id, token in ((created["job_id"], bearer(2)), (str(uuid.uuid4()), bearer(1))):

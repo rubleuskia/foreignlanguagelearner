@@ -137,7 +137,7 @@ enum ContextAnalysisWords {
         let code = language.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? language
         let excluded = functionWords[code] ?? []
         return text.split(whereSeparator: \.isWhitespace).map(String.init).filter { word in
-            let normalized = word.trimmingCharacters(in: .punctuationCharacters).lowercased()
+            let normalized = word.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .punctuationCharacters).lowercased()
             return !normalized.isEmpty && !excluded.contains(normalized)
         }
     }
@@ -155,6 +155,7 @@ enum ContextAnalysisWords {
                "für", "im", "in", "mit", "nach", "oder", "ohne", "und", "von", "vor", "zu", "zum", "zur"],
         "fr": ["à", "au", "aux", "avec", "car", "dans", "de", "des", "du", "en", "et", "la", "le",
                "les", "mais", "ou", "par", "pour", "sans", "sur", "un", "une"],
+        "it": ["a", "al", "alla", "con", "da", "dal", "dalla", "di", "del", "della", "e", "ed", "gli", "i", "il", "in", "la", "le", "lo", "ma", "o", "per", "su", "un", "una", "uno"],
         "es": ["a", "al", "con", "de", "del", "el", "en", "la", "las", "los", "o", "para", "pero",
                "por", "sin", "un", "una", "y"]
     ]

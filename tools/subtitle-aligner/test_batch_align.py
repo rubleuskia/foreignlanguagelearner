@@ -53,6 +53,24 @@ class BatchAlignTests(unittest.TestCase):
         data = {"segments": [{"words": words, "text": track["text"]}]}
         return data, batch_align.align.make_cues(words), [], False
 
+    def test_six_languages_reach_aligner_report_and_output_manifest(self):
+        for language in ("en", "fr", "es", "de", "it", "pl"):
+            with self.subTest(language=language), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                path = self.make_book(base / "input", count=1)
+                manifest = json.loads(path.read_text())
+                manifest["sourceLanguage"] = language
+                path.write_text(json.dumps(manifest))
+                seen = []
+                def checked(model, track, args):
+                    seen.append(args.language)
+                    return self.aligner(model, track, args)
+                output = base / "output"
+                self.assertEqual(batch_align.run(self.args(path, output), model_loader=lambda _: object(), aligner=checked), 0)
+                self.assertEqual(seen, [language])
+                self.assertEqual(json.loads((output / "book" / "manifest.json").read_text())["sourceLanguage"], language)
+                self.assertEqual(json.loads((output / "batch-report.json").read_text())["tracks"][0]["fingerprint"]["language"], language)
+
     def test_28_tracks_publish_report_manifest_and_zip(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

@@ -143,3 +143,42 @@ final class NativeDesignFlowTests: XCTestCase {
         add(attachment)
     }
 }
+
+extension NativeDesignFlowTests {
+    @MainActor func testSourceLanguagePickerSynchronizesDictionaryPracticeAndEmptyGroups() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture", "--multilingual-fixture"]
+        app.launch()
+        func destination(_ title: String) {
+            let tab = app.tabBars.buttons[title]
+            if tab.exists && tab.isHittable { tab.tap() }
+            else {
+                let sidebar = app.buttons["Toggle Sidebar"]
+                if sidebar.exists && sidebar.isHittable { sidebar.tap() }
+                let item = app.buttons[title].firstMatch
+                if item.exists { item.tap() } else { app.staticTexts[title].firstMatch.tap() }
+            }
+        }
+        func choose(_ language: String) {
+            app.buttons["source-language.picker"].tap()
+            app.buttons[language].firstMatch.tap()
+        }
+        destination("Dictionary")
+        XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
+        choose("English")
+        XCTAssertTrue(app.buttons["dictionary.entry.English phrase 10"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["dictionary.entry.dzień dobry"].exists)
+        XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "10")
+        destination("Practice")
+        XCTAssertTrue(app.staticTexts["practice.ready-count"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["practice.ready-count"].label, "10 ready to repeat")
+        choose("Italian")
+        XCTAssertEqual(app.staticTexts["practice.ready-count"].label, "0 ready to repeat")
+        XCTAssertFalse(app.buttons["practice.quick-start"].isEnabled)
+        destination("Dictionary")
+        XCTAssertTrue(app.staticTexts["No saved phrases"].waitForExistence(timeout: 5))
+        choose("Polish")
+        XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
+    }
+}

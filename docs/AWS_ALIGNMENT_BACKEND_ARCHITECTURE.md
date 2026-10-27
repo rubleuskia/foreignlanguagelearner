@@ -1,5 +1,10 @@
 # AWS backend for audio + TXT alignment
 
+## Multilingual source contract (2026-10-27)
+
+Create accepts exactly lowercase base codes `en`, `fr`, `es`, `de`, `it`, `pl`; other codes, regional tags, uppercase and non-string values are invalid. The existing canonical request hash includes language, so a changed language conflicts on idempotency replay. Stored jobs, execution input and retries retain the submitted code, and multilingual `base` remains pinned by `base-guided-v1`. New result manifests add a `language` field checked against the job by finalization; older manifests without the field remain compatible. Audio/text timing formats, resource limits and auth policies are unchanged. The deployment gate additionally requires language-specific timing quality evidence recorded in the benchmark matrix; language-contract tests alone are insufficient.
+
+
 **Status:** Reviewed implementation proposal; not shipped or authorization to deploy.  
 **Reviewed:** 2026-09-22 against `align.py`, `guided.py`, the iOS importer, and AWS documentation.  
 **Priority:** minimum total cost, no idle processing workers, no reuse of user media.

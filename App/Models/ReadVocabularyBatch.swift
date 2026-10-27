@@ -33,12 +33,12 @@ enum ReadingKnowledge {
         var result: [String: Set<String>] = [:]
         for word in try context.fetch(FetchDescriptor<ReadVocabularyWord>()) {
             try Task.checkCancellation()
-            result[word.languageCode, default: []].insert(word.normalizedForm)
+            result[SourceLanguage.canonical(word.languageCode), default: []].insert(word.normalizedForm)
         }
         for batch in try context.fetch(FetchDescriptor<ReadVocabularyBatch>()) {
             try Task.checkCancellation()
             guard batch.tokenizerVersion == VocabularyTokenizer.version else { throw ReadingVocabularyError.changed }
-            result[batch.languageCode, default: []].formUnion(try JSONDecoder().decode([String].self, from: batch.formsData))
+            result[SourceLanguage.canonical(batch.languageCode), default: []].formUnion(try JSONDecoder().decode([String].self, from: batch.formsData))
         }
         return result
     }

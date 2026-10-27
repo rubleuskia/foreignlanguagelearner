@@ -77,7 +77,7 @@ final class LibraryBackupTests: XCTestCase {
         ContextAnalysisSettings.setSelectedModel(.nano, in: sourceDefaults)
         ContextAnalysisSettings.setCloudAnalysisEnabled(true, in: sourceDefaults)
         sourceDefaults.set(12.5, forKey: "learning.cooldown.level.1")
-        var round = LearningRoundState(selection: .five, selectedIDs: [first.id, second.id])
+        var round = LearningRoundState(selection: .five, selectedIDs: [first.id, second.id], sourceLanguage: "pl")
         _ = round.recordAnswer(entryID: first.id, presentationID: round.currentPresentationID, right: false)
         LearningRoundCheckpoint.save(round, defaults: sourceDefaults)
         let sourceCache = directory.appending(path: "source-cache.json")
@@ -249,5 +249,44 @@ final class LibraryBackupTests: XCTestCase {
         try WordExplanationCache.restoreRecords([.init(key: key, value: value)], at: directory.appending(path: "WordExplanations-v1.json"))
         let restored = await cache.value(for: key)
         XCTAssertEqual(restored, value)
+    }
+}
+
+extension LibraryBackupTests {
+    @MainActor func testMultilingualOrphanEntriesCheckpointsAndPreferencesRoundTripTogether() throws {
+        let source = try container(), target = try container()
+        let sourceSuite = "MultiBackupSource.\(UUID())", targetSuite = "MultiBackupTarget.\(UUID())"
+        let sourceDefaults = try XCTUnwrap(UserDefaults(suiteName: sourceSuite))
+        let targetDefaults = try XCTUnwrap(UserDefaults(suiteName: targetSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite); targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let book = LearningItem(id: UUID(), title: "Deleted source", mediaKind: "audio", mediaFilename: "", transcriptFilename: "", duration: 0, segments: [])
+        var expected: [String: LearningRoundState] = [:]
+        for language in ["en-US", "pl"] {
+            book.sourceLanguageCode = language
+            let entry = DictionaryEntry(text: "same", item: book, segmentIndex: nil)
+            entry.translationText = "перевод"; entry.translationStatus = .ready
+            source.mainContext.insert(entry)
+            let code = SourceLanguage.canonical(language)
+            var round = LearningRoundState(selection: .five, selectedIDs: [entry.id], sourceLanguage: code)
+            round.recordAnswer(entryID: entry.id, presentationID: round.currentPresentationID, right: false)
+            expected[code] = round
+            LearningRoundCheckpoint.save(round, defaults: sourceDefaults)
+        }
+        sourceDefaults.set("en", forKey: SourceLanguage.activeKey)
+        sourceDefaults.set("it", forKey: SourceLanguage.importKey)
+        let file = try LibraryBackupService.export(context: source.mainContext, defaults: sourceDefaults, cacheURL: nil)
+        let document = try LibraryBackupService.decode(file.data)
+        XCTAssertEqual(document.rounds?.count, 2)
+        let preview = try LibraryBackupService.preview(document, context: target.mainContext)
+        XCTAssertTrue(preview.canRestore)
+        _ = try LibraryBackupService.restore(preview, context: target.mainContext, defaults: targetDefaults, cacheURL: nil)
+        let entries = try target.mainContext.fetch(FetchDescriptor<DictionaryEntry>())
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(Set(entries.map(\.sourceLanguageCode)), ["en-US", "pl"])
+        for code in ["en", "pl"] {
+            XCTAssertEqual(LearningRoundCheckpoint.load(language: code, entries: entries, defaults: targetDefaults), expected[code])
+        }
+        XCTAssertEqual(targetDefaults.string(forKey: SourceLanguage.activeKey), "en")
+        XCTAssertEqual(targetDefaults.string(forKey: SourceLanguage.importKey), "it")
     }
 }

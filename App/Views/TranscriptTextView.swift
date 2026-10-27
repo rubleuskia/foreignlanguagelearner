@@ -320,7 +320,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
         func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
                       suggestedActions: [UIMenuElement]) -> UIMenu? {
-            guard let selection = Self.validatedExpandedSelection(in: textView.text, selection: range) else {
+            guard let selection = Self.validatedExpandedSelection(in: textView.text, selection: range, language: parent.wordStyleLanguage) else {
                 return UIMenu(children: suggestedActions)
             }
             let segment = parent.document.ranges.firstIndex {
@@ -338,13 +338,13 @@ struct TranscriptTextView: UIViewRepresentable {
             return UIMenu(children: [translate, add] + suggestedActions)
         }
 
-        nonisolated static func validatedExpandedSelection(in text: String, selection: NSRange)
+        nonisolated static func validatedExpandedSelection(in text: String, selection: NSRange, language: String? = nil)
             -> (range: NSRange, text: String)? {
             let source = text as NSString
             guard selection.location != NSNotFound, selection.length > 0,
                   NSMaxRange(selection) <= source.length,
                   Range(selection, in: text) != nil else { return nil }
-            let expanded = WordSelectionExpander.expandedRange(in: text, selection: selection)
+            let expanded = WordSelectionExpander.expandedRange(in: text, selection: selection, language: language)
             guard expanded.location != NSNotFound, expanded.length > 0,
                   NSMaxRange(expanded) <= source.length,
                   Range(expanded, in: text) != nil else { return nil }

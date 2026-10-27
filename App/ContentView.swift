@@ -230,6 +230,16 @@ struct ContentView: View {
         learnt.translationStatus = .ready
         learnt.learningLevel = 4
         learnt.createdAt = Date(timeIntervalSince1970: 1)
+        if ProcessInfo.processInfo.arguments.contains("--multilingual-fixture") {
+            UserDefaults.standard.set("pl", forKey: SourceLanguage.activeKey)
+            for index in 1...10 {
+                let english = DictionaryEntry(text: "English phrase \(index)", item: item, segmentIndex: nil)
+                english.sourceLanguageCode = "en"
+                english.translationText = "перевод"; english.translationStatus = .ready
+                english.levelChangedAt = .distantPast
+                context.insert(english)
+            }
+        }
         context.insert(item)
         context.insert(practice)
         context.insert(learnt)

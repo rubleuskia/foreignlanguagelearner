@@ -1,5 +1,12 @@
 # Alignment backend
 
+## Source-language contract
+
+`language` accepts exactly `en`, `fr`, `es`, `de`, `it`, `pl`. Codes are lowercase base tags; uppercase, regional tags, unsupported codes and non-string values are rejected. The app canonicalizes its supported regional tags before creating jobs. The pinned `base-guided-v1` profile uses multilingual `base` weights.
+
+The canonical create request, stored job and pinned worker input retain language through start/replay/reconciliation. New worker result manifests also carry `language`; finalization checks it against the job. Legacy manifests lacking the additive field remain readable. Local batch alignment uses the same six codes and requires manifest/CLI equality. Admission limits, capabilities and deployment gates are unchanged; see the six-language matrix in `docs/ALIGNMENT_BENCHMARKS.md` for unexecuted audio-quality checks.
+
+
 This directory implements the public-test control plane described in
 [`docs/AWS_ALIGNMENT_BACKEND_ARCHITECTURE.md`](../../docs/AWS_ALIGNMENT_BACKEND_ARCHITECTURE.md).
 It is not deployed by this repository. Deployment requires an explicitly selected development

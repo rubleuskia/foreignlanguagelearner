@@ -481,3 +481,34 @@ final class ReadingVocabularyTests: XCTestCase {
         do { _ = try await task.value; XCTFail("Cancelled tokenization succeeded") } catch is CancellationError { }
     }
 }
+
+extension ReadingVocabularyTests {
+    func testSixLanguageFormsKeepApostrophesAccentsAndUTF16Ranges() throws {
+        for text in ["don't re-enter", "l’homme été", "niño corazón", "Straße süß", "l'amico città", "zażółć gęślą"] {
+            let source = text as NSString
+            let occurrences = try VocabularyTokenizer.occurrences(in: text)
+            XCTAssertFalse(occurrences.isEmpty)
+            for token in occurrences {
+                XCTAssertEqual(token.normalizedForm, VocabularyTokenizer.normalized(source.substring(with: token.rangeUTF16)))
+            }
+            XCTAssertEqual(try VocabularyTokenizer.forms(in: text), try VocabularyTokenizer.forms(in: text.decomposedStringWithCanonicalMapping))
+        }
+        XCTAssertEqual(try VocabularyTokenizer.forms(in: "l’homme l'homme"), ["l'homme"])
+        XCTAssertEqual(try VocabularyTokenizer.forms(in: "l'amico"), ["l'amico"])
+    }
+
+    @MainActor func testRegionalReadingHistorySharesSupportedBaseWithoutRewritingExportMetadata() throws {
+        let db = try container()
+        db.mainContext.insert(ReadVocabularyWord(languageCode: "en-us", normalizedForm: "same"))
+        db.mainContext.insert(ReadVocabularyWord(languageCode: "pl", normalizedForm: "same"))
+        ReadingKnowledge.insert(try ReadingKnowledge.encode(["other"]), language: "en-gb", context: db.mainContext)
+        try db.mainContext.save()
+        let store = ReadingVocabularyStore()
+        try store.reload(context: db.mainContext)
+        XCTAssertEqual(store.forms(for: "en"), ["same", "other"])
+        XCTAssertEqual(store.forms(for: "EN_us"), ["same", "other"])
+        XCTAssertEqual(store.forms(for: "pl"), ["same"])
+        XCTAssertTrue(store.forms(for: "fr").isEmpty)
+        XCTAssertTrue(try ReadingKnowledge.words(context: db.mainContext).contains { $0.languageCode == "en-us" })
+    }
+}

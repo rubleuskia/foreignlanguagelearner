@@ -355,3 +355,26 @@ final class ProgressiveBookTests: XCTestCase {
         XCTAssertEqual(view.text, document.text)
     }
 }
+
+extension ProgressiveBookTests {
+    func testAllSixNewBookLanguagesPrepareExplicitlyAndUnsupportedSourceFails() async throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appending(path: "book.txt")
+        try "A short text.".write(to: url, atomically: true, encoding: .utf8)
+        let service = BookImportService()
+        for language in SourceLanguage.supportedCodes {
+            let preview = try await service.previewFiles(audio: nil, text: url)
+            let prepared = try await service.prepare(preview, title: "Book", sourceLanguage: language,
+                orderedTracks: [], transcriptPath: preview.selectedTranscript, externalTranscript: nil)
+            XCTAssertEqual(prepared.sourceLanguage, language)
+            await service.cancel(preview)
+        }
+        let preview = try await service.previewFiles(audio: nil, text: url)
+        do {
+            _ = try await service.prepare(preview, title: "Book", sourceLanguage: "ru", orderedTracks: [], transcriptPath: preview.selectedTranscript, externalTranscript: nil)
+            XCTFail("Unsupported new-book language must be rejected")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("source language")) }
+        await service.cancel(preview)
+    }
+}

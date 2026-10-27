@@ -1,5 +1,16 @@
 # Architectural and product decisions
 
+## Six source languages with language-bound learning
+
+New books support English, French, Spanish, German, Italian and Polish; translation and explanations target Russian. The app's canonical registry is independent of Apple Translation availability. Supported regional tags group by their base language (case and underscore insensitive); unrelated historical tags remain separate and readable. Existing book/entry metadata and portable reading-history tags are preserved. Tokenizer v1 semantics and timing/package versions remain unchanged.
+
+Dictionary and Practice share `source-language.active.v1`; the new-book preference is separate (`source-language.new-book.v1`, initially Polish). Screen selection never changes saved data. Dictionary entry language, rather than linked-book language, determines groups. All list/level/readiness/learning pools are scoped before other filters. An open practice sheet captures its source language and labels it throughout the round.
+
+Unfinished training is stored as a language-to-round map under the existing checkpoint key. Rounds optionally encode their language for additive compatibility. Legacy rounds migrate only when every referenced entry exists and belongs to one language; invalid/mixed rounds are discarded with a recovery message while card levels remain. Library backup v1 adds optional `rounds` and typed language preferences, retains its legacy `round`, and merges validated language checkpoints without overwriting unrelated local rounds. Book restore matching also checks canonical language. UUID dictionary conflicts still require identical text and original language metadata.
+
+The alignment API and local batch tool require lowercase base codes `en/fr/es/de/it/pl`. Language is part of the existing canonical request/idempotency input and the worker specification; new worker manifests repeat it and finalization rejects mismatches. Old manifests without the additive field remain supported. The single-file CLI retains its documented Polish default, now prints the selected language, and rejects English-only models for other languages. Infrastructure quotas, authentication and deployment gates are unchanged. Mocked six-language contract tests do not establish audio timing quality; the benchmark gate remains open for all six language rows.
+
+
 ## Progressive books and first-use guidance (2026-10-25)
 
 - Text and audio are independently optional library resources. Empty filenames represent intentional absence; no placeholder media or fake track is created. Existing single-file/video records retain their adapters. Defaulted resource revision, UTF-16 reading anchor and historical language-lock fields are additive SwiftData fields. Untimed full-text reading restores its anchor independently of playback; reading completion keeps its existing explicit/duration-based semantics. Replacing resources must not unlock a language already used for accumulated reading knowledge.

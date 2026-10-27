@@ -25,7 +25,7 @@ UPLOAD_TTL_SECONDS = 24 * 60 * 60
 RESULT_TTL_SECONDS = 24 * 60 * 60
 RECORD_TTL_SECONDS = 7 * 24 * 60 * 60
 URL_TTL_SECONDS = 15 * 60
-ALLOWED_LANGUAGES = frozenset({"pl"})
+ALLOWED_LANGUAGES = frozenset({"en", "fr", "es", "de", "it", "pl"})
 ALLOWED_PROFILES = frozenset({"base-guided-v1"})
 ALLOWED_EXTENSIONS = frozenset({"mp3", "m4a", "wav"})
 ACTIVE_STATUSES = frozenset({"starting", "running", "cancelling"})
@@ -102,7 +102,7 @@ def validate_create(body: Any) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise AlignmentError("INVALID_PARAMETER", "Request body must be a JSON object.")
     _exact_fields(body, {"language", "profile_id", "allow_untimed_words", "audio", "text"}, "request")
-    if body["language"] not in ALLOWED_LANGUAGES:
+    if not isinstance(body["language"], str) or body["language"] not in ALLOWED_LANGUAGES:
         raise AlignmentError("INVALID_PARAMETER", "Unsupported language.")
     if body["profile_id"] not in ALLOWED_PROFILES:
         raise AlignmentError("INVALID_PARAMETER", "Unsupported alignment profile.")
@@ -214,10 +214,12 @@ def validate_manifest(
         raise AlignmentError("INFRASTRUCTURE_FAILURE", "Worker manifest is invalid.", 500)
     required = {"schema_version", "job_id", "attempt", "profile_id", "image_digest",
                 "inputs", "artifacts", "requires_review", "counts"}
-    if set(manifest) != required or manifest["schema_version"] != 1 or manifest["attempt"] != 1:
+    if set(manifest) not in (required, required | {"language"}) or manifest["schema_version"] != 1 or manifest["attempt"] != 1:
         raise AlignmentError("INFRASTRUCTURE_FAILURE", "Worker manifest schema is invalid.", 500)
     if manifest["job_id"] != job["job_id"] or manifest["profile_id"] != job["profile_id"]:
         raise AlignmentError("INFRASTRUCTURE_FAILURE", "Worker manifest identity is invalid.", 500)
+    if "language" in manifest and manifest["language"] != job.get("language"):
+        raise AlignmentError("INFRASTRUCTURE_FAILURE", "Worker manifest language is invalid.", 500)
     if not isinstance(manifest["image_digest"], str) or not manifest["image_digest"]:
         raise AlignmentError("INFRASTRUCTURE_FAILURE", "Worker image digest is missing.", 500)
     expected_inputs = {

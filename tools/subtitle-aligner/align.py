@@ -17,6 +17,15 @@ ALIGNER_WHITESPACE = ("\\u0009-\\u000d\\u001c-\\u001f\\u0020\\u0085\\u00a0\\u168
                       "\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000")
 ALIGNER_WHITESPACE_RE = re.compile(f"[{ALIGNER_WHITESPACE}]+")
 
+SUPPORTED_LANGUAGES = ("en", "fr", "es", "de", "it", "pl")
+
+def validate_language_model(language, model):
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError("Supported source languages: en, fr, es, de, it, pl (lowercase base codes).")
+    if language != "en" and Path(model).name.removesuffix(".pt").endswith(".en"):
+        raise ValueError("English-only .en models cannot align this source language; choose a multilingual model.")
+
+
 def clean_text(text):
     text = unicodedata.normalize("NFC", text.replace("\ufeff", ""))
     text = ALIGNER_WHITESPACE_RE.sub(" ", text).strip(" ")
@@ -156,7 +165,7 @@ def parser():
     result.add_argument("--alignment-json", type=Path,
                         help="Reuse raw alignment or this utility's JSON; must match input audio/text")
     result.add_argument("--output", type=Path, required=True, help="New output directory")
-    result.add_argument("--language", default="pl", help="Whisper language code (default: pl)")
+    result.add_argument("--language", choices=SUPPORTED_LANGUAGES, default="pl", help="Source language; omitted means Polish (pl), reported before alignment")
     result.add_argument("--model", default="small", help="Multilingual model name or checkpoint")
     result.add_argument("--token-step", type=int, default=100,
                         help="Tokens aligned per pass, 1–442 (larger windows may reduce drift)")
@@ -175,6 +184,8 @@ def parser():
 
 
 def run(args):
+    validate_language_model(args.language, args.model)
+    print(f"Source language: {args.language}", flush=True)
     if args.max_chars < 1:
         raise ValueError("--max-chars must be positive.")
     if not 1 <= args.token_step <= 442:
@@ -192,6 +203,9 @@ def run(args):
     if args.alignment_json:
         cached = json.loads(args.alignment_json.read_text(encoding="utf-8"))
         data = cached.get("alignment", cached)
+        cached_language = cached.get("language", data.get("language"))
+        if cached_language is not None and cached_language != args.language:
+            raise ValueError("Cached alignment language differs from --language.")
     else:
         try:
             import stable_whisper

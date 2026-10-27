@@ -1,5 +1,12 @@
 # Media library
 
+## Source language
+
+New imports use one of English (`en`), French (`fr`), Spanish (`es`), German (`de`), Italian (`it`) or Polish (`pl`). The confirmation screen remembers the previous new-book choice, initially Polish; supported manifest metadata takes precedence. Unsupported new package languages produce an explicit error. Reading does not require an available/downloaded Apple-to-Russian pair. Historical books outside the supported import list remain readable with original metadata.
+
+Saved phrases inherit their book's language and keep it after deletion of the book. Dictionary and Practice share an independent language selection; it does not edit book or phrase language. Reading forms are shared within canonical languages, including supported regional tags, and isolated across languages. Before the existing read-history lock, the reader's language change updates linked phrases and invalidates generated translations/analyses.
+
+
 The app uses **transcript segment** for a timed subtitle passage throughout the implementation.
 
 ## Use

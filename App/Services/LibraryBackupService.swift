@@ -10,6 +10,7 @@ struct LibraryBackupDocument: Codable {
     let books: [Book]
     let settings: Settings
     let round: LearningRoundState?
+    var rounds: [String: LearningRoundState]? = nil
     let wordExplanations: [WordExplanationCache.Record]
 
     struct Book: Codable {
@@ -33,6 +34,8 @@ struct LibraryBackupDocument: Codable {
         let isCompleted: Bool
     }
     struct Settings: Codable {
+        var activeSourceLanguage: String? = nil
+        var newBookSourceLanguage: String? = nil
         let model: String
         let cloudEnabled: Bool
         let translationPrompt: String
@@ -40,6 +43,8 @@ struct LibraryBackupDocument: Codable {
         let cooldowns: [Double]
 
         init(defaults: UserDefaults) {
+            activeSourceLanguage = defaults.string(forKey: SourceLanguage.activeKey)
+            newBookSourceLanguage = defaults.string(forKey: SourceLanguage.importKey)
             model = ContextAnalysisSettings.selectedModel(in: defaults).rawValue
             cloudEnabled = ContextAnalysisSettings.isCloudAnalysisEnabled(in: defaults)
             translationPrompt = ContextAnalysisSettings.prompt(in: defaults)
@@ -48,6 +53,8 @@ struct LibraryBackupDocument: Codable {
         }
 
         func apply(to defaults: UserDefaults) throws {
+            if let activeSourceLanguage { defaults.set(SourceLanguage.canonical(activeSourceLanguage), forKey: SourceLanguage.activeKey) }
+            if let newBookSourceLanguage, SourceLanguage.isSupported(newBookSourceLanguage) { defaults.set(SourceLanguage.canonical(newBookSourceLanguage), forKey: SourceLanguage.importKey) }
             try ContextAnalysisSettings.setPrompt(translationPrompt, in: defaults)
             try ContextAnalysisSettings.setWordExplanationPrompt(wordPrompt, in: defaults)
             defaults.set(model, forKey: ContextAnalysisSettings.modelKey)
@@ -131,12 +138,16 @@ enum LibraryBackupError: LocalizedError {
                 sourceLanguageLockedByHistory: item.sourceLanguageLockedByHistory)
         }
         let savedRound = LearningRoundCheckpoint.load(defaults: defaults)
-        let round = savedRound.flatMap {
-            Set($0.selectedIDs).isSubset(of: Set(entries.map(\.id))) ? $0 : nil
-        }
-        let document = LibraryBackupDocument(format: format, schemaVersion: 1, exportedAt: .now,
+        let round = savedRound.flatMap { LearningRoundCheckpoint.validated($0, entries: entries) }
+        var document = LibraryBackupDocument(format: format, schemaVersion: 1, exportedAt: .now,
             dictionary: dictionary.data, books: books, settings: .init(defaults: defaults), round: round,
             wordExplanations: try WordExplanationCache.backupRecords(at: cacheURL))
+        document.rounds = LearningRoundCheckpoint.all(defaults: defaults).compactMapValues {
+            LearningRoundCheckpoint.validated($0, entries: entries)
+        }
+        if let legacy = savedRound.flatMap({ LearningRoundCheckpoint.validated($0, entries: entries) }), let code = legacy.sourceLanguage {
+            document.rounds?[code] = legacy
+        }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(document)
         _ = try decode(data)
@@ -149,7 +160,7 @@ enum LibraryBackupError: LocalizedError {
         guard document.format == format, document.schemaVersion == 1 else {
             throw LibraryBackupError.invalid("Unsupported library backup format or version.")
         }
-        let dictionary = try DictionaryTransferService.decode(document.dictionary)
+        _ = try DictionaryTransferService.decode(document.dictionary)
         guard document.books.count <= 10_000,
               Set(document.books.map(\.id)).count == document.books.count,
               OpenAITranslationModel(rawValue: document.settings.model) != nil,
@@ -160,14 +171,21 @@ enum LibraryBackupError: LocalizedError {
               Set(document.wordExplanations.map(\.key)).count == document.wordExplanations.count else {
             throw LibraryBackupError.invalid("Invalid library backup settings or identities.")
         }
+        if let language = document.settings.activeSourceLanguage,
+           (try? VocabularyTokenizer.language(language)) == nil {
+            throw LibraryBackupError.invalid("Invalid active source language preference.")
+        }
+        if let language = document.settings.newBookSourceLanguage, !SourceLanguage.isSupported(language) {
+            throw LibraryBackupError.invalid("Invalid new-book source language preference.")
+        }
         for record in document.wordExplanations {
             guard validHash(record.key) else { throw LibraryBackupError.invalid("Invalid word explanation key.") }
             _ = try record.value.validated()
         }
-        if let round = document.round {
-            guard round.canResume, Set(round.selectedIDs).isSubset(of: Set(dictionary.entries.map(\.id))) else {
-                throw LibraryBackupError.invalid("Invalid unfinished training round.")
-            }
+        // Checkpoints are disposable; invalid or mixed-language legacy rounds are dropped on restore.
+        // Dictionary levels and the rest of a compatible backup remain recoverable.
+        if let rounds = document.rounds, rounds.count > 256 {
+            throw LibraryBackupError.invalid("Too many language training checkpoints.")
         }
         for book in document.books {
             guard validHash(book.fingerprint), !book.title.isEmpty, !book.sourceLanguage.isEmpty,
@@ -205,7 +223,7 @@ enum LibraryBackupError: LocalizedError {
         var issues: [String] = []
         var used = Set<UUID>()
         for book in document.books {
-            let candidates = indexed[book.fingerprint] ?? []
+            let candidates = (indexed[book.fingerprint] ?? []).filter { SourceLanguage.canonical($0.sourceLanguageCode) == SourceLanguage.canonical(book.sourceLanguage) }
             let exact = candidates.first { $0.id == book.id }
             guard let match = exact ?? (candidates.count == 1 ? candidates.first : nil),
                   used.insert(match.id).inserted else {
@@ -253,6 +271,15 @@ enum LibraryBackupError: LocalizedError {
         let incomingIDs = Set(fresh.dictionary.entries.map(\.id))
         let dictionaryPreview = DictionaryTransferService.preview(document: fresh.dictionary, mode: .restore,
             existing: try context.fetch(FetchDescriptor<DictionaryEntry>()), existingVocabulary: try ReadingKnowledge.words(context: context))
+        let incomingLanguages = Dictionary(uniqueKeysWithValues: fresh.dictionary.entries.map { ($0.id, $0.sourceLanguage) })
+        var rounds = LearningRoundCheckpoint.all(defaults: defaults)
+        let incomingRounds = (document.rounds.map { Array($0.values) } ?? []) + (document.round.map { [$0] } ?? [])
+        var discardedCheckpoint = false
+        for incoming in incomingRounds {
+            if let valid = LearningRoundCheckpoint.validated(incoming, languagesByID: incomingLanguages), let code = valid.sourceLanguage {
+                rounds[code] = valid
+            } else { discardedCheckpoint = true }
+        }
         do {
             try WordExplanationCache.restoreRecords(document.wordExplanations, at: cacheURL)
             let pending = try DictionaryTransferService.apply(dictionaryPreview, context: context, commitSave: { context in
@@ -280,7 +307,10 @@ enum LibraryBackupError: LocalizedError {
                 try save(context)
             })
             try document.settings.apply(to: defaults)
-            LearningRoundCheckpoint.save(document.round, defaults: defaults)
+            LearningRoundCheckpoint.replace(rounds, defaults: defaults)
+            if discardedCheckpoint {
+                defaults.set("An imported unfinished round could not be resumed because its phrases are missing or use different source languages. Restored learning levels are preserved.", forKey: LearningRoundCheckpoint.recoveryKey)
+            }
             return pending
         } catch {
             context.rollback()

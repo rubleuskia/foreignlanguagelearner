@@ -1,5 +1,8 @@
 # Foreign Language Learner
 
+New books support **English, French, Spanish, German, Italian and Polish**, with Russian translations and explanations. Dictionary and Practice share a remembered source-language dropdown, independent training progress and unfinished sessions for each language. Reading knowledge is shared within a language; older books and backups retain their original language metadata.
+
+
 Native SwiftUI iPhone and iPad app, targeting iOS 18+. Includes a local media library with single-file and multi-track audiobook import, synchronized selectable transcripts, a phrase dictionary with Apple automatic translation and opt-in OpenAI contextual explanations, interactive learning rounds, portable JSON dictionary files, simulator CI, and signed publishing infrastructure. See [media library details](docs/MEDIA_LIBRARY.md).
 
 ## First use
