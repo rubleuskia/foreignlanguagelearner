@@ -11,6 +11,17 @@ struct SourceLanguage: Identifiable, Hashable {
     static let activeKey = "source-language.active.v1"
     static let importKey = "source-language.new-book.v1"
 
+    private static let flagRegions = ["en": "GB", "fr": "FR", "es": "ES", "de": "DE", "it": "IT", "pl": "PL"]
+
+    var flag: String {
+        guard let region = Self.flagRegions[code] else { return "🌐" }
+        return String(String.UnicodeScalarView(region.unicodeScalars.compactMap {
+            UnicodeScalar(127397 + $0.value)
+        }))
+    }
+
+    var flaggedName: String { "\(flag) \(name)" }
+
     /// Only supported base languages are collapsed. Historical unrelated tags keep their identity.
     static func canonical(_ input: String) -> String {
         let tag = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -26,6 +37,24 @@ struct SourceLanguage: Identifiable, Hashable {
     static func groups(_ codes: [String]) -> [SourceLanguage] {
         let historical = Set(codes.map(canonical)).subtracting(supportedCodes).filter { !$0.isEmpty }.sorted()
         return supported + historical.map { .init(code: $0, name: name(for: $0)) }
+    }
+
+    /// Filter choices come from books, including books without dictionary entries.
+    /// Orphan entries remain accessible when the library has no books at all.
+    static func filterGroups(bookCodes: [String], entryCodes: [String]) -> [SourceLanguage] {
+        let codes = bookCodes.isEmpty ? entryCodes : bookCodes
+        let present = Set(codes.map(canonical).filter { !$0.isEmpty })
+        return present.map { .init(code: $0, name: name(for: $0)) }
+            .sorted { lhs, rhs in
+                let left = supportedCodes.firstIndex(of: lhs.code) ?? supportedCodes.count
+                let right = supportedCodes.firstIndex(of: rhs.code) ?? supportedCodes.count
+                return left == right ? lhs.code < rhs.code : left < right
+            }
+    }
+
+    static func resolvedActive(_ current: String, available: [SourceLanguage]) -> String {
+        let code = canonical(current)
+        return available.contains(where: { $0.code == code }) ? code : available.first?.code ?? "pl"
     }
 
     @MainActor static func entries(_ entries: [DictionaryEntry], language: String) -> [DictionaryEntry] {

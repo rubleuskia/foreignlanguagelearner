@@ -232,9 +232,12 @@ struct ContentView: View {
         learnt.createdAt = Date(timeIntervalSince1970: 1)
         if ProcessInfo.processInfo.arguments.contains("--multilingual-fixture") {
             UserDefaults.standard.set("pl", forKey: SourceLanguage.activeKey)
+            let englishBook = LearningItem(id: UUID(), title: "English example", mediaKind: "audio",
+                                           mediaFilename: "", transcriptFilename: "", duration: 0, segments: [],
+                                           sourceLanguageCode: "en")
+            context.insert(englishBook)
             for index in 1...10 {
-                let english = DictionaryEntry(text: "English phrase \(index)", item: item, segmentIndex: nil)
-                english.sourceLanguageCode = "en"
+                let english = DictionaryEntry(text: "English phrase \(index)", item: englishBook, segmentIndex: nil)
                 english.translationText = "перевод"; english.translationStatus = .ready
                 english.levelChangedAt = .distantPast
                 context.insert(english)
