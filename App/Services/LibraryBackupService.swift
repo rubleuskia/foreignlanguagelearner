@@ -27,6 +27,7 @@ struct LibraryBackupDocument: Codable {
         let tracks: [Track]
         var readingCharacterOffset: Int? = nil
         var sourceLanguageLockedByHistory: Bool? = nil
+        var lastPlayedAt: Date? = nil
     }
     struct Track: Codable {
         let id: String
@@ -34,6 +35,7 @@ struct LibraryBackupDocument: Codable {
         let isCompleted: Bool
     }
     struct Settings: Codable {
+        var interfaceLanguage: String? = nil
         var activeSourceLanguage: String? = nil
         var newBookSourceLanguage: String? = nil
         let model: String
@@ -43,6 +45,7 @@ struct LibraryBackupDocument: Codable {
         let cooldowns: [Double]
 
         init(defaults: UserDefaults) {
+            interfaceLanguage = AppLanguage.resolved(defaults.string(forKey: AppLanguage.key))
             activeSourceLanguage = defaults.string(forKey: SourceLanguage.activeKey)
             newBookSourceLanguage = defaults.string(forKey: SourceLanguage.importKey)
             model = ContextAnalysisSettings.selectedModel(in: defaults).rawValue
@@ -53,6 +56,9 @@ struct LibraryBackupDocument: Codable {
         }
 
         func apply(to defaults: UserDefaults) throws {
+            if let interfaceLanguage, AppLanguage.supported.contains(interfaceLanguage) {
+                defaults.set(interfaceLanguage, forKey: AppLanguage.key)
+            }
             if let activeSourceLanguage { defaults.set(SourceLanguage.canonical(activeSourceLanguage), forKey: SourceLanguage.activeKey) }
             if let newBookSourceLanguage, SourceLanguage.isSupported(newBookSourceLanguage) { defaults.set(SourceLanguage.canonical(newBookSourceLanguage), forKey: SourceLanguage.importKey) }
             try ContextAnalysisSettings.setPrompt(translationPrompt, in: defaults)
@@ -135,7 +141,8 @@ enum LibraryBackupError: LocalizedError {
                 parts: item.parts, tracks: item.tracks.map {
                     .init(id: $0.id, lastPosition: $0.lastPosition, isCompleted: $0.isCompleted)
                 }, readingCharacterOffset: item.readingCharacterOffset,
-                sourceLanguageLockedByHistory: item.sourceLanguageLockedByHistory)
+                sourceLanguageLockedByHistory: item.sourceLanguageLockedByHistory,
+                lastPlayedAt: item.lastPlayedAt)
         }
         let savedRound = LearningRoundCheckpoint.load(defaults: defaults)
         let round = savedRound.flatMap { LearningRoundCheckpoint.validated($0, entries: entries) }
@@ -175,6 +182,9 @@ enum LibraryBackupError: LocalizedError {
            (try? VocabularyTokenizer.language(language)) == nil {
             throw LibraryBackupError.invalid("Invalid active source language preference.")
         }
+        if let language = document.settings.interfaceLanguage, !AppLanguage.supported.contains(language) {
+            throw LibraryBackupError.invalid("Invalid interface language preference.")
+        }
         if let language = document.settings.newBookSourceLanguage, !SourceLanguage.isSupported(language) {
             throw LibraryBackupError.invalid("Invalid new-book source language preference.")
         }
@@ -190,6 +200,7 @@ enum LibraryBackupError: LocalizedError {
         for book in document.books {
             guard validHash(book.fingerprint), !book.title.isEmpty, !book.sourceLanguage.isEmpty,
                   book.lastPosition.isFinite, book.lastPosition >= 0,
+                  book.lastPlayedAt.map { $0.timeIntervalSince1970.isFinite } ?? true,
                   (book.readingCharacterOffset ?? 0) >= 0,
                   (0...1).contains(book.migrationVersion),
                   Set(book.tracks.map(\.id)).count == book.tracks.count,
@@ -265,7 +276,7 @@ enum LibraryBackupError: LocalizedError {
         let rollback = items.map { item in
             (item, item.title, item.createdAt, item.sourceLanguageCode, item.lastPosition, item.lastTrackID,
              item.isBookCompleted, item.readingVocabularyMigrationVersion, item.parts, item.tracks,
-             item.readingCharacterOffset, item.sourceLanguageLockedByHistory)
+             item.readingCharacterOffset, item.sourceLanguageLockedByHistory, item.lastPlayedAt)
         }
         let oldCache = try cacheURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? try Data(contentsOf: $0) : nil }
         let incomingIDs = Set(fresh.dictionary.entries.map(\.id))
@@ -291,6 +302,7 @@ enum LibraryBackupError: LocalizedError {
                     item.readingVocabularyMigrationVersion = book.migrationVersion
                     if let offset = book.readingCharacterOffset { item.readingCharacterOffset = offset }
                     if let locked = book.sourceLanguageLockedByHistory { item.sourceLanguageLockedByHistory = locked }
+                    if let lastPlayedAt = book.lastPlayedAt { item.lastPlayedAt = lastPlayedAt }
                     item.parts = book.parts
                     item.tracks = item.tracks.map { track in
                         var value = track
@@ -314,11 +326,12 @@ enum LibraryBackupError: LocalizedError {
             return pending
         } catch {
             context.rollback()
-            for (item, title, created, language, position, track, complete, migration, parts, tracks, offset, locked) in rollback {
+            for (item, title, created, language, position, track, complete, migration, parts, tracks, offset, locked, lastPlayedAt) in rollback {
                 item.title = title; item.createdAt = created; item.sourceLanguageCode = language
                 item.lastPosition = position; item.lastTrackID = track; item.isBookCompleted = complete
                 item.readingVocabularyMigrationVersion = migration; item.parts = parts; item.tracks = tracks
                 item.readingCharacterOffset = offset; item.sourceLanguageLockedByHistory = locked
+                item.lastPlayedAt = lastPlayedAt
             }
             if let cacheURL {
                 if let oldCache { try? oldCache.write(to: cacheURL, options: .atomic) }

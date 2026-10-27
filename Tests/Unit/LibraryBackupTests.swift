@@ -65,6 +65,7 @@ final class LibraryBackupTests: XCTestCase {
         original.sourceLanguageCode = "pl"
         original.isBookCompleted = true; original.readingVocabularyMigrationVersion = 1
         original.lastTrackID = "two"; original.lastPosition = 52
+        original.lastPlayedAt = Date(timeIntervalSince1970: 1234)
         original.tracks[0].isCompleted = true; original.tracks[0].lastPosition = 40
         original.tracks[1].lastPosition = 12
         let first = entry(original)
@@ -76,6 +77,8 @@ final class LibraryBackupTests: XCTestCase {
         try ContextAnalysisSettings.setWordExplanationPrompt("Custom examples", in: sourceDefaults)
         ContextAnalysisSettings.setSelectedModel(.nano, in: sourceDefaults)
         ContextAnalysisSettings.setCloudAnalysisEnabled(true, in: sourceDefaults)
+        sourceDefaults.set("en", forKey: AppLanguage.key)
+        targetDefaults.set("ru", forKey: AppLanguage.key)
         sourceDefaults.set(12.5, forKey: "learning.cooldown.level.1")
         var round = LearningRoundState(selection: .five, selectedIDs: [first.id, second.id], sourceLanguage: "pl")
         _ = round.recordAnswer(entryID: first.id, presentationID: round.currentPresentationID, right: false)
@@ -112,6 +115,7 @@ final class LibraryBackupTests: XCTestCase {
         XCTAssertEqual(restoredBook.readingVocabularyMigrationVersion, 1)
         XCTAssertEqual(restoredBook.lastPosition, 52)
         XCTAssertEqual(restoredBook.lastTrackID, "two")
+        XCTAssertEqual(restoredBook.lastPlayedAt, original.lastPlayedAt)
         XCTAssertTrue(restoredBook.tracks[0].isCompleted)
         XCTAssertEqual(restoredBook.tracks[1].lastPosition, 12)
         XCTAssertEqual(restoredBook.tracks[0].wordTimingsFilename, "one.words.json")
@@ -134,6 +138,7 @@ final class LibraryBackupTests: XCTestCase {
         XCTAssertEqual(ContextAnalysisSettings.wordExplanationPrompt(in: targetDefaults), "Custom examples")
         XCTAssertEqual(ContextAnalysisSettings.selectedModel(in: targetDefaults), .nano)
         XCTAssertTrue(ContextAnalysisSettings.isCloudAnalysisEnabled(in: targetDefaults))
+        XCTAssertEqual(targetDefaults.string(forKey: AppLanguage.key), "en")
         XCTAssertEqual(LearningCooldown.hours(level: 1, defaults: targetDefaults), 12.5)
         XCTAssertEqual(try WordExplanationCache.backupRecords(at: targetCache).first?.value, explanation)
     }
@@ -236,6 +241,11 @@ final class LibraryBackupTests: XCTestCase {
         XCTAssertThrowsError(try LibraryBackupService.decode(JSONSerialization.data(withJSONObject: object)))
         settings["cooldowns"] = [1, 2, 3]; settings["wordPrompt"] = "  "; object["settings"] = settings
         XCTAssertThrowsError(try LibraryBackupService.decode(JSONSerialization.data(withJSONObject: object)))
+        settings["wordPrompt"] = OpenAIWordExplanationProvider.defaultPrompt
+        settings["interfaceLanguage"] = "de"; object["settings"] = settings
+        XCTAssertThrowsError(try LibraryBackupService.decode(JSONSerialization.data(withJSONObject: object)))
+        settings.removeValue(forKey: "interfaceLanguage"); object["settings"] = settings
+        XCTAssertNoThrow(try LibraryBackupService.decode(JSONSerialization.data(withJSONObject: object)))
     }
 
     func testRunningCacheActorSeesImportedExplanations() async throws {

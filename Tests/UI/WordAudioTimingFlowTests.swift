@@ -9,6 +9,9 @@ final class WordAudioTimingFlowTests: XCTestCase {
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10))
         story.tap()
+        let resources = app.buttons["book.resources"]
+        XCTAssertTrue(resources.waitForExistence(timeout: 10))
+        resources.tap()
         let update = app.buttons["reader.update-phrase-audio"]
         XCTAssertTrue(update.waitForExistence(timeout: 10))
         XCTAssertTrue(update.isHittable)

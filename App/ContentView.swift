@@ -48,7 +48,7 @@ struct ContentView: View {
         }
         .translationTask(translationCoordinator.configuration,
                          action: translationCoordinator.perform(session:))
-        .alert("Library", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
+        .alert("Library", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") { errorMessage = nil } } message: { Text(AppLanguage.text(errorMessage ?? "")) }
     }
 
     private var library: some View {
@@ -71,7 +71,7 @@ struct ContentView: View {
                     }
                 } else {
                     List {
-                        if let recent = items.first(where: { !$0.isBookCompleted && ($0.lastPosition > 0 || $0.lastTrackID != nil || $0.readingCharacterOffset > 0) }) {
+                        if let recent = continueReadingItem {
                             Section("Continue reading") {
                                 VStack(alignment: .leading, spacing: 16) {
                                     NavigationLink { reader(for: recent) } label: {
@@ -85,14 +85,7 @@ struct ContentView: View {
                                         }
                                     }
                                     .buttonStyle(.plain)
-                                    if recent.hasAudio {
-                                    ProgressView(value: recent.readingProgress)
-                                        .accessibilityLabel("Reading progress")
-                                    Text("Read: \(recent.readingProgress.formatted(.percent.precision(.fractionLength(0))))")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                    } else {
-                                        Text("Continue from your saved place").font(.caption).foregroundStyle(.secondary)
-                                    }
+                                    readingProgress(for: recent)
                                     Button { featuredReader = recent } label: {
                                         Label("Continue reading", systemImage: "play.fill")
                                             .frame(maxWidth: .infinity)
@@ -106,23 +99,21 @@ struct ContentView: View {
                         Section("All materials") {
                             ForEach(items) { item in
                                 HStack {
-                                NavigationLink { reader(for: item) } label: {
-                                    HStack(spacing: 14) {
-                                        NativeBookCover(item: item)
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            Text(item.title).font(.headline).foregroundStyle(.primary)
-                                            if item.hasText { BookVocabularyBadge(item: item) }
-                                            Text(item.hasAudio
-                                                 ? "\(item.hasText ? "Read" : "Listened"): \(item.readingProgress.formatted(.percent.precision(.fractionLength(0))))"
-                                                 : item.isBookCompleted ? "Read" : "Ready to read")
-                                                .font(.caption).foregroundStyle(.secondary)
-                                            Text(summary(for: item)).font(.caption).foregroundStyle(.secondary)
+                                    NavigationLink { reader(for: item) } label: {
+                                        HStack(spacing: 14) {
+                                            NativeBookCover(item: item)
+                                            VStack(alignment: .leading, spacing: 5) {
+                                                Text(item.title).font(.headline).foregroundStyle(.primary)
+                                                if item.hasText { BookVocabularyBadge(item: item) }
+                                                readingProgress(for: item)
+                                                Text(summary(for: item)).font(.caption).foregroundStyle(.secondary)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.vertical, 4)
                                         }
-                                        .padding(.vertical, 4)
                                     }
-                                }
-                                BookResourceMenu(item: item)
-                                    .buttonStyle(.borderless)
+                                    BookResourceMenu(item: item)
+                                        .buttonStyle(.borderless)
                                 }
                             }
                             .onDelete(perform: deleteItems)
@@ -160,6 +151,32 @@ struct ContentView: View {
         else { BookReaderView(item: item).id(item.resourceRevision) }
     }
 
+    private func readingProgress(for item: LearningItem) -> some View {
+        let percentage = item.readingProgress.formatted(.percent.precision(.fractionLength(0)))
+        return HStack(spacing: 10) {
+            ProgressView(value: item.readingProgress)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Reading progress")
+                .accessibilityValue(percentage)
+            Text(percentage)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 36, alignment: .trailing)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var continueReadingItem: LearningItem? {
+        let unfinished = items.filter { !$0.isBookCompleted }
+        if let lastPlayed = unfinished.filter({ $0.lastPlayedAt != nil }).max(by: {
+            ($0.lastPlayedAt ?? .distantPast) < ($1.lastPlayedAt ?? .distantPast)
+        }) {
+            return lastPlayed
+        }
+        // Existing libraries have no play timestamp until the next explicit Play tap.
+        return unfinished.first { $0.lastPosition > 0 || $0.lastTrackID != nil || $0.readingCharacterOffset > 0 }
+    }
+
     private var vocabularyIndexIdentity: String {
         "\(vocabulary.ready):\(vocabulary.revision):" + items.map(ReadingVocabularyStore.catalogKey).joined(separator: ";")
     }
@@ -187,13 +204,13 @@ struct ContentView: View {
     }
 
     private func summary(for item: LearningItem) -> String {
-        if !item.hasAudio { return item.resourceStatus }
+        if !item.hasAudio { return AppLanguage.text(item.resourceStatus) }
         guard !item.tracks.isEmpty else {
             return item.parts.isEmpty
-                ? "\(Int(item.duration / 60)) min · \(item.resourceStatus)"
-                : "\(item.parts.count) parts · \(item.segments.count) transcript segments"
+                ? AppLanguage.format("%d min · %@", Int(item.duration / 60), AppLanguage.text(item.resourceStatus))
+                : AppLanguage.format("%d parts · %d transcript segments", item.parts.count, item.segments.count)
         }
-        return "\(item.tracks.count) tracks · \(Int(item.duration / 60)) min · \(item.resourceStatus)"
+        return AppLanguage.format("%d tracks · %d min · %@", item.tracks.count, Int(item.duration / 60), AppLanguage.text(item.resourceStatus))
     }
 
     private func addExample() {

@@ -39,6 +39,6 @@ struct ExportLogsButton: View {
         }
         .alert("Could not export logs", isPresented: Binding(
             get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-        )) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
+        )) { Button("OK") { errorMessage = nil } } message: { Text(AppLanguage.text(errorMessage ?? "")) }
     }
 }

@@ -82,7 +82,7 @@ private struct ContextWordDisclosure: View {
                             .overlay(alignment: .leading) { Rectangle().fill(.quaternary).frame(width: 2) }
                         }
                     } else if let error {
-                        Text(error).font(.subheadline).foregroundStyle(.secondary)
+                        Text(AppLanguage.text(error)).font(.subheadline).foregroundStyle(.secondary)
                         Button("Retry", systemImage: "arrow.clockwise") { retry += 1 }
                             .buttonStyle(.borderless)
                     } else {

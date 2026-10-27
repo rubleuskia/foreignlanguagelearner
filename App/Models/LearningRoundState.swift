@@ -377,7 +377,7 @@ enum LearningCooldown {
         let days = floor(minutes / 1440)
         let hours = floor(minutes.truncatingRemainder(dividingBy: 1440) / 60)
         let rest = minutes.truncatingRemainder(dividingBy: 60)
-        return "\(days.formatted(.number.precision(.fractionLength(0))))d \(hours.formatted(.number.precision(.fractionLength(0))))h \(rest.formatted(.number.precision(.fractionLength(0))))m"
+        return AppLanguage.format("%dd %dh %dm", Int(days), Int(hours), Int(rest))
     }
 
     @MainActor static func backfill(_ entries: [DictionaryEntry], now: Date = .now,

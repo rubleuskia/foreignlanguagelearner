@@ -49,20 +49,21 @@ struct PracticeHomeView: View {
                         Text("Revisit expressions from your books at your own pace.")
                             .foregroundStyle(.secondary)
                         let count = entries.count(where: \.isReadyForReview)
-                        Text("\(count) ready to repeat").font(.headline)
+                        Text(AppLanguage.format("%d ready to repeat", count)).font(.headline)
                             .accessibilityIdentifier("practice.ready-count")
                         if count == 0 {
-                            Text(entries.isEmpty
+                            Text(AppLanguage.text(entries.isEmpty
                                 ? "Save a phrase from a book and add a Russian translation to start."
-                                : "Cards need a ready Russian translation and an expired waiting period. Check each card in Dictionary for its remaining time.")
+                                : "Cards need a ready Russian translation and an expired waiting period. Check each card in Dictionary for its remaining time."))
                                 .font(.subheadline).foregroundStyle(.secondary)
                             if let next = entries.filter(\.isLearningEligible).compactMap({ LearningCooldown.remainingTime($0) }).filter({ $0 > 0 }).min() {
-                                Text("Next phrase ready in \(LearningCooldown.remainingDescription(seconds: next))")
+                                Text(AppLanguage.format("Next phrase ready in %@", LearningCooldown.remainingDescription(seconds: next)))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         Button { launch = .quick } label: {
-                            Label("Quick start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                            Text("Quick start")
+                                .frame(maxWidth: .infinity, alignment: .center)
                         }
                             .nativePrimaryAction()
                             .disabled(count == 0)

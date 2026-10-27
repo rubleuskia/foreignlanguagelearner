@@ -68,12 +68,13 @@ struct DictionaryView: View {
                 if entries.contains(where: \.isReadyForReview) {
                     Section {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("\(entries.count(where: \.isReadyForReview)) ready to repeat")
+                            Text(AppLanguage.format("%d ready to repeat", entries.count(where: \.isReadyForReview)))
                                 .font(.title3.weight(.semibold))
                             Text("A short round from your saved expressions.")
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Button { learningLaunch = .quickStart } label: {
-                                Label("Quick start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                                Text("Quick start")
+                                    .frame(maxWidth: .infinity, alignment: .center)
                             }
                             .nativePrimaryAction()
                             .accessibilityIdentifier("dictionary.quick-start")
@@ -87,7 +88,7 @@ struct DictionaryView: View {
                         ForEach(1...4, id: \.self) { level in
                             Button { selectedLevel = level } label: {
                                 VStack(spacing: 6) {
-                                    Text(LearningLevel.title(level)).font(.caption)
+                                    Text(AppLanguage.text(LearningLevel.title(level))).font(.caption)
                                         .foregroundStyle(.secondary)
                                     Text(level == 1 || level == 4
                                          ? "\(entries.count(where: { $0.learningLevel == level }))"
@@ -119,8 +120,8 @@ struct DictionaryView: View {
                         .listRowBackground(Color.clear)
                 } else {
                     if !learningEntries.isEmpty || selectedLevel != nil || readyOnly {
-                        Section(selectedLevel.map { "In progress · Level \($0)" } ?? "In progress") {
-                            if learningEntries.isEmpty { Text(readyOnly ? "No phrases ready to repeat" : "No phrases at this level").foregroundStyle(.secondary) }
+                        Section(selectedLevel.map { AppLanguage.format("In progress · Level %d", $0) } ?? AppLanguage.text("In progress")) {
+                            if learningEntries.isEmpty { Text(AppLanguage.text(readyOnly ? "No phrases ready to repeat" : "No phrases at this level")).foregroundStyle(.secondary) }
                             ForEach(learningEntries) { entry in
                                 entryButton(entry)
                             }
@@ -162,7 +163,7 @@ struct DictionaryView: View {
         }
         .alert("Dictionary error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+        } message: { Text(AppLanguage.text(errorMessage ?? "")) }
     }
 
     private func entryButton(_ entry: DictionaryEntry) -> some View {
@@ -200,7 +201,7 @@ private struct DictionaryRow: View {
                 PhraseCooldownLabel(entry: entry)
                 Text(entry.sourceTitle).font(.caption).foregroundStyle(.secondary)
                 if entry.translationStatus != .ready {
-                    Label(statusText, systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
+                    Label(AppLanguage.text(statusText), systemImage: statusIcon).font(.caption).foregroundStyle(statusColor)
                 }
             }
             Spacer()
@@ -254,7 +255,7 @@ struct DictionaryEntryDetailView: View {
                 Section("Source phrase") {
                     if entry.phraseAudioStart != nil {
                         Picker("Audio", selection: $audioMode) {
-                            ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
+                            ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: audioMode) { _, _ in playback.close(); openedAudioIdentity = nil }
@@ -269,7 +270,7 @@ struct DictionaryEntryDetailView: View {
                             .accessibilityIdentifier("dictionary.original")
                         if let source = audioSource {
                             Button { toggleAudio(source) } label: {
-                                Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
+                                Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
                                       systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                     .labelStyle(.iconOnly)
                                     .font(.title2)
@@ -340,7 +341,7 @@ struct DictionaryEntryDetailView: View {
                             }
                         }
                         contextProgress
-                        Button(entry.contextTranslationText == nil ? "Translate in Context" : "Refresh Context Translation",
+                        Button(AppLanguage.text(entry.contextTranslationText == nil ? "Translate in Context" : "Refresh Context Translation"),
                                systemImage: "character.book.closed") {
                             contextual.translateContext(for: entry, context: context,
                                                         service: contextAnalysisService)
@@ -367,7 +368,7 @@ struct DictionaryEntryDetailView: View {
                         set: { saveLevel($0) }
                     )) {
                         ForEach(1...4, id: \.self) { level in
-                            Text("\(level) · \(LearningLevel.title(level))").tag(level)
+                            Text("\(level) · \(AppLanguage.text(LearningLevel.title(level)))").tag(level)
                         }
                     }
                     .pickerStyle(.menu)
@@ -392,11 +393,11 @@ struct DictionaryEntryDetailView: View {
                 }
                 Section("Source") {
                     Text(entry.sourceTitle)
-                    LabeledContent("Languages", value: "\(SourceLanguage.name(for: entry.sourceLanguageCode)) → Russian")
+                    LabeledContent("Languages", value: "\(SourceLanguage.name(for: entry.sourceLanguageCode)) → \(AppLanguage.text("Russian"))")
                 }
                 Section { ExportLogsButton() }
                 Section("Automatic translation") {
-                    Button(entry.hasTranslation ? "Translate Again" : "Force Translation",
+                    Button(AppLanguage.text(entry.hasTranslation ? "Translate Again" : "Force Translation"),
                            systemImage: "character.book.closed") {
                         if entry.hasTranslation { confirmingReplacement = true }
                         else { forceTranslation() }
@@ -413,7 +414,7 @@ struct DictionaryEntryDetailView: View {
             .nativeForm()
             .navigationTitle("Dictionary entry")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(editing ? "Cancel" : "Close") { if editing { editing = false } else { dismiss() } } }
+                ToolbarItem(placement: .cancellationAction) { Button(AppLanguage.text(editing ? "Cancel" : "Close")) { if editing { editing = false } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
                     if editing { Button("Save") { save() }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
                     else {
@@ -450,7 +451,7 @@ struct DictionaryEntryDetailView: View {
             } message: {
                 Text("The current translation will be replaced with a new automatic translation.")
             }
-            .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+            .alert("Could not save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(AppLanguage.text(errorMessage ?? "")) }
             .translationTask(coordinator.configuration, action: coordinator.perform(session:))
             .alert("Context translation failed", isPresented: Binding(
                 get: { if case .failed = contextual.status { true } else { false } },
@@ -458,7 +459,7 @@ struct DictionaryEntryDetailView: View {
             )) {
                 Button("OK") { contextual.clearError() }
             } message: {
-                if case .failed(let message) = contextual.status { Text(message) }
+                if case .failed(let message) = contextual.status { Text(AppLanguage.text(message)) }
             }
         }.presentationDetents([.medium, .large])
     }
@@ -567,7 +568,7 @@ struct DictionaryImportPreviewView: View {
         NavigationStack {
             Form {
                 Section("Mode") {
-                    Text(preview.mode.rawValue)
+                    Text(AppLanguage.text(preview.mode.rawValue))
                     if preview.mode == .restore {
                         Text("Restores saved details and learning progress for matching entries. Other entries stay in the dictionary.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -591,7 +592,7 @@ struct DictionaryImportPreviewView: View {
                 }
                 if let words = preview.document.readingVocabulary?.words {
                     Section("Words from read texts") {
-                        if preview.mode == .translations { Text("\(words.count) reading words will be skipped. This mode updates translations only.") }
+                        if preview.mode == .translations { Text(AppLanguage.format("%d reading words will be skipped. This mode updates translations only.", words.count)) }
                         else {
                             LabeledContent("New studied words", value: "\(preview.vocabularyAdditions)")
                             LabeledContent("Already studied", value: "\(preview.vocabularyDuplicates)")
@@ -607,7 +608,7 @@ struct DictionaryImportPreviewView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Apply") { apply() } }
             }
-            .alert("Import failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+            .alert("Import failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(AppLanguage.text(errorMessage ?? "")) }
         }
     }
     private func apply() {
@@ -642,12 +643,12 @@ struct LearningLevelBadge: View {
         }
     }
     var body: some View {
-        Text("\(level) · \(LearningLevel.title(level))")
+        Text("\(level) · \(AppLanguage.text(LearningLevel.title(level)))")
             .font(.caption2.weight(.semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
-            .accessibilityLabel("Level \(level), \(LearningLevel.title(level))")
+            .accessibilityLabel(AppLanguage.format("Level %d, %@", level, AppLanguage.text(LearningLevel.title(level))))
     }
 }
 
@@ -659,8 +660,8 @@ private struct PhraseCooldownLabel: View {
         if entry.learningLevel < 4 {
             if let remaining = LearningCooldown.remainingTime(entry) {
                 Label(remaining > 0
-                      ? "Repeat in \(LearningCooldown.remainingDescription(seconds: remaining))"
-                      : "Ready to repeat",
+                      ? AppLanguage.format("Repeat in %@", LearningCooldown.remainingDescription(seconds: remaining))
+                      : AppLanguage.text("Ready to repeat"),
                       systemImage: remaining > 0 ? "clock" : "checkmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)

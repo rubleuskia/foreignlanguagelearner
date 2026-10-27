@@ -50,7 +50,7 @@ struct OnboardingTip: View {
     var body: some View {
         Group {
             if enabled && !skipped && !completed && allowed && testAllowsTips {
-                Button(step.title, systemImage: "lightbulb") { presented = true }
+                Button(AppLanguage.text(step.title), systemImage: "lightbulb") { presented = true }
                     .font(.subheadline).padding(8)
                     .accessibilityIdentifier("onboarding.\(step.rawValue)")
                     .popover(isPresented: $presented) {
@@ -74,8 +74,8 @@ struct OnboardingTip: View {
 
     private var tipContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(step.title).font(.headline)
-            Text(step.message).fixedSize(horizontal: false, vertical: true)
+            Text(AppLanguage.text(step.title)).font(.headline)
+            Text(AppLanguage.text(step.message)).fixedSize(horizontal: false, vertical: true)
             Button("Got it") {
                 UserDefaults.standard.set(true, forKey: step.key)
                 completed = true; presented = false
@@ -101,7 +101,7 @@ struct OnboardingHelpSection: View {
             Toggle("Show tips", isOn: $enabled)
             Button("Reset tips") { OnboardingPreferences.reset(); reset = true }
                 .accessibilityIdentifier("settings.reset-tips")
-            if reset { Text(enabled ? "Tips will appear next time you open the relevant screens." : "Tips reset. Enable Show tips to see them again.").font(.caption) }
+            if reset { Text(AppLanguage.text(enabled ? "Tips will appear next time you open the relevant screens." : "Tips reset. Enable Show tips to see them again.")).font(.caption) }
         }
     }
 }
@@ -113,7 +113,7 @@ struct OnboardingGuideView: View {
                 Text("Add TXT, an audio file, audio tracks in a ZIP, or a complete book package. You can read with text alone or listen with audio alone.")
                 Text("Use the book’s ⋮ menu to add missing files or replace current ones. Text and audio work independently until you add a compatible synchronization package.")
             }
-            ForEach(OnboardingStep.allCases, id: \.rawValue) { step in Section(step.title) { Text(step.message) } }
+            ForEach(OnboardingStep.allCases, id: \.rawValue) { step in Section(AppLanguage.text(step.title)) { Text(AppLanguage.text(step.message)) } }
             Section("Translation") {
                 Text("Ordinary translation into Russian uses Apple language packs. A first request may require downloading them. Cloud contextual analysis is optional, requires your OpenAI API key and sends the selected phrase and limited context directly to OpenAI.")
             }

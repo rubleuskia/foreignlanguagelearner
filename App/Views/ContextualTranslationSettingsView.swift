@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContextualTranslationSettingsView: View {
+    @AppStorage(AppLanguage.key) private var interfaceLanguage = "ru"
     @AppStorage(ContextAnalysisSettings.cloudAnalysisEnabledKey)
     private var cloudAnalysisEnabled = false
     @AppStorage(ContextAnalysisSettings.modelKey)
@@ -22,6 +23,13 @@ struct ContextualTranslationSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Interface language") {
+                Picker("Interface language", selection: $interfaceLanguage) {
+                    Text("Русский").tag("ru")
+                    Text("English").tag("en")
+                }
+                .accessibilityIdentifier("settings.interface-language")
+            }
             OnboardingHelpSection()
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
@@ -33,7 +41,7 @@ struct ContextualTranslationSettingsView: View {
                 .disabled(checkingKey)
                 .onChange(of: selectedModelRawValue) { _, _ in keyCheckMessage = nil }
                 LabeledContent("Configuration") {
-                    Text(hasSavedAPIKey ? "API key saved" : "API key required")
+                    Text(AppLanguage.text(hasSavedAPIKey ? "API key saved" : "API key required"))
                         .foregroundStyle(hasSavedAPIKey ? Color.secondary : Color.orange)
                 }
                 SecureField("OpenAI API key", text: $apiKey)
@@ -42,15 +50,15 @@ struct ContextualTranslationSettingsView: View {
                     .textContentType(.password)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                Button(hasSavedAPIKey ? "Replace API Key" : "Save API Key") { saveAPIKey() }
+                Button(AppLanguage.text(hasSavedAPIKey ? "Replace API Key" : "Save API Key")) { saveAPIKey() }
                     .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button(checkingKey ? "Checking…" : "Check API Key") {
+                Button(AppLanguage.text(checkingKey ? "Checking…" : "Check API Key")) {
                     Task { await checkAPIKey() }
                 }
                 .disabled(checkingKey || (!hasSavedAPIKey && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 .accessibilityIdentifier("settings.check-api-key")
                 if let keyCheckMessage {
-                    Text(keyCheckMessage).font(.caption)
+                    Text(AppLanguage.text(keyCheckMessage)).font(.caption)
                         .foregroundStyle(keyCheckFailed ? Color.red : Color.green)
                 }
                 Text("Checks the entered key, or the saved key if the field is empty, with a small API request using the selected model.")
@@ -59,7 +67,7 @@ struct ContextualTranslationSettingsView: View {
                     Button("Delete API Key", role: .destructive) { deleteAPIKey() }.disabled(checkingKey)
                 }
                 if let keyMessage {
-                    Text(keyMessage).font(.caption).foregroundStyle(.red)
+                    Text(AppLanguage.text(keyMessage)).font(.caption).foregroundStyle(.red)
                 }
                 Text("The key is stored in this device's Keychain. When enabled, the selected phrase and limited surrounding context are sent directly to OpenAI. API usage is billed to the account that owns this key.")
                     .font(.caption)
@@ -88,7 +96,7 @@ struct ContextualTranslationSettingsView: View {
                         resetPrompt()
                     }
                     if let promptMessage {
-                        Text(promptMessage)
+                        Text(AppLanguage.text(promptMessage))
                             .font(.caption)
                             .foregroundStyle(promptMessageIsError ? Color.red : Color.secondary)
                     }
@@ -100,7 +108,7 @@ struct ContextualTranslationSettingsView: View {
             wordPromptSection
         }
         .nativeForm()
-        .navigationTitle("Settings")
+        .navigationTitle(AppLanguage.text("Settings"))
         .task {
             refreshKeyStatus()
             refreshPrompt()
@@ -147,7 +155,7 @@ struct ContextualTranslationSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.word-prompt.reset")
                 if let wordPromptMessage {
-                    Text(wordPromptMessage).font(.caption).foregroundStyle(.secondary)
+                    Text(AppLanguage.text(wordPromptMessage)).font(.caption).foregroundStyle(.secondary)
                 }
                 Text("Save to use this prompt for new word explanations. Reset to Default restores the original prompt.")
                     .font(.caption).foregroundStyle(.secondary)

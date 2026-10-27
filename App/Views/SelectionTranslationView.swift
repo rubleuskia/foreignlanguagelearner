@@ -34,7 +34,7 @@ struct SelectionTranslationView: View {
                     Button {
                         coordinator.saveToDictionary(context: context, service: contextAnalysisService)
                     } label: {
-                        Label(coordinator.savedEntryID != nil ? "Added to Dictionary" : "Add to Dictionary",
+                        Label(AppLanguage.text(coordinator.savedEntryID != nil ? "Added to Dictionary" : "Add to Dictionary"),
                               systemImage: coordinator.savedEntryID != nil ? "checkmark.circle.fill" : "text.badge.plus")
                             .frame(maxWidth: .infinity)
                     }
@@ -79,7 +79,7 @@ struct SelectionTranslationView: View {
             .alert("Translation or playback error", isPresented: Binding(
                 get: { coordinator.errorMessage != nil || playback.errorMessage != nil },
                 set: { if !$0 { coordinator.errorMessage = nil; playback.errorMessage = nil } }
-            )) { Button("OK") {} } message: { Text(coordinator.errorMessage ?? playback.errorMessage ?? "") }
+            )) { Button("OK") {} } message: { Text(AppLanguage.text(coordinator.errorMessage ?? playback.errorMessage ?? "")) }
         }
         .presentationDetents([.medium, .large])
     }
@@ -112,7 +112,7 @@ struct SelectionTranslationView: View {
                 }
             }
         case .failed(let message):
-            Text(message).foregroundStyle(.red)
+            Text(AppLanguage.text(message)).foregroundStyle(.red)
             Button("Retry", systemImage: "arrow.clockwise") {
                 coordinator.retry(service: contextAnalysisService)
             }
@@ -125,7 +125,7 @@ struct SelectionTranslationView: View {
                 Button {
                     toggleAudio(source)
                 } label: {
-                    Label(playback.isPlaying ? source.pauseLabel : source.playLabel,
+                    Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
                           systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                 }
                 .accessibilityIdentifier("preview.play-audio")

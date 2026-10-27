@@ -89,7 +89,7 @@ struct LearningSessionView: View {
                 }
             }
             .background(NativeDesign.page)
-            .navigationTitle("\(previewRound == nil ? "Learn" : "Preview") · \(SourceLanguage.name(for: sourceLanguage))")
+            .navigationTitle("\(AppLanguage.text(previewRound == nil ? "Learn" : "Preview")) · \(SourceLanguage.name(for: sourceLanguage))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -102,7 +102,7 @@ struct LearningSessionView: View {
             .alert("Could not save progress", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
-            )) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+            )) { Button("OK") {} } message: { Text(AppLanguage.text(errorMessage ?? "")) }
         }
         .task {
             savedRound = LearningRoundCheckpoint.load(language: sourceLanguage, entries: storedEntries)
@@ -135,10 +135,10 @@ struct LearningSessionView: View {
     private var setupView: some View {
         Form {
             LabeledContent("Source language", value: SourceLanguage.name(for: sourceLanguage))
-            if let recoveryMessage { Text(recoveryMessage).foregroundStyle(.secondary) }
+            if let recoveryMessage { Text(AppLanguage.text(recoveryMessage)).foregroundStyle(.secondary) }
             if let savedRound {
                 Section("Unfinished round") {
-                    Text("Completed \(savedRound.rightAttemptCount) of \(savedRound.totalSelectedCount)")
+                    Text(AppLanguage.format("Completed %d of %d", savedRound.rightAttemptCount, savedRound.totalSelectedCount))
                     Button("Continue learning") {
                         selection = savedRound.selection
                         round = savedRound
@@ -153,7 +153,7 @@ struct LearningSessionView: View {
             Section("Round size") {
                 Picker("Phrases", selection: $selection) {
                     ForEach(LearningRoundSelection.allCases) { option in
-                        Text(option.title).tag(option)
+                        Text(AppLanguage.text(option.title)).tag(option)
                     }
                 }
                 .pickerStyle(.menu)
@@ -204,7 +204,7 @@ struct LearningSessionView: View {
             VStack(spacing: 24) {
                 if let preview {
                     VStack(spacing: 4) {
-                        Text("Preview \(preview.reviewedCount + 1) of \(preview.selectedIDs.count)")
+                        Text(AppLanguage.format("Preview %d of %d", preview.reviewedCount + 1, preview.selectedIDs.count))
                             .font(.headline)
                             .accessibilityIdentifier("learn.preview-progress")
                         Text("Choose which phrases to practise before learning starts.")
@@ -212,13 +212,13 @@ struct LearningSessionView: View {
                     }
                 } else if let round {
                     VStack(spacing: 4) {
-                        Text("Completed \(round.rightAttemptCount) of \(round.totalSelectedCount)")
+                        Text(AppLanguage.format("Completed %d of %d", round.rightAttemptCount, round.totalSelectedCount))
                             .font(.headline)
                             .accessibilityIdentifier("learn.completed")
-                        Text("Wrong attempts: \(round.wrongAttemptCount)")
+                        Text(AppLanguage.format("Wrong attempts: %d", round.wrongAttemptCount))
                             .font(.caption).foregroundStyle(.secondary)
                         if !round.skippedIDs.isEmpty {
-                            Text("Skipped: \(round.skippedIDs.count)")
+                            Text(AppLanguage.format("Skipped: %d", round.skippedIDs.count))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -383,7 +383,7 @@ struct LearningSessionView: View {
                 HStack { ProgressView(); Text("Generating context translation…") }
             } else {
                 if case .failed(let message) = contextual.status {
-                    Text(message).foregroundStyle(.red)
+                    Text(AppLanguage.text(message)).foregroundStyle(.red)
                 }
                 if entry.contextTranslationText == nil || entry.contextSelectedTranslationText == nil
                     || contextual.status != .idle {
@@ -410,7 +410,7 @@ struct LearningSessionView: View {
             LazyVStack(spacing: 18) {
                 Image(systemName: round.skippedIDs.isEmpty ? "checkmark.circle.fill" : "flag.checkered")
                     .font(.system(size: 54)).foregroundStyle(.tint)
-                Text(round.selectedIDs.isEmpty ? "Preview complete" : (round.skippedIDs.isEmpty ? "Round complete" : "Round finished")).font(.title)
+                Text(AppLanguage.text(round.selectedIDs.isEmpty ? "Preview complete" : (round.skippedIDs.isEmpty ? "Round complete" : "Round finished"))).font(.title)
                 if round.selectedIDs.isEmpty {
                     Text("No phrases selected for learning. Your level changes have been saved.")
                         .foregroundStyle(.secondary)
@@ -460,7 +460,7 @@ struct LearningSessionView: View {
                                         .foregroundStyle(previous == entry.learningLevel ? Color.secondary : entry.learningLevel > previous ? Color.green : Color.orange)
                                         .padding(.horizontal, 10).padding(.vertical, 5)
                                         .background(.quaternary, in: Capsule())
-                                        .accessibilityLabel("Level \(previous) to \(entry.learningLevel)")
+                                        .accessibilityLabel(AppLanguage.format("Level %d to %d", previous, entry.learningLevel))
                                         .accessibilityIdentifier("learn.completion.level-transition")
                                 }
                                 Text(entry.text)
@@ -523,11 +523,11 @@ struct LearningSessionView: View {
                 if entry.phraseAudioStart != nil {
                     Menu {
                         Picker("Audio fragment", selection: $audioMode) {
-                            ForEach(PhraseAudioMode.allCases) { mode in Text(mode.title).tag(mode) }
+                            ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Text(audioMode.title).multilineTextAlignment(.leading)
+                            Text(AppLanguage.text(audioMode.title)).multilineTextAlignment(.leading)
                             Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
                         }
                         .frame(minHeight: 44)

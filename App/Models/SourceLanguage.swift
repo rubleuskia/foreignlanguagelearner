@@ -6,8 +6,8 @@ struct SourceLanguage: Identifiable, Hashable {
     var id: String { code }
 
     static let supportedCodes = ["en", "fr", "es", "de", "it", "pl"]
-    static let supported = supportedCodes.map { SourceLanguage(code: $0, name: name(for: $0)) }
-    static let polish = SourceLanguage(code: "pl", name: name(for: "pl"))
+    static var supported: [SourceLanguage] { supportedCodes.map { SourceLanguage(code: $0, name: name(for: $0)) } }
+    static var polish: SourceLanguage { SourceLanguage(code: "pl", name: name(for: "pl")) }
     static let activeKey = "source-language.active.v1"
     static let importKey = "source-language.new-book.v1"
 
@@ -68,6 +68,6 @@ struct SourceLanguage: Identifiable, Hashable {
     }
 
     static func name(for code: String) -> String {
-        Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code
+        Locale(identifier: AppLanguage.current).localizedString(forLanguageCode: code)?.capitalized ?? code
     }
 }

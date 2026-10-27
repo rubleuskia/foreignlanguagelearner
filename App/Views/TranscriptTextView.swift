@@ -327,15 +327,19 @@ struct TranscriptTextView: UIViewRepresentable {
                 NSIntersectionRange($0, selection.range).length > 0
             }
             let selectionContext = Self.context(in: textView.text, selection: selection.range)
-            let add = UIAction(title: "Add to Dictionary", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+            let add = UIAction(title: AppLanguage.text("Add to Dictionary"), image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
                 self?.parent.handleSelection(.addToDictionary, selection.text, selection.range,
                                              segment, selectionContext)
             }
-            let translate = UIAction(title: "Translate in Context", image: UIImage(systemName: "character.book.closed")) { [weak self] _ in
+            let translate = UIAction(title: AppLanguage.text("Translate in Context"), image: UIImage(systemName: "character.book.closed")) { [weak self] _ in
                 self?.parent.handleSelection(.translateInContext, selection.text, selection.range,
                                              segment, selectionContext)
             }
-            return UIMenu(children: [translate, add] + suggestedActions)
+            let copiedText = (textView.text as NSString).substring(with: range)
+            let copy = UIAction(title: AppLanguage.text("Copy"), image: UIImage(systemName: "doc.on.doc")) { _ in
+                UIPasteboard.general.string = copiedText
+            }
+            return UIMenu(children: [translate, add, copy])
         }
 
         nonisolated static func validatedExpandedSelection(in text: String, selection: NSRange, language: String? = nil)

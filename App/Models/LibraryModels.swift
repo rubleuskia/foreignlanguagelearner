@@ -191,6 +191,7 @@ struct TranscriptDocument: Sendable {
     var sourceLanguageCode: String = "pl"
     var tracks: [LearningTrack] = []
     var lastTrackID: String? = nil
+    var lastPlayedAt: Date? = nil
 
     init(id: UUID, title: String, mediaKind: String, mediaFilename: String,
          transcriptFilename: String, duration: Double, segments: [TranscriptSegment], parts: [LearningPart] = [], sourceLanguageCode: String = "pl",

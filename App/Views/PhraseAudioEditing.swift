@@ -117,7 +117,9 @@ private struct PhraseAudioBoundaryEditor: View {
             Form {
                 Section("Phrase") {
                     Text(entry.text)
-                    Text("Start: \(start.formatted(.number.precision(.fractionLength(2)))) s · End: \(end.formatted(.number.precision(.fractionLength(2)))) s")
+                    Text(AppLanguage.format("Start: %@ s · End: %@ s",
+                                            start.formatted(.number.precision(.fractionLength(2))),
+                                            end.formatted(.number.precision(.fractionLength(2)))))
                         .accessibilityIdentifier("audio-editor.range")
                 }
                 Section("Audio boundaries · 0.1 s") {
@@ -125,9 +127,9 @@ private struct PhraseAudioBoundaryEditor: View {
                         changeBoundary(value, isEnd: isEnd)
                     }
                     HStack {
-                        Text("Start: \(start.formatted(.number.precision(.fractionLength(1)))) s")
+                        Text(AppLanguage.format("Start: %@ s", start.formatted(.number.precision(.fractionLength(1)))))
                         Spacer()
-                        Text("End: \(end.formatted(.number.precision(.fractionLength(1)))) s")
+                        Text(AppLanguage.format("End: %@ s", end.formatted(.number.precision(.fractionLength(1)))))
                     }.font(.caption).monospacedDigit()
                     Button("Show whole track") { sliderWindow = 0...trackDuration }
                     Button("Zoom to phrase") { sliderWindow = max(0, start - 5)...min(trackDuration, end + 5) }
@@ -164,7 +166,7 @@ private struct PhraseAudioBoundaryEditor: View {
                     }
                 }
                 Section {
-                    Button(playback.isPlaying ? "Stop preview" : "Play preview", systemImage: "play.circle") {
+                    Button(AppLanguage.text(playback.isPlaying ? "Stop preview" : "Play preview"), systemImage: "play.circle") {
                         if playback.isPlaying { playback.close(); return }
                         guard let preview = resolved(start: start, end: end) else { return }
                         playback.open(url: preview.identity.url, position: start, range: preview.identity.range)
@@ -181,11 +183,11 @@ private struct PhraseAudioBoundaryEditor: View {
                     }
                     .disabled(PhraseAudioSourceResolver.resolve(entry: entry, items: items, mode: mode, ignoreManualRange: true) == nil)
                     if resetToAutomatic { Text("Automatic boundaries will be restored when you save.").font(.caption) }
-                    if let message = error ?? playback.errorMessage { Text(message).foregroundStyle(.red) }
+                    if let message = error ?? playback.errorMessage { Text(AppLanguage.text(message)).foregroundStyle(.red) }
                 }
             }
             .nativeForm()
-            .navigationTitle(mode == .sentence ? "Phrase boundaries" : "Audio boundaries")
+            .navigationTitle(AppLanguage.text(mode == .sentence ? "Phrase boundaries" : "Audio boundaries"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -262,7 +264,7 @@ private struct AudioRangeSlider: View {
                     let fraction = min(1, max(0, (gesture.location.x - 22) / width))
                     change(bounds.lowerBound + fraction * span, isEnd)
                 })
-            .accessibilityLabel(isEnd ? "Audio end" : "Audio start")
+            .accessibilityLabel(AppLanguage.text(isEnd ? "Audio end" : "Audio start"))
             .accessibilityValue("\((isEnd ? end : start).formatted(.number.precision(.fractionLength(1)))) seconds")
             .accessibilityAdjustableAction { direction in
                 let delta = direction == .increment ? 0.1 : -0.1
