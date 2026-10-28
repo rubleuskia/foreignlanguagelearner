@@ -16,7 +16,7 @@ struct BookImportView: View {
         }
         var symbol: String { self == .text ? "doc.text" : self == .audio ? "headphones" : "archivebox" }
     }
-    private enum FileChoice { case audio, text, archive }
+    private enum FileChoice { case audio, text, archive, cover }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(ReadingVocabularyStore.self) private var vocabulary
@@ -32,6 +32,12 @@ struct BookImportView: View {
     @State private var preview: BookImportService.Preview?
     @State private var selectedTranscript: String?
     @State private var title = ""
+    @State private var coverSelection = "cover-books"
+    @State private var coverData: Data?
+    private var archiveCoverURL: URL? {
+        guard let preview, preview.coverFilename != nil else { return nil }
+        return BookImportService.stagingRoot.appending(path: preview.id.uuidString).appending(path: "archive-cover.jpg")
+    }
     @State private var language = UserDefaults.standard.string(forKey: SourceLanguage.importKey) ?? "pl"
     @State private var expectedRevision = ""
     @State private var working = false
@@ -63,6 +69,7 @@ struct BookImportView: View {
         case .audio: return [.audio]
         case .text: return [.plainText]
         case .archive: return [.zip]
+        case .cover: return [.image]
         }
     }
 
@@ -128,6 +135,11 @@ struct BookImportView: View {
                         .disabled(!canCheck || working)
                         .accessibilityIdentifier("import.check")
                 } else if let value = preview {
+                    if item == nil {
+                        BookCoverPicker(selection: $coverSelection, customData: coverData, archiveURL: archiveCoverURL) {
+                            choice = .cover; picking = true
+                        }
+                    }
                     Section("Step 2 of 2 · Review book") {
                         TextField("Title", text: $title).disabled(item != nil)
                         Picker("Book language", selection: $language) {
@@ -166,7 +178,7 @@ struct BookImportView: View {
                     if hasPreviewText && action != .audio {
                         Section("Reading vocabulary") {
                             ReadingVocabularyStatus()
-                            VocabularyStatisticsView(words: wordPreviewKey == previewKey ? wordPreview?.words : nil, language: language, error: wordError)
+                            VocabularyStatisticsView(words: wordPreviewKey == previewKey ? wordPreview?.words : nil, language: language, error: wordError, showsBars: item == nil)
                             if wordError != nil { Button("Retry word count") { Task { await countWords() } } }
                         }
                     }
@@ -177,6 +189,8 @@ struct BookImportView: View {
                     .disabled(working || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                               || (action == .text && selectedTranscript == nil && textURL == nil)
                               || (hasPreviewText && action != .audio && (wordPreview == nil || wordPreviewKey != previewKey || !vocabulary.ready)))
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .listRowBackground(Color.clear)
                     .accessibilityIdentifier("import.commit")
                 }
                 if working { ProgressView("Checking and preparing files…") }
@@ -187,6 +201,10 @@ struct BookImportView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(BookLibraryDesign.background)
+            .preferredColorScheme(.dark)
+            .tint(.blue)
             .environment(\.editMode, .constant(step == 2 ? .active : .inactive))
             .disabled(working)
             .navigationTitle(AppLanguage.text(item == nil ? "Add book" : "Update book"))
@@ -204,7 +222,22 @@ struct BookImportView: View {
             .fileImporter(isPresented: $picking, allowedContentTypes: fileTypes) { value in
                 switch value {
                 case .success(let url):
-                    switch choice { case .audio: audioURL = url; case .text: textURL = url; case .archive: archiveURL = url }
+                    switch choice {
+                    case .audio: audioURL = url
+                    case .text: textURL = url
+                    case .archive: archiveURL = url
+                    case .cover:
+                        working = true
+                        work = Task {
+                            defer { working = false }
+                            do {
+                                let data = try await Task.detached(priority: .userInitiated) { try BookCoverService.load(url) }.value
+                                try Task.checkCancellation()
+                                coverData = data; coverSelection = "custom"
+                            } catch is CancellationError { }
+                            catch { self.error = error.localizedDescription }
+                        }
+                    }
                     error = nil
                 case .failure(let failure): error = failure.localizedDescription
                 }
@@ -216,6 +249,17 @@ struct BookImportView: View {
             .sheet(isPresented: $legacyImport) { ImportItemView() }
             .task(id: previewKey) { await countWords() }
             .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+                   ProcessInfo.processInfo.arguments.contains("--cover-import-fixture"), item == nil, step == 0 {
+                    let url = FileManager.default.temporaryDirectory.appending(path: "cover-import-example.txt")
+                    do {
+                        try Data("A small story about reading books.".utf8).write(to: url)
+                        source = .text; textURL = url; title = "Cover import example"; language = "en"
+                        checkFiles()
+                    } catch { self.error = error.localizedDescription }
+                }
+                #endif
                 if let item, let action, step == 0 {
                     expectedRevision = item.resourceRevision; title = item.title; language = item.sourceLanguageCode
                     source = action == .text ? .text : action == .audio ? .audio : .package
@@ -255,6 +299,7 @@ struct BookImportView: View {
                 else { value = try await service.previewFiles(audio: audioURL, text: textURL) }
                 guard !Task.isCancelled else { await service.cancel(value); return }
                 preview = value; selectedTranscript = value.selectedTranscript
+                if item == nil, coverData == nil { coverSelection = value.coverFilename == nil ? "cover-books" : "archive" }
                 if item == nil { if title.isEmpty { title = value.title }; if value.isManifestPackage { language = SourceLanguage.canonical(value.sourceLanguage) } }
                 if action == .synchronization && !value.isManifestPackage { throw BookManifestError.invalid("Synchronization requires a complete package with a manifest, text and audio.") }
                 step = 2
@@ -277,7 +322,9 @@ struct BookImportView: View {
                 if item == nil { UserDefaults.standard.set(language, forKey: SourceLanguage.importKey) }
                 let prepared = try await service.prepare(preview, title: title, sourceLanguage: language,
                     orderedTracks: preview.tracks, transcriptPath: selectedTranscript,
-                    externalTranscript: usesArchive ? textURL : nil)
+                    externalTranscript: usesArchive ? textURL : nil,
+                    coverData: item == nil && coverSelection == "custom" ? coverData : nil,
+                    useArchiveCover: item != nil || coverSelection == "archive")
                 let stagedWords = try await service.vocabularyPreview(prepared)
                 guard stagedWords.fingerprint == reviewed.fingerprint else { throw ReadingVocabularyError.changed }
                 try Task.checkCancellation()
@@ -302,6 +349,8 @@ struct BookImportView: View {
                         transcriptFilename: prepared.transcriptFilename, duration: prepared.duration,
                         segments: segments, sourceLanguageCode: prepared.sourceLanguage,
                         tracks: prepared.tracks, lastTrackID: prepared.tracks.first?.id)
+                    added.coverFilename = prepared.coverFilename ?? ""
+                    added.bundledCoverName = BookCoverService.bundled.contains(coverSelection) ? coverSelection : "cover-books"
                     added.readingVocabularyMigrationVersion = 1
                     context.insert(added)
                     do { try context.save() }

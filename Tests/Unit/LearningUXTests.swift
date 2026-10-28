@@ -102,6 +102,13 @@ final class LearningUXTests: XCTestCase {
 
     @MainActor
     func testCooldownRemainingTimeUsesSavedDateAndCurrentSettings() {
+        // UI tests can persist Russian; these assertions exercise the English duration format.
+        let previousLanguage = UserDefaults.standard.string(forKey: AppLanguage.key)
+        UserDefaults.standard.set("en", forKey: AppLanguage.key)
+        defer {
+            if let previousLanguage { UserDefaults.standard.set(previousLanguage, forKey: AppLanguage.key) }
+            else { UserDefaults.standard.removeObject(forKey: AppLanguage.key) }
+        }
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let entry = trainingEntry(level: 2)

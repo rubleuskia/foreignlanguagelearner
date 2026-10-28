@@ -1,6 +1,18 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor private func openReader(_ app: XCUIApplication) {
+        if app.buttons["library.continue"].exists {
+            app.buttons["library.continue"].tap()
+        } else {
+            if !app.buttons["book.continue"].exists { app.staticTexts["Reading vocabulary story"].firstMatch.tap() }
+            let resume = app.buttons["book.continue"]
+            XCTAssertTrue(resume.waitForExistence(timeout: 5))
+            for _ in 0..<5 where !resume.isHittable { app.swipeUp() }
+            resume.tap()
+        }
+    }
+
     @MainActor func testBackAndReopenPreservesBookChapterProgress() {
         verifyBackAndReopenPreservesProgress(legacy: false)
     }
@@ -15,13 +27,13 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         if legacy { app.launchArguments.append("--legacy-reader-fixture") }
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
-        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         let slider = app.sliders.firstMatch
         XCTAssertTrue(slider.waitForExistence(timeout: 10))
         slider.adjust(toNormalizedSliderPosition: 0.5)
         XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(story.waitForExistence(timeout: 5)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 5)); openReader(app)
         XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5), "Back must preserve the saved chapter position")
         app.buttons["reader.choose-chapter"].tap()
         if legacy {
@@ -31,7 +43,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         }
         XCTAssertTrue(app.staticTexts["0:00"].waitForExistence(timeout: 5), "Explicit selection still restarts the chapter")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(story.waitForExistence(timeout: 5)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 5)); openReader(app)
         XCTAssertTrue(app.staticTexts["0:00"].waitForExistence(timeout: 5))
     }
 
@@ -40,7 +52,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-end-fixture"]
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
-        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10))
         app.buttons["Play"].tap()
         let picker = app.buttons["reader.choose-chapter"]
@@ -69,7 +81,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
-        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         let text = app.textViews["reader.transcript"]
         XCTAssertTrue(text.waitForExistence(timeout: 10))
         text.swipeUp(velocity: .fast)
@@ -86,7 +98,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--paused-scroll-fixture"]
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
-        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         let text = app.textViews["reader.transcript"]
         XCTAssertTrue(text.waitForExistence(timeout: 10))
         app.buttons["Reading vocabulary"].tap()
@@ -121,7 +133,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--chapter-scroll-fixture"]
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
-        XCTAssertTrue(story.waitForExistence(timeout: 10)); story.tap()
+        XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         let play = app.buttons["Play"]
         XCTAssertTrue(play.waitForExistence(timeout: 10)); play.tap()
         app.buttons["reader.choose-chapter"].tap()
@@ -149,7 +161,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         let initialCount = NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "New", "4")
         expectation(for: initialCount, evaluatedWith: badge)
         waitForExpectations(timeout: 10)
-        story.tap()
+        openReader(app)
         app.buttons["Reading vocabulary"].tap()
         app.buttons["reader.actions"].tap()
         let chapter = app.buttons["reader.complete-chapter"]

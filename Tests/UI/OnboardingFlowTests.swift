@@ -12,6 +12,7 @@ final class OnboardingFlowTests: XCTestCase {
         for _ in 0..<8 where !book.exists || !book.isHittable { app.swipeUp() }
         XCTAssertTrue(book.exists)
         book.tap()
+        app.buttons["book.continue"].tap()
         let dismiss = app.buttons["onboarding.got-it"]
         XCTAssertTrue(dismiss.waitForExistence(timeout: 10))
         let tip = app.scrollViews.containing(.button, identifier: "onboarding.got-it").firstMatch
@@ -56,6 +57,7 @@ final class OnboardingFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--progressive-books-fixture"]
         app.launch()
         app.staticTexts["Text example"].firstMatch.tap()
+        app.buttons["book.continue"].tap()
         XCTAssertTrue(app.textViews["reader.transcript"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.sliders["Playback position"].exists)
         capture(app, name: "Text-only reading")
@@ -71,6 +73,7 @@ final class OnboardingFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--progressive-books-fixture"]
         app.launch()
         app.staticTexts["Audio example"].firstMatch.tap()
+        app.buttons["book.continue"].tap()
         XCTAssertTrue(app.staticTexts["Listen to your book"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.sliders["Track playback position"].exists)
         capture(app, name: "Audio-only listening")
@@ -79,7 +82,9 @@ final class OnboardingFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Choose TXT"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.staticTexts["Combined example"].firstMatch.tap()
+        app.buttons["book.continue"].tap()
         XCTAssertTrue(app.textViews["reader.transcript"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["No timed transcript for this track"].exists)
         XCTAssertTrue(app.sliders["Track playback position"].exists)
@@ -91,15 +96,18 @@ final class OnboardingFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--progressive-books-fixture", "--onboarding-fixture"]
         app.launch()
         app.staticTexts["Text example"].firstMatch.tap()
+        app.buttons["book.continue"].tap()
         XCTAssertTrue(app.buttons["onboarding.got-it"].waitForExistence(timeout: 10))
         capture(app, name: "First reading tip")
         app.buttons["onboarding.got-it"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["library.settings"].tap()
         app.buttons["settings.reset-tips"].tap()
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Text example"].firstMatch.exists)
         app.staticTexts["Text example"].firstMatch.tap()
+        app.buttons["book.continue"].tap()
         XCTAssertTrue(app.buttons["onboarding.got-it"].waitForExistence(timeout: 5))
     }
 

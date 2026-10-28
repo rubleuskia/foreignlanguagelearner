@@ -24,6 +24,7 @@ actor BookImportService {
         let selectedTranscript: String?
         let isManifestPackage: Bool
         let ignoredFileCount: Int
+        var coverFilename: String? = nil
     }
 
     struct Prepared: Sendable {
@@ -35,6 +36,7 @@ actor BookImportService {
         let transcriptFilename: String
         let duration: Double
         let stagedBookDirectory: URL
+        var coverFilename: String? = nil
     }
 
     enum ImportError: LocalizedError {
@@ -181,7 +183,7 @@ actor BookImportService {
 
     func prepare(_ preview: Preview, title: String, sourceLanguage: String? = nil,
                  orderedTracks: [PreviewTrack], transcriptPath: String?,
-                 externalTranscript: URL?) throws -> Prepared {
+                 externalTranscript: URL?, coverData: Data? = nil, useArchiveCover: Bool = true) throws -> Prepared {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanTitle.isEmpty, cleanTitle.unicodeScalars.count <= 500 else { throw invalid("Book title must contain 1–500 Unicode scalars.") }
         let language = SourceLanguage.canonical(sourceLanguage ?? preview.sourceLanguage)
@@ -198,6 +200,14 @@ actor BookImportService {
         }
         let root = Self.stagingRoot.appending(path: preview.id.uuidString, directoryHint: .isDirectory)
         let book = root.appending(path: "book", directoryHint: .isDirectory)
+        let coverURL = book.appending(path: BookCoverService.filename)
+        if let coverData {
+            try BookCoverService.jpeg(coverData).write(to: coverURL, options: .atomic)
+        } else if useArchiveCover, fileManager.fileExists(atPath: root.appending(path: "archive-cover.jpg").path) {
+            try Data(contentsOf: root.appending(path: "archive-cover.jpg")).write(to: coverURL, options: .atomic)
+        } else if !useArchiveCover, fileManager.fileExists(atPath: coverURL.path) {
+            try fileManager.removeItem(at: coverURL)
+        }
         let transcriptDestination = book.appending(path: "transcript.txt")
         if fileManager.fileExists(atPath: transcriptDestination.path) {
             try fileManager.removeItem(at: transcriptDestination)
@@ -252,7 +262,8 @@ actor BookImportService {
         return Prepared(transactionID: preview.id, itemID: preview.itemID, title: cleanTitle,
                         sourceLanguage: language, tracks: learningTracks,
                         transcriptFilename: hasTranscript ? "transcript.txt" : "", duration: duration,
-                        stagedBookDirectory: book)
+                        stagedBookDirectory: book,
+                        coverFilename: fileManager.fileExists(atPath: coverURL.path) ? BookCoverService.filename : nil)
     }
 
     func movePreparedToLibrary(_ prepared: Prepared) throws {
@@ -290,7 +301,7 @@ actor BookImportService {
         var manifest = try BookManifestValidator.decode(manifestData, limits: limits)
         let byPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
         let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle, $0.wordTimings].compactMap { $0 } })
-        let unknown = entries.filter { $0.type == .file && !allowed.contains($0.path) && !isSystemMetadata($0.path) }
+        let unknown = entries.filter { $0.type == .file && !allowed.contains($0.path) && !BookCoverService.isCoverPath($0.path) && !isSystemMetadata($0.path) }
         guard unknown.isEmpty else { throw invalid("Strict package contains unreferenced file: \(unknown[0].path)") }
         guard let transcriptEntry = byPath[manifest.transcript], transcriptEntry.type == .file else { throw invalid("Manifest transcript is missing.") }
         let transcript = try extractData(transcriptEntry, from: archive, maximumBytes: limits.maximumTranscriptBytes)
@@ -348,12 +359,13 @@ actor BookImportService {
                                        duration: duration, alignmentStatus: track.alignmentStatus,
                                        wordTimingsFilename: wordTimingsFilename))
         }
+        let cover = try extractCover(archive: archive, entries: entries, book: book)
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
         manifests[transactionID] = manifest
         return .init(id: transactionID, itemID: UUID(), title: manifest.title,
                      sourceLanguage: try supportedManifestLanguage(manifest.sourceLanguage), tracks: previewTracks,
                      transcriptCandidates: [manifest.transcript], selectedTranscript: manifest.transcript,
-                     isManifestPackage: true, ignoredFileCount: entries.filter { isSystemMetadata($0.path) }.count)
+                     isManifestPackage: true, ignoredFileCount: entries.filter { isSystemMetadata($0.path) }.count, coverFilename: cover)
     }
 
     private func previewRaw(archive: Archive, entries: [Entry], transactionID: UUID,
@@ -387,14 +399,31 @@ actor BookImportService {
                                 mediaFilename: mediaFilename, subtitleFilename: nil,
                                 duration: duration, alignmentStatus: .untimed))
         }
-        let known = Set(audio.map(\.path) + transcripts.map(\.path))
+        let cover = try extractCover(archive: archive, entries: entries, book: book)
+        let known = Set(audio.map(\.path) + transcripts.map(\.path) + files.filter { BookCoverService.isCoverPath($0.path) }.map(\.path))
         let ignored = files.filter { !known.contains($0.path) }.count
         return .init(id: transactionID, itemID: UUID(),
                      title: suggestedTitle,
                      sourceLanguage: "pl", tracks: tracks,
                      transcriptCandidates: transcripts.map(\.path),
                      selectedTranscript: transcripts.count == 1 ? transcripts[0].path : nil,
-                     isManifestPackage: false, ignoredFileCount: ignored)
+                     isManifestPackage: false, ignoredFileCount: ignored, coverFilename: cover)
+    }
+
+    private func extractCover(archive: Archive, entries: [Entry], book: URL) throws -> String? {
+        // Prefer a root cover, then deterministic lexical order for nested covers.
+        let candidates = entries.filter { $0.type == .file && !isSystemMetadata($0.path) && BookCoverService.isCoverPath($0.path) }
+            .sorted { left, right in
+                let l = left.path.split(separator: "/").count, r = right.path.split(separator: "/").count
+                return l == r ? left.path < right.path : l < r
+            }
+        guard let entry = candidates.first else { return nil }
+        let data = try extractData(entry, from: archive, maximumBytes: BookCoverService.maximumBytes)
+        let normalized = try BookCoverService.jpeg(data)
+        try normalized.write(to: book.appending(path: BookCoverService.filename), options: .atomic)
+        // Keep the archive original available when a failed/reviewed import changes cover choices.
+        try normalized.write(to: book.deletingLastPathComponent().appending(path: "archive-cover.jpg"), options: .atomic)
+        return BookCoverService.filename
     }
 
     private func validateEntries(_ entries: [Entry]) throws {

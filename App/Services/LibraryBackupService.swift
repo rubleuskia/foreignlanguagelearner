@@ -28,6 +28,7 @@ struct LibraryBackupDocument: Codable {
         var readingCharacterOffset: Int? = nil
         var sourceLanguageLockedByHistory: Bool? = nil
         var lastPlayedAt: Date? = nil
+        var bundledCoverName: String? = nil
     }
     struct Track: Codable {
         let id: String
@@ -142,7 +143,7 @@ enum LibraryBackupError: LocalizedError {
                     .init(id: $0.id, lastPosition: $0.lastPosition, isCompleted: $0.isCompleted)
                 }, readingCharacterOffset: item.readingCharacterOffset,
                 sourceLanguageLockedByHistory: item.sourceLanguageLockedByHistory,
-                lastPlayedAt: item.lastPlayedAt)
+                lastPlayedAt: item.lastPlayedAt, bundledCoverName: item.bundledCoverName)
         }
         let savedRound = LearningRoundCheckpoint.load(defaults: defaults)
         let round = savedRound.flatMap { LearningRoundCheckpoint.validated($0, entries: entries) }
@@ -202,6 +203,7 @@ enum LibraryBackupError: LocalizedError {
                   book.lastPosition.isFinite, book.lastPosition >= 0,
                   book.lastPlayedAt.map { $0.timeIntervalSince1970.isFinite } ?? true,
                   (book.readingCharacterOffset ?? 0) >= 0,
+                  book.bundledCoverName.map { BookCoverService.bundled.contains($0) } ?? true,
                   (0...1).contains(book.migrationVersion),
                   Set(book.tracks.map(\.id)).count == book.tracks.count,
                   book.lastTrackID == nil || book.tracks.contains(where: { $0.id == book.lastTrackID }),
@@ -276,7 +278,7 @@ enum LibraryBackupError: LocalizedError {
         let rollback = items.map { item in
             (item, item.title, item.createdAt, item.sourceLanguageCode, item.lastPosition, item.lastTrackID,
              item.isBookCompleted, item.readingVocabularyMigrationVersion, item.parts, item.tracks,
-             item.readingCharacterOffset, item.sourceLanguageLockedByHistory, item.lastPlayedAt)
+             item.readingCharacterOffset, item.sourceLanguageLockedByHistory, item.lastPlayedAt, item.bundledCoverName)
         }
         let oldCache = try cacheURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? try Data(contentsOf: $0) : nil }
         let incomingIDs = Set(fresh.dictionary.entries.map(\.id))
@@ -303,6 +305,7 @@ enum LibraryBackupError: LocalizedError {
                     if let offset = book.readingCharacterOffset { item.readingCharacterOffset = offset }
                     if let locked = book.sourceLanguageLockedByHistory { item.sourceLanguageLockedByHistory = locked }
                     if let lastPlayedAt = book.lastPlayedAt { item.lastPlayedAt = lastPlayedAt }
+                    if let cover = book.bundledCoverName { item.bundledCoverName = cover }
                     item.parts = book.parts
                     item.tracks = item.tracks.map { track in
                         var value = track
@@ -326,12 +329,12 @@ enum LibraryBackupError: LocalizedError {
             return pending
         } catch {
             context.rollback()
-            for (item, title, created, language, position, track, complete, migration, parts, tracks, offset, locked, lastPlayedAt) in rollback {
+            for (item, title, created, language, position, track, complete, migration, parts, tracks, offset, locked, lastPlayedAt, cover) in rollback {
                 item.title = title; item.createdAt = created; item.sourceLanguageCode = language
                 item.lastPosition = position; item.lastTrackID = track; item.isBookCompleted = complete
                 item.readingVocabularyMigrationVersion = migration; item.parts = parts; item.tracks = tracks
                 item.readingCharacterOffset = offset; item.sourceLanguageLockedByHistory = locked
-                item.lastPlayedAt = lastPlayedAt
+                item.lastPlayedAt = lastPlayedAt; item.bundledCoverName = cover
             }
             if let cacheURL {
                 if let oldCache { try? oldCache.write(to: cacheURL, options: .atomic) }
