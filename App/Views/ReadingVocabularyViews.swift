@@ -80,6 +80,7 @@ struct VocabularyStatisticsView: View {
     let words: Set<String>?
     let language: String
     var error: String? = nil
+    var showsBars = false
     @State private var stats: VocabularyStatistics?
     @State private var totalStudied = 0
 
@@ -92,13 +93,23 @@ struct VocabularyStatisticsView: View {
         Group {
             if let error { Text(AppLanguage.text(error)).foregroundStyle(.secondary) }
             else if vocabulary.ready, let stats, words != nil {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(AppLanguage.format("Unique words: %d · New: %d · Studied: %d", stats.total, stats.new, stats.known))
-                        .accessibilityIdentifier("vocabulary.statistics")
-                    Text(AppLanguage.format("Studied from read texts (%@): %d", language, totalStudied))
-                        .accessibilityIdentifier("vocabulary.total")
+                if showsBars {
+                    VStack(alignment: .leading, spacing: 16) {
+                        BookStatisticBar(title: "New words", count: stats.new, total: stats.total, color: .blue)
+                        BookStatisticBar(title: "Saved phrases", count: 0, total: 0, color: .teal)
+                        BookStatisticBar(title: "Studied words", count: stats.known, total: stats.total, color: .white)
+                        Text(AppLanguage.format("%d unique words", stats.total)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .accessibilityIdentifier("vocabulary.statistics")
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(AppLanguage.format("Unique words: %d · New: %d · Studied: %d", stats.total, stats.new, stats.known))
+                            .accessibilityIdentifier("vocabulary.statistics")
+                        Text(AppLanguage.format("Studied from read texts (%@): %d", language, totalStudied))
+                            .accessibilityIdentifier("vocabulary.total")
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                 }
-                .font(.caption).foregroundStyle(.secondary)
             } else { ProgressView("Counting words…").font(.caption) }
         }
         .onAppear { update() }

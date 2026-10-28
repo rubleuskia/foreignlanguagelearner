@@ -1,5 +1,14 @@
 # Architectural and product decisions
 
+## Book overview, progress and local cover policy (2026-10-28)
+
+Library opens a book overview before its reader. Continue delegates to the existing reader adapters and never changes the last explicit-Play timestamp. Opening a chapter from the overview selects its saved local offset; the existing in-reader chooser still explicitly restarts a chapter. Overview progress distinguishes completion-weighted book progress from chapter saved playback position. Read/unread counts describe unique forms in completed text in this book, while new/studied counts use accumulated knowledge across its language. Saved phrases remain a separate metric; their bar represents this book’s share of saved phrases in that language, not a percentage of word mastery.
+
+Two defaulted SwiftData strings store a normalized local cover filename and a stable bundled-cover name. Existing records use `cover-books`. Every chapter inherits the book image; there is no per-chapter artwork override. Six compressed JPEGs ship offline. ImageIO normalizes uploads/ZIP images to JPEG with orientation applied and a maximum edge of 1,200 pixels; encoded inputs are limited to 16 MiB. A small evictable decoded-image cache avoids repeated decoding in chapter lists.
+
+Raw and strict ZIP imports accept image files whose basename is case-insensitively `cover`. Shallower paths take precedence (root covers first), then paths sort lexically. Other strict-package validation is unchanged and no external manifest field is added. Corrupt/oversized selected covers fail before publication. Original staged cover data remains available while retrying or changing cover choice; only the selected normalized cover is moved by the existing transaction. Resource replacement keeps the current cover. Library-state backups add optional validated bundled-cover metadata, preserving older-backup compatibility; user/ZIP image bytes stay in separately imported book assets.
+
+
 ## Continue Reading follows explicit playback (2026-10-27)
 
 Each book stores the time of the last user Play tap. Continue Reading shows the unfinished book with the newest such event, regardless of playback position or import order. Seeking, opening a reader, automatic chapter transitions and passive progress saves do not change this order. Old libraries without play timestamps continue to use the previous saved-progress selection until a book is played. The timestamp is optional in library-state backups so older files remain readable.

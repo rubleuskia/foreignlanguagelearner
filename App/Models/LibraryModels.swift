@@ -147,6 +147,8 @@ struct TranscriptDocument: Sendable {
 @Model final class LearningItem {
     // Defaults keep existing stores readable. Empty filenames represent absent resources.
     var resourceRevision: String = ""
+    var coverFilename: String = ""
+    var bundledCoverName: String = "cover-books"
     var readingCharacterOffset: Int = 0
     var sourceLanguageLockedByHistory: Bool = false
     var isSourceLanguageLocked: Bool { sourceLanguageLockedByHistory || hasReadingCompletion }

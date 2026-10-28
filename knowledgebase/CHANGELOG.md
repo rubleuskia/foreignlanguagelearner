@@ -1,5 +1,15 @@
 # Project changelog
 
+## 2026-10-28 — Book library redesign and local covers
+
+- Replaced library rows with image-led dark layouts, blue primary actions and filters, green reading-progress bars, title search and recent/title sorting. Library, Dictionary and Practice remain available.
+- Opening a book now presents its overview, word statistics and ordered chapters/virtual parts. Continue uses the existing saved reader position and explicit-Play recency policy. Chapter rows display completed/in-progress/not-started states, local saved time and inherited book artwork; selecting one resumes its own saved position without marking it read. The in-reader chapter chooser keeps its existing restart behavior.
+- Added new/studied unique-word counts, saved-phrase counts and distinct read/unread unique forms from completed text. Phrase bars show the book’s share of saved phrases in the same language; no arbitrary learning target or likes were introduced.
+- Import offers six bundled offline covers (about 1.24 MiB combined), custom image upload and automatic case-insensitive `cover` image detection in raw and strict ZIP packages. Covers are validated, bounded to 16 MiB input, downsampled to 1,200 pixels and staged with book resources. Existing records use the supplied books-on-table placeholder.
+- Defaulted cover metadata preserves existing SwiftData stores; optional built-in-cover metadata round-trips through library-state backups. Custom cover image bytes remain book assets and are not embedded in state backups.
+- Added import/image-boundary and chapter-presentation unit tests, navigation/import/accessibility UI coverage, and Russian/English strings. Updated DECISIONS and PROJECT for the new entry workflow and cover policy.
+
+
 ## 2026-10-27 — Russian and English interface languages
 
 - Use Russian as the default interface language and add an immediate Russian/English switch in Settings. Localize navigation, import, reading, dictionary, practice, backup and configuration screens without changing book text or the fixed Russian translation target.

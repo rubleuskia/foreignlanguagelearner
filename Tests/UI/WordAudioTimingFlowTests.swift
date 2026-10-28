@@ -8,7 +8,7 @@ final class WordAudioTimingFlowTests: XCTestCase {
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10))
-        story.tap()
+        app.buttons["library.continue"].tap()
         let resources = app.buttons["book.resources"]
         XCTAssertTrue(resources.waitForExistence(timeout: 10))
         resources.tap()

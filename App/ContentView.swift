@@ -70,61 +70,13 @@ struct ContentView: View {
                         if makingExample { ProgressView("Preparing example…") }
                     }
                 } else {
-                    List {
-                        if let recent = continueReadingItem {
-                            Section("Continue reading") {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    NavigationLink { reader(for: recent) } label: {
-                                        HStack(spacing: 16) {
-                                            NativeBookCover(item: recent, large: true)
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                Text(recent.title).font(.title2.weight(.semibold))
-                                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                                                if recent.hasText { BookVocabularyBadge(item: recent) }
-                                            }
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                    readingProgress(for: recent)
-                                    Button { featuredReader = recent } label: {
-                                        Label("Continue reading", systemImage: "play.fill")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .nativePrimaryAction()
-                                    .accessibilityIdentifier("library.continue")
-                                }
-                                .padding(.vertical, 8)
-                            }
-                        }
-                        Section("All materials") {
-                            ForEach(items) { item in
-                                HStack {
-                                    NavigationLink { reader(for: item) } label: {
-                                        HStack(spacing: 14) {
-                                            NativeBookCover(item: item)
-                                            VStack(alignment: .leading, spacing: 5) {
-                                                Text(item.title).font(.headline).foregroundStyle(.primary)
-                                                if item.hasText { BookVocabularyBadge(item: item) }
-                                                readingProgress(for: item)
-                                                Text(summary(for: item)).font(.caption).foregroundStyle(.secondary)
-                                            }
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.vertical, 4)
-                                        }
-                                    }
-                                    BookResourceMenu(item: item)
-                                        .buttonStyle(.borderless)
-                                }
-                            }
-                            .onDelete(perform: deleteItems)
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
+                    BookLibraryShelf(items: items, recent: continueReadingItem,
+                                     resume: { featuredReader = $0 }, delete: deleteItems)
                 }
             }
-            .background(NativeDesign.page)
+            .background(BookLibraryDesign.background)
             .safeAreaInset(edge: .top) { ReadingVocabularyStatus() }
+            .preferredColorScheme(.dark)
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -149,21 +101,6 @@ struct ContentView: View {
     @ViewBuilder private func reader(for item: LearningItem) -> some View {
         if item.tracks.isEmpty { ReaderView(item: item).id(item.resourceRevision) }
         else { BookReaderView(item: item).id(item.resourceRevision) }
-    }
-
-    private func readingProgress(for item: LearningItem) -> some View {
-        let percentage = item.readingProgress.formatted(.percent.precision(.fractionLength(0)))
-        return HStack(spacing: 10) {
-            ProgressView(value: item.readingProgress)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Reading progress")
-                .accessibilityValue(percentage)
-            Text(percentage)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 36, alignment: .trailing)
-                .accessibilityHidden(true)
-        }
     }
 
     private var continueReadingItem: LearningItem? {
