@@ -82,6 +82,34 @@ final class ActivityDashboardFlowTests: XCTestCase {
         XCTAssertTrue(card.label.contains("1"))
     }
 
+    @MainActor func testStatisticsStayCachedUntilLongPullToRefresh() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
+        app.launch()
+        app.buttons["Activity"].firstMatch.tap()
+        let count = app.descendants(matching: .any)["activity.card.advanced"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        XCTAssertTrue(count.label.contains("0"))
+        app.buttons["Practice"].firstMatch.tap()
+        app.buttons["practice.quick-start"].tap()
+        XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
+        app.buttons["learn.preview-learn"].tap()
+        app.buttons["learn.check"].tap()
+        app.buttons["learn.right"].tap()
+        XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        app.buttons["Activity"].firstMatch.tap()
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        XCTAssertTrue(count.label.contains("0"), "Returning to Activity must preserve its cached snapshot")
+        let scroll = app.scrollViews["activity.scroll"]
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
+            .press(forDuration: 0.05, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '1'"), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 10), .completed)
+        capture(app, "Activity — Explicit pull refresh")
+    }
+
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways

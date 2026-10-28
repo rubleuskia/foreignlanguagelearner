@@ -53,7 +53,7 @@ struct ActivityRecord: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-enum ActivityPeriod: String, CaseIterable, Identifiable {
+enum ActivityPeriod: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case day = "Day", week = "Week", month = "Month"
     var id: Self { self }
     var component: Calendar.Component {
@@ -64,25 +64,30 @@ enum ActivityPeriod: String, CaseIterable, Identifiable {
     }
 }
 
-struct ActivityWord: Sendable, Hashable {
+struct ActivityWord: Codable, Sendable, Hashable {
     let language: String
     let date: Date
     var count: Int = 1
 }
 
-struct ActivitySnapshot: Sendable {
+struct ActivitySnapshot: Codable, Sendable {
     var words: [ActivityWord] = []
     var events: [ActivityRecord] = []
+    var languageCodes: [String] = []
 
     static func load(container: ModelContainer) async throws -> Self {
         let task = Task.detached {
             let reader = ModelContext(container)
             reader.autosaveEnabled = false
             // Portable imports can overlap; use each language/form's earliest known date once.
-            var first: [String: ActivityWord] = [:]
+            struct WordIdentity: Hashable { let language: String; let form: String }
+            var first: [WordIdentity: ActivityWord] = [:]
+            var canonicalCodes: [String: String] = [:]
             func remember(language: String, form: String, date: Date) {
-                let code = SourceLanguage.canonical(language)
-                let key = ReadVocabularyWord.key(code, form)
+                let code: String
+                if let cached = canonicalCodes[language] { code = cached }
+                else { code = SourceLanguage.canonical(language); canonicalCodes[language] = code }
+                let key = WordIdentity(language: code, form: form)
                 if first[key].map({ $0.date <= date }) == true { return }
                 first[key] = ActivityWord(language: code, date: date)
             }
@@ -98,10 +103,20 @@ struct ActivitySnapshot: Sendable {
                 }
             }
             // Most forms share chapter-completion timestamps. Compact them before updating charts.
-            let words = Dictionary(grouping: first.values, by: { $0 }).map { key, values in
-                ActivityWord(language: key.language, date: key.date, count: values.count)
+            var counts: [ActivityWord: Int] = [:]
+            for word in first.values { counts[word, default: 0] += 1 }
+            let words = counts.map { key, count in
+                ActivityWord(language: key.language, date: key.date, count: count)
             }
-            return Self(words: words, events: try reader.fetch(FetchDescriptor<UserActivityEvent>()).map(\.record))
+            let events = try reader.fetch(FetchDescriptor<UserActivityEvent>()).map(\.record)
+            var bookRequest = FetchDescriptor<LearningItem>()
+            bookRequest.propertiesToFetch = [\.sourceLanguageCode]
+            var entryRequest = FetchDescriptor<DictionaryEntry>()
+            entryRequest.propertiesToFetch = [\.sourceLanguageCode]
+            let languages = Set(try reader.fetch(bookRequest).map { SourceLanguage.canonical($0.sourceLanguageCode) }
+                + reader.fetch(entryRequest).map { SourceLanguage.canonical($0.sourceLanguageCode) }
+                + words.map(\.language) + events.map(\.language))
+            return Self(words: words, events: events, languageCodes: languages.filter { !$0.isEmpty }.sorted())
         }
         return try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
     }
@@ -147,7 +162,7 @@ struct ActivitySnapshot: Sendable {
     }
 }
 
-struct ActivitySummary {
+struct ActivitySummary: Sendable {
     let words: Int
     let phrases: [ActivityRecord]
     let promotions: Int
