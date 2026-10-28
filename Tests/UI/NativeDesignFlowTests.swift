@@ -191,6 +191,54 @@ final class NativeDesignFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
     }
 
+    @MainActor func testDictionaryTranslationAndNotesWithAudioPersistAfterReopening() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--audio-boundary-fixture",
+                               "--editing-context-fixture", "--word-explanation-fixture"]
+        app.launch()
+        app.tabBars.buttons["Dictionary"].tap()
+        let card = app.buttons["dictionary.entry.Kot"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.buttons["dictionary.play-audio"].waitForExistence(timeout: 5))
+        app.buttons["Edit"].tap()
+        let translation = app.textViews["dictionary.translation-editor"]
+        XCTAssertTrue(translation.waitForExistence(timeout: 5))
+        translation.tap()
+        translation.typeText("updated ")
+        let updated = (translation.value as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(updated.contains("updated"))
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["dictionary.detail-translation"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["dictionary.detail-translation"].label, updated)
+
+        let meaning = app.textFields["dictionary.meaning-editor"]
+        for _ in 0..<8 {
+            if meaning.exists && meaning.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(meaning.isHittable)
+        meaning.tap()
+        meaning.typeText("preferred meaning")
+        let note = app.textFields["dictionary.note-editor"]
+        if !note.isHittable { app.swipeUp() }
+        note.tap()
+        note.typeText("personal note")
+        let saveNote = app.buttons["Save Meaning and Note"]
+        if !saveNote.isHittable { app.swipeUp() }
+        saveNote.tap()
+        XCTAssertFalse(saveNote.isEnabled)
+        app.buttons["Close"].tap()
+        card.tap()
+        for _ in 0..<8 {
+            if meaning.exists && meaning.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertEqual(meaning.value as? String, "preferred meaning")
+        XCTAssertEqual(note.value as? String, "personal note")
+    }
+
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

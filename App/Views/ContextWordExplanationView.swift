@@ -8,26 +8,55 @@ struct ContextWordExplanationView: View {
     let sourceLanguage: String
     let targetLanguage: String
     @State private var expandedWord: Int?
+    @State private var preparedInput: Input?
+    @State private var rows: [ContextWordRow]?
+
+    private struct Input: Equatable, Sendable {
+        let explanation: String
+        let selectedText: String
+        let context: SelectionContext?
+        let sourceLanguage: String
+        let targetLanguage: String
+    }
+    private var input: Input {
+        .init(explanation: explanation, selectedText: selectedText, context: context,
+              sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+    }
 
     var body: some View {
-        if let rows = ContextWordRows.build(explanation: explanation, selectedText: selectedText,
-                                           context: context, sourceLanguage: sourceLanguage,
-                                           targetLanguage: targetLanguage) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(rows) { row in
-                    if row.id != rows.first?.id { Divider().padding(.vertical, 6) }
-                    ContextWordDisclosure(row: row, isExpanded: Binding(
-                        get: { expandedWord == row.id },
-                        set: { expandedWord = $0 ? row.id : nil }
-                    ))
-                    .id(row.input)
+        Group {
+            if preparedInput != input {
+                ProgressView()
+            } else if let rows {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id { Divider().padding(.vertical, 6) }
+                        ContextWordDisclosure(row: row, isExpanded: Binding(
+                            get: { expandedWord == row.id },
+                            set: { expandedWord = $0 ? row.id : nil }
+                        ))
+                        .id(row.input)
+                    }
+                    Text("Tap a word to explore its meaning.")
+                        .font(.caption).foregroundStyle(.secondary).padding(.top, 10)
                 }
-                Text("Tap a word to explore its meaning.")
-                    .font(.caption).foregroundStyle(.secondary).padding(.top, 10)
+            } else {
+                Text(explanation).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        } else {
-            Text(explanation).textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+        }
+        .task(id: input) {
+            let snapshot = input
+            let worker = Task.detached(priority: .userInitiated) {
+                ContextWordRows.build(explanation: snapshot.explanation, selectedText: snapshot.selectedText,
+                    context: snapshot.context, sourceLanguage: snapshot.sourceLanguage,
+                    targetLanguage: snapshot.targetLanguage)
+            }
+            let value = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled else { return }
+            rows = value
+            expandedWord = nil
+            preparedInput = snapshot
         }
     }
 }

@@ -24,7 +24,88 @@ struct PhraseAudioSource: Equatable, Sendable {
 }
 
 enum PhraseAudioSourceResolver {
-    static func resolve(entry: DictionaryEntry, items: [LearningItem], mode: PhraseAudioMode = .selection, ignoreManualRange: Bool = false, includePadding: Bool = true,
+    struct EntrySnapshot: Equatable, Sendable {
+        let text: String
+        let localSourceItemID: UUID?
+        let sourceItemID: UUID
+        let sourceTrackID: String?
+        let segmentIndex: Int?
+        let audioStart: Double?
+        let audioEnd: Double?
+        let phraseAudioStart: Double?
+        let phraseAudioEnd: Double?
+        let manualAudioStart: Double?
+        let manualAudioEnd: Double?
+        let manualPhraseAudioStart: Double?
+        let manualPhraseAudioEnd: Double?
+
+        init(_ entry: DictionaryEntry) {
+            self.text = entry.text
+            self.localSourceItemID = entry.localSourceItemID
+            self.sourceItemID = entry.sourceItemID
+            self.sourceTrackID = entry.sourceTrackID
+            self.segmentIndex = entry.segmentIndex
+            self.audioStart = entry.audioStart
+            self.audioEnd = entry.audioEnd
+            self.phraseAudioStart = entry.phraseAudioStart
+            self.phraseAudioEnd = entry.phraseAudioEnd
+            self.manualAudioStart = entry.manualAudioStart
+            self.manualAudioEnd = entry.manualAudioEnd
+            self.manualPhraseAudioStart = entry.manualPhraseAudioStart
+            self.manualPhraseAudioEnd = entry.manualPhraseAudioEnd
+        }
+    }
+
+    struct ItemSnapshot: Equatable, Sendable {
+        let id: UUID
+        let title: String
+        let mediaFilename: String
+        let duration: Double
+        let segments: [TranscriptSegment]
+        let resourceRevision: String
+        let tracks: [LearningTrack]
+
+        init(_ item: LearningItem) {
+            self.id = item.id
+            self.title = item.title
+            self.mediaFilename = item.mediaFilename
+            self.duration = item.duration
+            self.segments = item.segments
+            self.resourceRevision = item.resourceRevision
+            // Playback position and completion do not change an audio source.
+            tracks = item.tracks.map {
+                var track = $0
+                track.lastPosition = 0
+                track.isCompleted = false
+                return track
+            }
+        }
+    }
+
+    static func snapshots(_ items: [LearningItem], localID: UUID?, sourceID: UUID) -> [ItemSnapshot] {
+        items.filter { $0.id == sourceID || $0.id == localID }.map(ItemSnapshot.init)
+    }
+
+    static func resolve(entry: DictionaryEntry, items: [LearningItem], mode: PhraseAudioMode = .selection,
+                        ignoreManualRange: Bool = false, includePadding: Bool = true,
+                        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
+        resolve(entry: EntrySnapshot(entry), items: snapshots(items, localID: entry.localSourceItemID, sourceID: entry.sourceItemID),
+                mode: mode, ignoreManualRange: ignoreManualRange, includePadding: includePadding, fileExists: fileExists)
+    }
+
+    static func resolve(preview: SelectionTranslationPreview, items: [LearningItem],
+                        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
+        resolve(preview: preview, items: snapshots(items, localID: nil, sourceID: preview.sourceItemID), fileExists: fileExists)
+    }
+
+    static func resolve(localSourceItemID: UUID?, sourceItemID: UUID, audioRange: ClosedRange<Double>?,
+                        sourceTrackID: String? = nil, items: [LearningItem],
+                        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
+        resolve(localSourceItemID: localSourceItemID, sourceItemID: sourceItemID, audioRange: audioRange,
+                sourceTrackID: sourceTrackID, items: snapshots(items, localID: localSourceItemID, sourceID: sourceItemID), fileExists: fileExists)
+    }
+
+    static func resolve(entry: EntrySnapshot, items: [ItemSnapshot], mode: PhraseAudioMode = .selection, ignoreManualRange: Bool = false, includePadding: Bool = true,
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
         if mode == .sentence {
             let manual = !ignoreManualRange && (entry.manualPhraseAudioStart != nil || entry.manualPhraseAudioEnd != nil)
@@ -80,7 +161,7 @@ enum PhraseAudioSourceResolver {
         return source
     }
 
-    static func resolve(preview: SelectionTranslationPreview, items: [LearningItem],
+    static func resolve(preview: SelectionTranslationPreview, items: [ItemSnapshot],
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
         var source = resolve(localSourceItemID: preview.sourceItemID,
                 sourceItemID: preview.sourceItemID,
@@ -103,7 +184,7 @@ enum PhraseAudioSourceResolver {
 
     static func resolve(localSourceItemID: UUID?, sourceItemID: UUID,
                         audioRange: ClosedRange<Double>?, sourceTrackID: String? = nil,
-                        items: [LearningItem],
+                        items: [ItemSnapshot],
                         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> PhraseAudioSource? {
         let item = localSourceItemID.flatMap { localID in items.first { $0.id == localID } }
             ?? items.first { $0.id == sourceItemID }
@@ -134,7 +215,7 @@ enum PhraseAudioSourceResolver {
                                  itemTitle: sourceDescription)
     }
 
-    private static func padded(_ source: PhraseAudioSource?, items: [LearningItem]) -> PhraseAudioSource? {
+    private static func padded(_ source: PhraseAudioSource?, items: [ItemSnapshot]) -> PhraseAudioSource? {
         guard let source, let item = items.first(where: { $0.id == source.identity.itemID }) else { return nil }
         let duration = source.identity.trackID.flatMap { id in item.tracks.first { $0.id == id }?.duration } ?? item.duration
         let range = max(0, source.identity.range.lowerBound - 0.5)...min(duration, source.identity.range.upperBound + 0.5)
@@ -223,7 +304,7 @@ enum PhraseAudioTiming {
         let pattern = words.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: "\\s+")
         guard let expression = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}])" + pattern + "(?![\\p{L}\\p{N}])") else { return nil }
         let firstRange = document.ranges[firstSegment]
-        let search = NSRange(location: firstRange.location, length: (document.text as NSString).length - firstRange.location)
+        let search = selectionSearchRange(firstSegment: firstSegment, wordCount: words.count, document: document)
         let matches = expression.matches(in: document.text, range: search).filter { NSIntersectionRange($0.range, firstRange).length > 0 }
         if matches.count == 1 { return matches[0].range }
         let matchingStored = matches.filter {
@@ -231,6 +312,21 @@ enum PhraseAudioTiming {
             return abs(range.lowerBound - storedRange.lowerBound) < 0.001 && abs(range.upperBound - storedRange.upperBound) < 0.001
         }
         return matchingStored.count == 1 ? matchingStored[0].range : nil
+    }
+
+    /// A match must begin in the saved cue. At most wordCount - 1 further words can belong to it.
+    /// Bound the regex before searching rather than scanning every remaining cue and filtering later.
+    static func selectionSearchRange(firstSegment: Int, wordCount: Int, document: TranscriptDocument) -> NSRange {
+        let first = document.ranges[firstSegment]
+        var end = NSMaxRange(first)
+        var remaining = max(0, wordCount - 1)
+        var index = firstSegment + 1
+        while remaining > 0, index < document.segments.count {
+            end = NSMaxRange(document.ranges[index])
+            remaining -= document.segments[index].text.split(maxSplits: remaining, whereSeparator: \.isWhitespace).count
+            index += 1
+        }
+        return NSRange(location: first.location, length: end - first.location)
     }
 
     static func removingLegacyPadding(from stored: ClosedRange<Double>, selectedText: String,
@@ -241,8 +337,7 @@ enum PhraseAudioTiming {
         let pattern = words.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: "\\s+")
         guard let expression = try? NSRegularExpression(pattern: pattern) else { return stored }
         let firstRange = document.ranges[firstSegment]
-        let searchRange = NSRange(location: firstRange.location,
-                                  length: (document.text as NSString).length - firstRange.location)
+        let searchRange = selectionSearchRange(firstSegment: firstSegment, wordCount: words.count, document: document)
         let matches = expression.matches(in: document.text, range: searchRange).filter {
             NSIntersectionRange($0.range, firstRange).length > 0
         }

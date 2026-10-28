@@ -485,65 +485,66 @@ struct LearningSessionView: View {
 
     private func phraseAudio(for entry: DictionaryEntry) -> some View {
         let mode: PhraseAudioMode = entry.phraseAudioStart == nil ? .selection : audioMode
-        let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: mode)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Audio").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                Spacer()
-                if let source {
-                    PhraseAudioEditButton(entry: entry, items: sourceItems, source: source,
-                                          stopPlayback: { playback.pause() }, mode: mode)
+        return ResolvedPhraseAudio(request: .init(entry: entry, items: sourceItems, mode: mode)) { source in
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Audio").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    Spacer()
+                    if let source {
+                        PhraseAudioEditButton(entry: entry, items: sourceItems, source: source,
+                                              stopPlayback: { playback.pause() }, mode: mode)
+                            .font(.subheadline.weight(.medium))
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("learn.edit-audio")
+                    }
+                }
+                HStack(alignment: .center, spacing: 12) {
+                    if let source {
+                        Button { toggleAudio(source) } label: {
+                            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.title3.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                                .background(Color.accentColor.opacity(0.12), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                        .accessibilityLabel(playback.isPlaying ? source.pauseLabel : source.playLabel)
+                        .accessibilityIdentifier("learn.play-audio")
+                    }
+                    if entry.phraseAudioStart != nil {
+                        Menu {
+                            Picker("Audio fragment", selection: $audioMode) {
+                                ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(AppLanguage.text(audioMode.title)).multilineTextAlignment(.leading)
+                                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                            }
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
                         .font(.subheadline.weight(.medium))
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("learn.edit-audio")
-                }
-            }
-            HStack(alignment: .center, spacing: 12) {
-                if let source {
-                    Button { toggleAudio(source) } label: {
-                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                        .accessibilityLabel("Audio fragment")
+                        .accessibilityValue(audioMode.title)
+                        .accessibilityIdentifier("learn.audio-mode")
+                        .onChange(of: audioMode) { _, _ in closeAudio() }
+                    } else if source != nil {
+                        Text("Phrase audio").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
-                    .accessibilityLabel(playback.isPlaying ? source.pauseLabel : source.playLabel)
-                    .accessibilityIdentifier("learn.play-audio")
+                    Spacer(minLength: 0)
+                    if source != nil { PlaybackRateMenu(playback: playback, compact: true) }
                 }
-                if entry.phraseAudioStart != nil {
-                    Menu {
-                        Picker("Audio fragment", selection: $audioMode) {
-                            ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(AppLanguage.text(audioMode.title)).multilineTextAlignment(.leading)
-                            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
-                        }
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.subheadline.weight(.medium))
-                    .accessibilityLabel("Audio fragment")
-                    .accessibilityValue(audioMode.title)
-                    .accessibilityIdentifier("learn.audio-mode")
-                    .onChange(of: audioMode) { _, _ in closeAudio() }
-                } else if source != nil {
-                    Text("Phrase audio").font(.subheadline).foregroundStyle(.secondary)
+                if source == nil {
+                    Label("Audio unavailable on this device", systemImage: "speaker.slash")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
-                if source != nil { PlaybackRateMenu(playback: playback, compact: true) }
             }
-            if source == nil {
-                Label("Audio unavailable on this device", systemImage: "speaker.slash")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
+            .padding(12)
+            .background(Color.accentColor.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("learn.audio-panel")
         }
-        .padding(12)
-        .background(Color.accentColor.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("learn.audio-panel")
     }
 
     private func startRound() {

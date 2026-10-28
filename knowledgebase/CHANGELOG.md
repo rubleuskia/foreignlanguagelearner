@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-28 — Audit repeated work across interactive screens
+
+- Dictionary translation/meaning/note editing, selection translation, practice audio and boundary sliders no longer read/parse transcripts or resolve aligned audio inside view rendering. Resolve immutable source snapshots on a worker and reuse results until actual audio inputs change, including manual bounds, resource replacement or new timing sidecars. Boundary drags also skip repeated audio-session teardown once the preview is closed. Playback positions and unrelated edits do not invalidate them; cancelled loads cannot install stale controls.
+- Build legacy reader documents once per chapter and move both book-reader text/subtitle loads off the UI executor. Cache prepared word-explanation rows across disclosure changes. Isolate library search from dictionary-wide phrase grouping.
+- Bound saved-selection regex searches to the original cue and enough subsequent words for cross-cue phrases, retaining whitespace, repeated-phrase and legacy-padding behavior.
+- Verification: all 235 unit tests and eight targeted UI scenarios pass on the iOS 26.5 iPhone 17 Pro simulator. A 30,000-cue chapter resolves 100 saved selections in about 10 ms in the synthetic benchmark. Physical-device hang durations have not been measured.
+- DECISIONS.md records the execution and invalidation policy. No project purpose, supported workflow or major boundary changed, so PROJECT.md is unchanged.
+
 ## 2026-10-28 — Responsive practice translation editing
 
 - Give the practice translation editor its own draft and presentation state. Opening it and typing no longer invalidate the entire practice card, which synchronously resolves phrase audio and loads/decodes source transcripts. Skip audio teardown when no audio is open.
