@@ -588,3 +588,7 @@
 "Time includes an open reader in the foreground and actual audio playback in the background. Reading and listening together count once." = "Время учитывает открытый экран чтения и воспроизведение аудио в фоне. Одновременное чтение и прослушивание считаются один раз.";
 "Activity could not be loaded" = "Не удалось загрузить активность";
 "Activity could not be saved" = "Не удалось сохранить активность";
+
+/* Manual activity refresh */
+"Updated: %@" = "Обновлено: %@";
+"Pull down to refresh" = "Потяните вниз для обновления";

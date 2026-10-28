@@ -4,15 +4,14 @@ import SwiftUI
 
 struct ActivityDashboardView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Query private var books: [LearningItem]
-    @Query private var entries: [DictionaryEntry]
     @AppStorage(SourceLanguage.activeKey) private var activeLanguage = "pl"
     @State private var period = ActivityPeriod.week
     @State private var anchor = Date.now
-    @State private var now = Date.now
-    @State private var snapshot = ActivitySnapshot()
+    @State private var report = ActivityDashboardReport.empty
+    @State private var languageCodes: [String] = []
+    @State private var preparedRequest: ActivityReportRequest?
+    @State private var refreshing = false
     @State private var loading = true
     @State private var error: String?
     @State private var selectedDate: Date?
@@ -27,11 +26,13 @@ struct ActivityDashboardView: View {
         return result
     }
     private var interval: DateInterval { period.interval(containing: anchor, calendar: calendar) }
-    private var summary: ActivitySummary { snapshot.summary(language: language, interval: interval, now: now) }
+    private var request: ActivityReportRequest {
+        .init(language: activeLanguage, period: period, anchor: anchor, calendar: calendar)
+    }
+    private var now: Date { report.updatedAt }
+
     private var languages: [SourceLanguage] {
-        let codes = books.map(\.sourceLanguageCode) + entries.map(\.sourceLanguageCode)
-            + snapshot.words.map(\.language) + snapshot.events.map(\.language)
-        return SourceLanguage.filterGroups(bookCodes: [], entryCodes: codes)
+        SourceLanguage.filterGroups(bookCodes: [], entryCodes: languageCodes)
     }
     private var language: String { SourceLanguage.resolvedActive(activeLanguage, available: languages) }
     private var dateLocale: Locale { Locale(identifier: AppLanguage.current) }
@@ -42,7 +43,7 @@ struct ActivityDashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     controls
-                    if loading { ProgressView().frame(maxWidth: .infinity) }
+                    if loading || (preparedRequest != request && error == nil) { ProgressView().frame(maxWidth: .infinity) }
                     if let error {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Activity could not be loaded").font(.headline)
@@ -50,21 +51,23 @@ struct ActivityDashboardView: View {
                             Button("Try again") { Task { await refresh() } }
                         }.activityCard(surface)
                     }
-                    metrics(wide: wide)
-                    if wide {
-                        HStack(alignment: .top, spacing: 20) {
-                            wordChart.frame(maxWidth: .infinity)
-                            phraseProgress.frame(maxWidth: .infinity)
+                    if preparedRequest == request {
+                        metrics(wide: wide)
+                        if wide {
+                            HStack(alignment: .top, spacing: 20) {
+                                wordChart.frame(maxWidth: .infinity)
+                                phraseProgress.frame(maxWidth: .infinity)
+                            }
+                            HStack(alignment: .top, spacing: 20) {
+                                regularity.frame(maxWidth: .infinity)
+                                phraseList.frame(maxWidth: .infinity)
+                            }
+                        } else {
+                            wordChart
+                            phraseProgress
+                            regularity
+                            phraseList
                         }
-                        HStack(alignment: .top, spacing: 20) {
-                            regularity.frame(maxWidth: .infinity)
-                            phraseList.frame(maxWidth: .infinity)
-                        }
-                    } else {
-                        wordChart
-                        phraseProgress
-                        regularity
-                        phraseList
                     }
                     Text("Reading words and phrase learning are counted separately. Phrase and time history starts with this update. Backups preserve recorded history.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -74,6 +77,7 @@ struct ActivityDashboardView: View {
                 .padding(20).frame(maxWidth: 1200).frame(maxWidth: .infinity)
             }
             .background(Color.black)
+            .accessibilityIdentifier("activity.scroll")
             .refreshable { await refresh() }
         }
         .preferredColorScheme(.dark)
@@ -91,14 +95,7 @@ struct ActivityDashboardView: View {
                 }
             }
         }
-        .task {
-            await refresh()
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { break }
-                await refresh()
-            }
-        }
-        .onChange(of: scenePhase) { _, value in if value == .active { Task { await refresh() } } }
+        .task(id: request) { await loadCached(request) }
         .onChange(of: period) { _, _ in selectedDate = nil }
         .onChange(of: anchor) { _, _ in selectedDate = nil }
         .onChange(of: activeLanguage) { _, _ in selectedDate = nil }
@@ -109,6 +106,13 @@ struct ActivityDashboardView: View {
             Picker("Period", selection: $period) {
                 ForEach(ActivityPeriod.allCases) { Text(AppLanguage.text($0.rawValue)).tag($0) }
             }.pickerStyle(.segmented).accessibilityIdentifier("activity.period")
+            if preparedRequest != nil {
+                HStack {
+                    Text(AppLanguage.format("Updated: %@", report.updatedAt.formatted(.dateTime.day().month().hour().minute().locale(dateLocale))))
+                    Spacer()
+                    Text("Pull down to refresh")
+                }.font(.caption2).foregroundStyle(.secondary)
+            }
             HStack {
                 Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
                     .accessibilityLabel("Previous period").accessibilityIdentifier("activity.previous")
@@ -116,15 +120,15 @@ struct ActivityDashboardView: View {
                 VStack(spacing: 4) {
                     Text(periodTitle).font(.headline).multilineTextAlignment(.center)
                         .accessibilityIdentifier("activity.dates")
-                    if interval.contains(now) {
+                    if interval.contains(.now) {
                         Text("Current period").font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Button("Today") { anchor = .now; now = .now }.font(.caption)
+                        Button("Today") { anchor = .now }.font(.caption)
                     }
                 }
                 Spacer(minLength: 4)
                 Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                    .disabled(interval.end > now).accessibilityLabel("Next period")
+                    .disabled(interval.end > .now).accessibilityLabel("Next period")
                     .accessibilityIdentifier("activity.next")
             }
         }
@@ -134,30 +138,30 @@ struct ActivityDashboardView: View {
         if wide {
             HStack(alignment: .top, spacing: 16) {
                 wordMetric
-                metric("Phrases advanced", value: "\(summary.phrases.count)", icon: "bubble.left.and.bubble.right", color: .blue, subtitle: "Different phrases in this period", id: "advanced")
-                metric("Phrases learned", value: "\(summary.learned)", icon: "graduationcap", color: .purple, subtitle: "Reached level 4", id: "learned")
+                metric("Phrases advanced", value: "\(report.phraseCount)", icon: "bubble.left.and.bubble.right", color: .blue, subtitle: "Different phrases in this period", id: "advanced")
+                metric("Phrases learned", value: "\(report.learned)", icon: "graduationcap", color: .purple, subtitle: "Reached level 4", id: "learned")
                 timeMetric
             }
         } else {
             wordMetric
             LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 260 : 150))], spacing: 12) {
-                metric("Phrases advanced", value: "\(summary.phrases.count)", icon: "bubble.left.and.bubble.right", color: .blue, subtitle: "Different phrases in this period", id: "advanced", compact: true)
-                metric("Phrases learned", value: "\(summary.learned)", icon: "graduationcap", color: .purple, subtitle: "Reached level 4", id: "learned", compact: true)
+                metric("Phrases advanced", value: "\(report.phraseCount)", icon: "bubble.left.and.bubble.right", color: .blue, subtitle: "Different phrases in this period", id: "advanced", compact: true)
+                metric("Phrases learned", value: "\(report.learned)", icon: "graduationcap", color: .purple, subtitle: "Reached level 4", id: "learned", compact: true)
             }
             HStack {
                 Label("Time with books", systemImage: "clock").font(.subheadline)
                 Spacer()
-                Text(duration(summary.seconds)).font(.title3.weight(.semibold)).monospacedDigit()
+                Text(duration(report.seconds)).font(.title3.weight(.semibold)).monospacedDigit()
             }.activityCard(surface).accessibilityElement(children: .combine).accessibilityIdentifier("activity.card.time")
         }
     }
 
     private var wordMetric: some View {
-        metric("New reading words", value: "\(summary.words)", icon: "book.fill", color: green,
+        metric("New reading words", value: "\(report.words)", icon: "book.fill", color: green,
                subtitle: comparison, id: "words")
     }
     private var timeMetric: some View {
-        metric("Time with books", value: duration(summary.seconds), icon: "clock", color: .white,
+        metric("Time with books", value: duration(report.seconds), icon: "clock", color: .white,
                subtitle: "Reading and audio", id: "time")
     }
     private func metric(_ title: String, value: String, icon: String, color: Color, subtitle: String, id: String, compact: Bool = false) -> some View {
@@ -176,30 +180,11 @@ struct ActivityDashboardView: View {
             .accessibilityIdentifier("activity.card.\(id)")
     }
 
-    private struct Bucket: Identifiable {
-        let start: Date
-        let end: Date
-        let value: Int
-        let future: Bool
-        var id: Date { start }
-    }
-    private var buckets: [Bucket] {
-        var result: [Bucket] = []
-        var cursor = interval.start
-        while cursor < interval.end {
-            let end = min(calendar.date(byAdding: period == .day ? .hour : .day, value: 1, to: cursor)!, interval.end)
-            let count = snapshot.wordCount(language: language, interval: .init(start: cursor, end: end), now: now)
-            result.append(.init(start: cursor, end: end, value: count, future: cursor > now))
-            cursor = end
-        }
-        return result
-    }
-
     private var wordChart: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(period == .day ? "Daily rhythm" : "New words by day").font(.headline)
             Label("Reading words", systemImage: "circle.fill").font(.caption).foregroundStyle(green)
-            Chart(buckets) { bucket in
+            Chart(report.buckets) { bucket in
                 BarMark(x: .value(AppLanguage.text("Date"), bucket.start, unit: period == .day ? .hour : .day),
                         y: .value(AppLanguage.text("Words"), bucket.value))
                     .foregroundStyle(green.gradient).cornerRadius(4)
@@ -215,7 +200,7 @@ struct ActivityDashboardView: View {
                 }
             }
             .chartXScale(domain: interval.start...interval.end)
-            .chartYScale(domain: 0...max(5, buckets.map(\.value).max() ?? 0))
+            .chartYScale(domain: 0...report.chartMaximum)
             .chartXAxis {
                 AxisMarks(values: .stride(by: period == .day ? .hour : .day, count: period == .day ? 4 : period == .week ? 1 : 7)) { value in
                     AxisValueLabel {
@@ -229,7 +214,7 @@ struct ActivityDashboardView: View {
             }
             .chartXSelection(value: $selectedDate)
             .frame(height: 210).accessibilityIdentifier("activity.chart")
-            if summary.words == 0 {
+            if report.words == 0 {
                 Text("No new reading words in this period. Complete a chapter to add its new words.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -240,7 +225,7 @@ struct ActivityDashboardView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Phrase progress").font(.headline)
             ForEach(2...4, id: \.self) { target in
-                let count = summary.phrases.count { $0.toLevel == target }
+                let count = report.levelCounts[target, default: 0]
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text(AppLanguage.format("Level %d", target)).font(.subheadline.bold()).foregroundStyle(levelColor(target))
@@ -251,12 +236,12 @@ struct ActivityDashboardView: View {
                     GeometryReader { proxy in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.white.opacity(0.10))
-                            Capsule().fill(levelColor(target)).frame(width: proxy.size.width * Double(count) / Double(max(1, summary.phrases.count)))
+                            Capsule().fill(levelColor(target)).frame(width: proxy.size.width * Double(count) / Double(max(1, report.phraseCount)))
                         }
                     }.frame(height: 6)
                 }
             }
-            Text(AppLanguage.format("Different phrases: %d · promotions: %d", summary.phrases.count, summary.promotions))
+            Text(AppLanguage.format("Different phrases: %d · promotions: %d", report.phraseCount, report.promotions))
                 .font(.caption).foregroundStyle(.secondary)
             Text("Each phrase appears once, at its highest reached level. Manual changes are included.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -267,12 +252,12 @@ struct ActivityDashboardView: View {
         let month = calendar.dateInterval(of: .month, for: anchor)!
         let days = calendar.range(of: .day, in: .month, for: anchor)!
         let offset = (calendar.component(.weekday, from: month.start) - calendar.firstWeekday + 7) % 7
-        let active = snapshot.activeDays(language: language, now: now, calendar: calendar)
+        let active = report.activeDays
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Consistency").font(.headline)
                 Spacer()
-                Label(AppLanguage.format("%d day streak", snapshot.streak(language: language, now: now, calendar: calendar)), systemImage: "flame.fill")
+                Label(AppLanguage.format("%d day streak", report.streak), systemImage: "flame.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
             Text(anchor, format: .dateTime.month(.wide).year().locale(dateLocale)).font(.subheadline).foregroundStyle(.secondary)
@@ -304,11 +289,11 @@ struct ActivityDashboardView: View {
     private var phraseList: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What moved forward").font(.headline)
-            if summary.phrases.isEmpty {
+            if report.phraseCount == 0 {
                 Label("Practice phrases to see their progress here.", systemImage: "rectangle.on.rectangle")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 20)
             }
-            ForEach(Array(summary.phrases.prefix(10))) { record in
+            ForEach(Array(report.recentPhrases)) { record in
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(record.phrase).font(.subheadline.weight(.medium))
@@ -320,9 +305,9 @@ struct ActivityDashboardView: View {
                         .foregroundStyle(levelColor(record.toLevel)).padding(7)
                         .background(levelColor(record.toLevel).opacity(0.12), in: Capsule())
                 }
-                if record.id != summary.phrases.prefix(10).last?.id { Divider() }
+                if record.id != report.recentPhrases.last?.id { Divider() }
             }
-            if summary.phrases.count > 10 { Text("Showing the 10 most recent phrases").font(.caption).foregroundStyle(.secondary) }
+            if report.phraseCount > 10 { Text("Showing the 10 most recent phrases").font(.caption).foregroundStyle(.secondary) }
         }.activityCard(surface)
     }
 
@@ -335,11 +320,9 @@ struct ActivityDashboardView: View {
         }
     }
     private var comparison: String {
-        let previousStart = calendar.date(byAdding: period.component, value: -1, to: interval.start)!
-        let previousEnd = calendar.date(byAdding: period.component, value: -1, to: min(now, interval.end))!
-        let previous = snapshot.summary(language: language, interval: .init(start: previousStart, end: previousEnd), now: now).words
+        let previous = report.previousWords
         guard previous > 0 else { return AppLanguage.text("First encounters in completed chapters") }
-        let delta = Int((Double(summary.words - previous) / Double(previous) * 100).rounded())
+        let delta = Int((Double(report.words - previous) / Double(previous) * 100).rounded())
         return AppLanguage.format("%+d%% vs. the same part of the previous period", delta)
     }
     private func move(_ direction: Int) {
@@ -353,12 +336,34 @@ struct ActivityDashboardView: View {
         return minutes >= 60 ? AppLanguage.format("%d h %d min", minutes / 60, minutes % 60)
             : AppLanguage.format("%d min", minutes)
     }
-    @MainActor private func refresh() async {
-        now = .now
+    @MainActor private func loadCached(_ selection: ActivityReportRequest) async {
         do {
-            let loaded = try await ActivitySnapshot.load(container: context.container)
+            let loaded = try await ActivityStatisticsCache.shared.report(container: context.container, request: selection)
+            let codes = await ActivityStatisticsCache.shared.languages()
             try Task.checkCancellation()
-            snapshot = loaded; error = nil; loading = false
+            guard selection == request else { return }
+            report = loaded; languageCodes = codes; preparedRequest = selection
+            error = nil; loading = false
+        } catch is CancellationError { } catch {
+            guard selection == request else { return }
+            self.error = error.localizedDescription; loading = false
+        }
+    }
+
+    @MainActor private func refresh() async {
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        do {
+            let selection = request
+            let loaded = try await ActivityStatisticsCache.shared.report(container: context.container, request: selection, refresh: true)
+            let codes = await ActivityStatisticsCache.shared.languages()
+            // UIKit may cancel the refresh task as its gesture/control finishes. A successful
+            // explicit load still replaces the cache and the visible results for this selection.
+            if selection == request {
+                report = loaded; languageCodes = codes; preparedRequest = selection
+                error = nil; loading = false
+            } else { await loadCached(request) }
         } catch is CancellationError { } catch { self.error = error.localizedDescription; loading = false }
     }
 }

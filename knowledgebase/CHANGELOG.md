@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-28 — Cached activity statistics with manual refresh
+
+- Stop the Activity screen’s 15-second polling and foreground-triggered database reloads. Reuse a persistent derived snapshot across launches and prepared in-memory reports across navigation. With no usable cache, build the initial snapshot once. A long pull down from the top explicitly refreshes the statistics; a timestamp and gesture hint explain when the displayed snapshot was captured.
+- Move language collection, database reads, decoding, aggregation, chart buckets, level counts, recent-phrase selection, calendar days and streak preparation off the UI executor. The screen renders bounded ready-to-display values without scanning managed dictionary entries or the activity history on each redraw.
+- Preserve the displayed results during refresh and after refresh failures. Coalesce concurrent loads, invalidate prepared reports after a successful explicit refresh and fall back to rebuilding an unavailable/corrupt cache. Canonicalize each source language once during word deduplication instead of once per word.
+- Verification: seven cache tests and twelve existing activity-history tests pass; dashboard UI coverage verifies frozen results after practice and updates after a long pull. Other day/week/month, language, empty-state and accessibility scenarios pass, as does the Russian iPad dashboard. A 30,000-event fixture exercises 100 prepared-cache reads without re-aggregation.
+- DECISIONS.md records the derived-cache and manual-refresh policy; PROJECT.md describes the supported refresh gesture.
+
 ## 2026-10-28 — Center the library Continue action
 
 - Move the Continue button below the featured book’s cover and metadata so it spans the full row, with its label and saved-position caption centered. This removes the offset caused by placing the button inside the right-hand metadata column. An explicit icon/text group also avoids the inherited List label layout shifting the caption.

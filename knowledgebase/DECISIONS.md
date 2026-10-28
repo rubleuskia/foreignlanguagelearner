@@ -1,5 +1,13 @@
 # Architectural and product decisions
 
+## Activity snapshots refresh explicitly (2026-10-28)
+
+Activity renders an immutable, timestamped snapshot. It does not poll or reread the database on foreground activation, tab returns, chart selection or period/language changes. The first request loads a versioned snapshot from the app’s private Caches/Activity/statistics-v1.json; only a missing, corrupt or incompatible cache causes an initial rebuild. A native pull-to-refresh from the top of the screen explicitly fetches current data in the background and replaces the snapshot. A last-updated label and gesture hint make staleness visible. Recorded training and reading history continues to save as before.
+
+A dedicated actor owns the source snapshot and a bounded 96-entry in-memory cache of prepared reports keyed by canonical language, normalized period start and calendar/timezone/locale. SwiftData reads, JSON decoding/writing, word deduplication, language discovery and all history aggregation stay off the main actor. Report payloads contain only scalar totals, at most 31 chart buckets (23–25 for a DST day), three level counts, ten recent phrases and a day set. The dashboard no longer observes entire book/dictionary queries or recomputes history-derived values in its body. Source-language discovery uses projected background fetches; per-word JSON key encoding and repeated language canonicalization are removed.
+
+An explicit refresh clears prepared reports only after a successful replacement. Concurrent requests share their in-flight load; a refresh waiting on an initial disk read still performs a fresh database read. Failed refreshes retain the last usable snapshot in memory and on disk. Cache files are disposable derived data, excluded from portable backups, and write failure does not block displaying successfully read statistics. No persisted learning/history schema, metrics or backup contract changes.
+
 ## Local activity history and counting (2026-10-28)
 
 Activity is a fourth native tab with a language filter shared with Dictionary/Practice. Unlike training availability, its selector also includes historical activity languages after source deletion. Periods use the current device calendar/timezone with Monday-based weeks. Charts show hourly reading-word buckets for a day and daily buckets for weeks/months. Comparisons use the same elapsed portion of the preceding period. The calendar marks any recorded reading, audio or phrase-level change; a streak can end yesterday while today is unfinished.
