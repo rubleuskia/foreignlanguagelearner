@@ -158,12 +158,19 @@ struct BookLibraryShelf: View {
                                 }.buttonStyle(.plain)
                                 metadata(recent)
                                 progress(recent)
-                                Button { resume(recent) } label: { Label("Continue", systemImage: "play.fill").lineLimit(1).minimumScaleFactor(0.5).frame(maxWidth: .infinity) }
-                                    .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: 12))
-                                    .accessibilityIdentifier("library.continue")
-                                BookResumeLabel(item: recent).font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        Button { resume(recent) } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill").accessibilityHidden(true)
+                                Text("Continue").lineLimit(1).minimumScaleFactor(0.5)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: 12))
+                        .accessibilityIdentifier("library.continue")
+                        BookResumeLabel(item: recent).font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }.padding(.vertical, 8)
                 } header: { Text("Continue reading").font(.title2.bold()).foregroundStyle(.white).textCase(nil) }
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)

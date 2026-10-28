@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-28 — Center the library Continue action
+
+- Move the Continue button below the featured book’s cover and metadata so it spans the full row, with its label and saved-position caption centered. This removes the offset caused by placing the button inside the right-hand metadata column. An explicit icon/text group also avoids the inherited List label layout shifting the caption.
+- No architectural/product decision or project overview changed.
+
 ## 2026-10-28 — User activity dashboard
 
 - Added a dark native Activity tab with day/week/month navigation, language selection, new reading words, distinct phrases advanced, phrases reaching level 4, time with books, interactive word charts, a monthly activity calendar, a current streak and recent phrase transitions. iPad uses a two-column layout; Russian/English and accessibility text sizes are supported.
