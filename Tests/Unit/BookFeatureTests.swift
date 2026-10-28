@@ -242,7 +242,7 @@ final class BookFeatureTests: XCTestCase {
         let configuration = ModelConfiguration(url: store)
         let legacyID = UUID(), bookID = UUID(), dictionaryID = UUID()
         do {
-            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                                configurations: configuration)
             let legacy = LearningItem(id: legacyID, title: "Legacy", mediaKind: "video",
                                       mediaFilename: "media.mp4", transcriptFilename: "text.srt",
@@ -260,7 +260,7 @@ final class BookFeatureTests: XCTestCase {
             container.mainContext.insert(legacy); container.mainContext.insert(entry); container.mainContext.insert(book)
             try container.mainContext.save()
         }
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                           configurations: ModelConfiguration(url: store))
         let items = try reopened.mainContext.fetch(FetchDescriptor<LearningItem>())
         XCTAssertEqual(Set(items.map(\.id)), [legacyID, bookID])

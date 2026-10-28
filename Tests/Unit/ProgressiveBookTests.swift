@@ -25,7 +25,7 @@ final class ProgressiveBookTests: XCTestCase {
     }
 
     @MainActor private func database() throws -> ModelContainer {
-        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 

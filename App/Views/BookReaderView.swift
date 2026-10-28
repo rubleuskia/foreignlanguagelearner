@@ -74,6 +74,7 @@ struct BookReaderView: View {
                 allowed: item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
                 .id(showAudioTip)
         }
+        .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.playback.player.timeControlStatus == .playing })
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)

@@ -31,7 +31,7 @@ struct ForeignLanguageLearnerApp: App {
                 !ProcessInfo.processInfo.arguments.contains("--test-russian-ui")
                     ? "en" : AppLanguage.resolved(selectedLanguage)))
         }
-            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
+            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
             .environment(translationCoordinator)
             .environment(readingVocabulary)
             .environment(\.contextAnalysisService, contextAnalysisService)

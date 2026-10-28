@@ -11,6 +11,7 @@ struct LibraryBackupDocument: Codable {
     let settings: Settings
     let round: LearningRoundState?
     var rounds: [String: LearningRoundState]? = nil
+    var activity: [ActivityRecord]? = nil
     let wordExplanations: [WordExplanationCache.Record]
 
     struct Book: Codable {
@@ -156,6 +157,7 @@ enum LibraryBackupError: LocalizedError {
         if let legacy = savedRound.flatMap({ LearningRoundCheckpoint.validated($0, entries: entries) }), let code = legacy.sourceLanguage {
             document.rounds?[code] = legacy
         }
+        document.activity = try context.fetch(FetchDescriptor<UserActivityEvent>()).map(\.record)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(document)
         _ = try decode(data)
@@ -188,6 +190,12 @@ enum LibraryBackupError: LocalizedError {
         }
         if let language = document.settings.newBookSourceLanguage, !SourceLanguage.isSupported(language) {
             throw LibraryBackupError.invalid("Invalid new-book source language preference.")
+        }
+        if let activity = document.activity {
+            guard activity.count <= 500_000, Set(activity.map(\.id)).count == activity.count,
+                  activity.allSatisfy({ $0.isValid && SourceLanguage.canonical($0.language) == $0.language }) else {
+                throw LibraryBackupError.invalid("Invalid activity history.")
+            }
         }
         for record in document.wordExplanations {
             guard validHash(record.key) else { throw LibraryBackupError.invalid("Invalid word explanation key.") }
@@ -273,6 +281,15 @@ enum LibraryBackupError: LocalizedError {
             throw LibraryBackupError.invalid("Library changed. Import the matching books and review the backup again.")
         }
         try context.save()
+        let existingActivity = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<UserActivityEvent>()).map { ($0.id, $0.record) })
+        for incoming in document.activity ?? [] {
+            if var existing = existingActivity[incoming.id] {
+                var normalized = incoming
+                existing.reverted = false; normalized.reverted = false
+                if existing.kind == "time" { existing.seconds = 0; normalized.seconds = 0 }
+                guard existing == normalized else { throw LibraryBackupError.invalid("Conflicting activity identity.") }
+            }
+        }
         let items = try context.fetch(FetchDescriptor<LearningItem>())
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         let rollback = items.map { item in
@@ -318,6 +335,16 @@ enum LibraryBackupError: LocalizedError {
                 for entry in try context.fetch(FetchDescriptor<DictionaryEntry>()) where incomingIDs.contains(entry.id) {
                     if let id = fresh.matches[entry.sourceItemID] { entry.sourceItemID = id }
                     if let old = entry.localSourceItemID, let id = fresh.matches[old] { entry.localSourceItemID = id }
+                }
+                // Merge growing time records and undo tombstones without duplicating history.
+                let localEvents = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<UserActivityEvent>()).map { ($0.id, $0) })
+                for record in document.activity ?? [] {
+                    if let local = localEvents[record.id] {
+                        local.reverted = local.reverted || record.reverted
+                        if record.kind == "time" { local.seconds = max(local.seconds, record.seconds) }
+                    } else {
+                        context.insert(UserActivityEvent(record))
+                    }
                 }
                 try save(context)
             })

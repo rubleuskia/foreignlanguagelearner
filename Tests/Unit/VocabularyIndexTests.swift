@@ -133,7 +133,7 @@ final class VocabularyIndexTests: XCTestCase {
     }
 
     @MainActor func testLargeDistinctCompletionUsesBoundedWritesAndRestoresFromBackup() async throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let store = ReadingVocabularyStore()
         let text = (0..<50_000).map(uniqueForm).joined(separator: " ")
@@ -159,7 +159,7 @@ final class VocabularyIndexTests: XCTestCase {
         let exported = try DictionaryTransferService.export(entries: [], includeContext: true, readingWords: ReadingKnowledge.words(context: container.mainContext))
         let document = try DictionaryTransferService.decode(exported.data)
         XCTAssertEqual(document.readingVocabulary?.words.count, 50_000)
-        let restored = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let restored = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let preview = DictionaryTransferService.preview(document: document, mode: .restore, existing: [], existingVocabulary: [])
         _ = try DictionaryTransferService.apply(preview, context: restored.mainContext)
@@ -178,7 +178,7 @@ final class VocabularyIndexTests: XCTestCase {
             original.mainContext.insert(ReadVocabularyWord(languageCode: "pl", normalizedForm: "kot", firstLearnedAt: Date(timeIntervalSince1970: 10)))
             try original.mainContext.save()
         }
-        let upgraded = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let upgraded = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                          configurations: ModelConfiguration(url: url))
         let store = ReadingVocabularyStore()
         await store.start(context: upgraded.mainContext)
@@ -186,14 +186,14 @@ final class VocabularyIndexTests: XCTestCase {
         XCTAssertEqual(store.forms(for: "pl"), ["kot"])
         ReadingKnowledge.insert(try ReadingKnowledge.encode(["pies"]), language: "pl", context: upgraded.mainContext)
         try upgraded.mainContext.save()
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                          configurations: ModelConfiguration(url: url))
         XCTAssertEqual(try ReadingKnowledge.forms(context: reopened.mainContext)["pl"], ["kot", "pies"])
         XCTAssertEqual(try ReadingKnowledge.words(context: reopened.mainContext).first { $0.normalizedForm == "kot" }?.firstLearnedAt, Date(timeIntervalSince1970: 10))
     }
 
     @MainActor func testBatchKnowledgeEarlierRestoreDateAndFailedSave() async throws {
-        let db = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let db = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                    configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         db.mainContext.insert(ReadVocabularyBatch(language: "pl", formsData: try JSONEncoder().encode(["kot"]), firstLearnedAt: Date(timeIntervalSince1970: 100)))
         try db.mainContext.save()

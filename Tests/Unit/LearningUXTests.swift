@@ -281,7 +281,7 @@ final class LearningUXTests: XCTestCase {
         let id: UUID
         var checkpoint: Data
         do {
-            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+            let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                                configurations: configuration)
             let context = ModelContext(container)
             let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -302,7 +302,7 @@ final class LearningUXTests: XCTestCase {
             XCTAssertFalse(round.isComplete)
             checkpoint = try JSONEncoder().encode(round)
         }
-        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let reopened = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: configuration)
         let entries = try ModelContext(reopened).fetch(FetchDescriptor<DictionaryEntry>())
         XCTAssertEqual(entries.first(where: { $0.id == id })?.learningLevel, 3)
@@ -428,7 +428,7 @@ final class LearningUXTests: XCTestCase {
 
     @MainActor
     func testPreviewSuccessFailureRetryDismissAndLateResponseDoNotMutatePersistence() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",

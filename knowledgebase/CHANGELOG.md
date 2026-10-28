@@ -1,5 +1,14 @@
 # Project changelog
 
+## 2026-10-28 — User activity dashboard
+
+- Added a dark native Activity tab with day/week/month navigation, language selection, new reading words, distinct phrases advanced, phrases reaching level 4, time with books, interactive word charts, a monthly activity calendar, a current streak and recent phrase transitions. iPad uses a two-column layout; Russian/English and accessibility text sizes are supported.
+- Word counts reuse earliest recorded reading-form dates, deduplicated by canonical source language. Phrase history starts with this update and records practice, preview and manual level changes atomically; cancelled answers do not count. Each phrase appears once at its highest attained level, alongside the number of promotion events.
+- Time records wall time with an open foreground reader or actual background audio, counting simultaneous reading/listening once and excluding suspended intervals. No past time or level history is inferred.
+- Independent local activity records survive deleting books/phrases and travel in optional library-backup history. Repeated restores merge stable identities, growing session time and undo tombstones. Old backups remain readable; dictionary-only exports retain their existing scope.
+- Verification: 221 unit tests and five Activity UI scenarios passed on iPhone; existing tab-navigation regression passed. Twelve activity unit tests and the Russian day/week/month dashboard UI scenario passed on iPad, including screenshots.
+- DECISIONS.md records counting, retention, timing and backup rules; PROJECT.md includes the new supported workflow.
+
 ## 2026-10-28 — Book library redesign and local covers
 
 - Replaced library rows with image-led dark layouts, blue primary actions and filters, green reading-progress bars, title search and recent/title sorting. Library, Dictionary and Practice remain available.

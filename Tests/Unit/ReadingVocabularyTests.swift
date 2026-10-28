@@ -53,7 +53,7 @@ final class ReadingVocabularyTests: XCTestCase {
     }
 
     @MainActor private func container() throws -> ModelContainer {
-        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
