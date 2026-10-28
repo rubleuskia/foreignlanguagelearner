@@ -88,6 +88,7 @@ struct ReaderView: View {
         }
         .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
         .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: item.hasText && !selecting && translationPreview == nil) }
+        .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.player.timeControlStatus == .playing })
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)

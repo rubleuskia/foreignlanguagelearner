@@ -537,8 +537,10 @@ struct DictionaryEntryDetailView: View {
         let previousDate = entry.levelChangedAt
         entry.learningLevel = level
         entry.levelChangedAt = .now
+        let activity = ActivityHistory.levelChange(entry: entry, from: previousLevel, origin: "manual")
         do { try context.save() }
         catch {
+            if let activity { context.delete(activity) }
             entry.learningLevel = previousLevel
             entry.levelChangedAt = previousDate
             errorMessage = error.localizedDescription

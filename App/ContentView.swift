@@ -21,6 +21,8 @@ struct ContentView: View {
                 .tabItem { Label("Dictionary", systemImage: "book.closed") }
             NavigationStack { PracticeHomeView() }
                 .tabItem { Label("Practice", systemImage: "rectangle.on.rectangle") }
+            NavigationStack { ActivityDashboardView() }
+                .tabItem { Label("Activity", systemImage: "chart.bar.xaxis") }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tint(.blue)
@@ -31,6 +33,8 @@ struct ContentView: View {
             } catch { errorMessage = error.localizedDescription }
             seedLearningUXFixtureIfNeeded()
             #if DEBUG
+            do { try ActivityUIFixture.seed(context: context) }
+            catch { errorMessage = error.localizedDescription }
             do { try ProgressiveBookUIFixture.seed(context: context) }
             catch { errorMessage = error.localizedDescription }
             do { try ReadingVocabularyUIFixture.seed(context: context) }

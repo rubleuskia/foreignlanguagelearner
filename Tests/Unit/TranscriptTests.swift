@@ -144,7 +144,7 @@ final class TranscriptTests: XCTestCase {
     }
 
     @MainActor func testDictionaryPersistsMultiwordSelectionAndSource() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Lesson", mediaKind: "audio", mediaFilename: "media.m4a", transcriptFilename: "transcript.srt", duration: 10, segments: [])
         let entry = DictionaryEntry(text: "  dzień\n dobry 🌍  ", item: item, segmentIndex: 2)
@@ -158,7 +158,7 @@ final class TranscriptTests: XCTestCase {
     }
 
     @MainActor func testDictionaryPersistsAudioRange() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Lesson", mediaKind: "audio", mediaFilename: "media.m4a",

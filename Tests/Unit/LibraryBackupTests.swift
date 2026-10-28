@@ -5,7 +5,7 @@ import XCTest
 
 final class LibraryBackupTests: XCTestCase {
     @MainActor private func container(url: URL? = nil) throws -> ModelContainer {
-        let schema = Schema([LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self])
+        let schema = Schema([LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self])
         let configuration = url.map { ModelConfiguration(schema: schema, url: $0) }
             ?? ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])

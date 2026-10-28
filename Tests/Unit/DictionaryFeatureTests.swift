@@ -105,7 +105,7 @@ final class DictionaryFeatureTests: XCTestCase {
     }
 
     @MainActor func testDictionaryJSONRoundTripAndTranslationOnlyImport() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -185,7 +185,7 @@ final class DictionaryFeatureTests: XCTestCase {
     }
 
     @MainActor func testContextAnalysisPersistsWithDictionaryEntry() throws {
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         let item = LearningItem(id: UUID(), title: "Story", mediaKind: "audio",
@@ -307,7 +307,7 @@ extension DictionaryFeatureTests {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let schema = Schema([LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self])
+        let schema = Schema([LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self])
         let configuration = ModelConfiguration(schema: schema, url: directory.appending(path: "dictionary.store"))
         do {
             let container = try ModelContainer(for: schema, configurations: [configuration])
@@ -367,7 +367,7 @@ extension DictionaryFeatureTests {
         let (_, entry) = backupFixture()
         let document = try DictionaryTransferService.decode(
             DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []).data)
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
         context.insert(entry)
@@ -413,7 +413,7 @@ extension DictionaryFeatureTests {
         entries[0]["createdAt"] = "2026-10-17T16:29:03Z"
         root["entries"] = entries
         let document = try DictionaryTransferService.decode(JSONSerialization.data(withJSONObject: root))
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let preview = DictionaryTransferService.preview(document: document, mode: .merge, existing: [])
         _ = try DictionaryTransferService.apply(preview, context: container.mainContext)
@@ -458,7 +458,7 @@ extension DictionaryFeatureTests {
         entry.translationStatus = .translating
         let document = try DictionaryTransferService.decode(
             DictionaryTransferService.export(entries: [entry], includeContext: true, diagnosticEvents: []).data)
-        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self,
+        let container = try ModelContainer(for: LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let preview = DictionaryTransferService.preview(document: document, mode: .restore, existing: [])
         let pending = try DictionaryTransferService.apply(preview, context: container.mainContext)

@@ -125,12 +125,14 @@ enum LearningAnswerTransaction {
         let promotionBlocked = right && (round.wrongAttemptsByEntry?[entry.id] ?? 0) >= 4
         entry.learningLevel = promotionBlocked ? previousLevel : LearningLevel.adjusted(previousLevel, correct: right)
         if entry.learningLevel != previousLevel { entry.levelChangedAt = .now }
+        let activity = ActivityHistory.levelChange(entry: entry, from: previousLevel, origin: "practice")
         do {
             try save()
             _ = round.recordAnswer(entryID: expectedEntryID,
                                    presentationID: presentationID, right: right)
             return true
         } catch {
+            if let activity { entry.modelContext?.delete(activity) }
             entry.learningLevel = previousLevel
             entry.levelChangedAt = previousDate
             throw error
@@ -204,14 +206,16 @@ enum LearningPreviewTransaction {
         case .moveToNextLevel: entry.learningLevel = LearningLevel.adjusted(oldLevel, correct: true)
         case .markAsKnown: entry.learningLevel = 4
         }
+        if entry.learningLevel != oldLevel { entry.levelChangedAt = .now }
+        let activity = ActivityHistory.levelChange(entry: entry, from: oldLevel, origin: "preview")
         do {
             if entry.learningLevel != oldLevel {
-                entry.levelChangedAt = .now
                 try save()
             }
             return preview.advance(entryID: entry.id, presentationID: presentationID,
                                    learn: action == .startLearning)
         } catch {
+            if let activity { entry.modelContext?.delete(activity) }
             entry.learningLevel = oldLevel
             entry.levelChangedAt = oldDate
             throw error
@@ -253,6 +257,8 @@ struct LearningAnswerUndo {
               round.sourceLanguage == nil || SourceLanguage.canonical(entry.sourceLanguageCode) == round.sourceLanguage,
               round == answeredRound else { return false }
         let savedDate = entry.levelChangedAt
+        let activity = previousLevel != savedLevel ? try ActivityHistory.event(entry: entry, date: savedLevelChangedAt) : nil
+        activity?.reverted = true
         entry.learningLevel = previousLevel
         entry.levelChangedAt = previousLevelChangedAt
         do {
@@ -261,6 +267,7 @@ struct LearningAnswerUndo {
             round.renewPresentation()
             return true
         } catch {
+            activity?.reverted = false
             entry.learningLevel = savedLevel
             entry.levelChangedAt = savedDate
             throw error
