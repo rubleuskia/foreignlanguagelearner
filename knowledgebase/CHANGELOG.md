@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-28 — Responsive practice translation editing
+
+- Give the practice translation editor its own draft and presentation state. Opening it and typing no longer invalidate the entire practice card, which synchronously resolves phrase audio and loads/decodes source transcripts. Skip audio teardown when no audio is open.
+- Preserve Save/Cancel behavior in preview and active rounds; display save failures inside the editor and retain the draft for retry. The editor can expand to a large sheet above the keyboard.
+- Verification: 32 learning unit tests and two UI scenarios pass on the iOS 26.5 iPhone 17 Pro simulator, including typing, cancelling, reopening, saving and continuing a round on a card with audio. Physical-device hang durations have not been measured.
+- No architectural/product decision or project overview changed.
+
 ## 2026-10-28 — Cached activity statistics with manual refresh
 
 - Stop the Activity screen’s 15-second polling and foreground-triggered database reloads. Reuse a persistent derived snapshot across launches and prepared in-memory reports across navigation. With no usable cache, build the initial snapshot once. A long pull down from the top explicitly refreshes the statistics; a timestamp and gesture hint explain when the displayed snapshot was captured.
