@@ -171,7 +171,7 @@ struct LearningSessionView: View {
                     LabeledContent("Current level", value: "\(level)")
                 }
                 DisclosureGroup("How practice works") {
-                    Text("Preview phrases first. Practice starts at the lowest available level; wrong answers return to the queue. After Check, swipe left for Right or right for Wrong. Undo is available for 3 seconds.")
+                    Text("Preview phrases first. Practice starts at the lowest available level; wrong answers return to the queue. Tap the card to reveal, then swipe left for Right or right for Wrong. Undo is available for 3 seconds.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
             }
@@ -222,6 +222,23 @@ struct LearningSessionView: View {
                     .foregroundStyle(.secondary)
                 }
 
+                if preview == nil, revealed, round != nil {
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            Label("Swipe left: Right", systemImage: "arrow.left")
+                            Spacer(minLength: 8)
+                            Label("Swipe right: Wrong", systemImage: "arrow.right")
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Swipe left: Right", systemImage: "arrow.left")
+                            Label("Swipe right: Wrong", systemImage: "arrow.right")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("learn.swipe-hint")
+                }
+
                 HStack(alignment: .center, spacing: 16) {
                     Text(entry.translationText ?? "")
                         .font(.largeTitle)
@@ -229,6 +246,11 @@ struct LearningSessionView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("learn.translation")
+                        .contentShape(Rectangle())
+                        .onTapGesture { revealed.toggle() }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint(AppLanguage.text("Tap to flip the card"))
+                        .accessibilityAction { revealed.toggle() }
                     LearningTranslationEditButton(entry: entry, beforeEditing: {
                         if openedAudioIdentity != nil { closeAudio() }
                     }) { value in
@@ -274,9 +296,10 @@ struct LearningSessionView: View {
                     }
                 } else {
                     Button { revealed = true } label: {
-                        Text("Check").frame(maxWidth: .infinity)
+                        Label("Tap the card to reveal", systemImage: "hand.tap")
+                            .frame(maxWidth: .infinity, minHeight: 64)
                     }
-                        .nativePrimaryAction()
+                        .nativeSecondaryAction()
                         .accessibilityIdentifier("learn.check")
                 }
                 if let preview, dynamicTypeSize.isAccessibilitySize,
@@ -287,6 +310,8 @@ struct LearningSessionView: View {
             .frame(maxWidth: 620)
             .padding(24)
             .background(NativeDesign.surface, in: RoundedRectangle(cornerRadius: NativeDesign.cornerRadius))
+            .contentShape(RoundedRectangle(cornerRadius: NativeDesign.cornerRadius))
+            .onTapGesture { if !revealed { revealed = true } }
             .padding(20)
             .frame(maxWidth: .infinity)
         }
@@ -658,6 +683,8 @@ struct LearningSessionView: View {
         } else {
             playback.open(url: source.identity.url, position: source.identity.range.lowerBound,
                           range: source.identity.range)
+            playback.mediaTitle = source.itemTitle
+            playback.mediaSubtitle = AppLanguage.text("Phrase audio")
             openedAudioIdentity = source.identity
             playback.play()
         }

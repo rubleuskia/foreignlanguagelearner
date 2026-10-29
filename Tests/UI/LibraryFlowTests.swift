@@ -139,7 +139,7 @@ final class LibraryFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["learn.check"].exists)
         app.buttons["learn.preview-learn"].tap()
 
-        XCTAssertTrue(app.staticTexts["learn.translation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["learn.translation"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["learn.original"].exists,
                        "The original must stay hidden before Check")
         XCTAssertFalse(app.buttons["learn.generate-context"].exists)
@@ -189,11 +189,16 @@ final class LibraryFlowTests: XCTestCase {
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
-        let translation = app.staticTexts["learn.translation"]
+        let translation = app.buttons["learn.translation"]
         translation.swipeLeft()
         XCTAssertTrue(app.buttons["learn.check"].exists)
         XCTAssertFalse(app.buttons["learn.undo"].exists)
-        app.buttons["learn.check"].tap()
+        translation.tap()
+        XCTAssertTrue(app.staticTexts["learn.original"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.descendants(matching: .any)["learn.swipe-hint"].firstMatch.exists)
+        translation.tap()
+        XCTAssertFalse(app.staticTexts["learn.original"].exists)
+        translation.tap()
         translation.swipeRight()
         app.buttons["learn.undo"].tap()
         XCTAssertTrue(app.staticTexts["learn.original"].exists)
@@ -228,7 +233,7 @@ final class LibraryFlowTests: XCTestCase {
         app.swipeUp()
         useTranslation.tap()
         app.swipeDown()
-        XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
+        XCTAssertEqual(app.buttons["learn.translation"].label, "здравствуйте")
         XCTAssertFalse(useTranslation.exists)
         app.buttons["Close"].tap()
         app.buttons["dictionary.learn"].tap()
@@ -236,7 +241,7 @@ final class LibraryFlowTests: XCTestCase {
         if !app.buttons["learn.start"].isHittable { app.swipeUp() }
         app.buttons["learn.start"].tap()
         app.buttons["learn.preview-learn"].tap()
-        XCTAssertEqual(app.staticTexts["learn.translation"].label, "здравствуйте")
+        XCTAssertEqual(app.buttons["learn.translation"].label, "здравствуйте")
     }
 
     @MainActor

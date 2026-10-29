@@ -33,6 +33,6 @@ final class WordExplanationFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Простыми словами"].exists)
         word.tap()
         XCTAssertTrue(app.staticTexts["Простыми словами"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["learn.translation"].label, "добрый день")
+        XCTAssertEqual(app.buttons["learn.translation"].label, "добрый день")
     }
 }

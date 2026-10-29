@@ -41,6 +41,7 @@ struct TranscriptTextView: UIViewRepresentable {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
+    var fontScale = 1.0
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
@@ -148,6 +149,7 @@ struct TranscriptTextView: UIViewRepresentable {
         private var appliedWordRanges: [NSRange] = []
         private var appliedWordUnderline = false
         private var appliedWordLanguage = ""
+        private var appliedFontScale: Double?
         private var appliedContentSizeCategory: UIContentSizeCategory?
         private var appliedWindow: NSRange?
         private var appliedIndexIdentity: ObjectIdentifier?
@@ -437,16 +439,24 @@ struct TranscriptTextView: UIViewRepresentable {
             let category = view.traitCollection.preferredContentSizeCategory
             guard appliedWordRevision != parent.wordStyleRevision
                     || appliedWordUnderline != parent.differentiateWithoutColor
-                    || appliedContentSizeCategory != category || appliedWindow != window
+                    || appliedContentSizeCategory != category || appliedFontScale != parent.fontScale || appliedWindow != window
                     || appliedIndexIdentity != identity || appliedWordLanguage != parent.wordStyleLanguage else { return }
             let ranges = parent.vocabularyIndex?.unknownRanges(in: window, known: parent.knownForms)
                 ?? parent.unknownWordRanges
             appliedWindow = window
             appliedIndexIdentity = identity
             isApplyingProgrammaticUpdate = true
-            if appliedContentSizeCategory != category {
+            if appliedContentSizeCategory != category || appliedFontScale != parent.fontScale {
+                if appliedFontScale != nil, !parent.following, pendingReadingOffset == nil {
+                    let point = CGPoint(x: view.textContainerInset.left + 1,
+                                        y: view.contentOffset.y + view.adjustedContentInset.top + 1)
+                    if let position = view.closestPosition(to: point) {
+                        pendingReadingOffset = view.offset(from: view.beginningOfDocument, to: position)
+                    }
+                }
+                followKey = nil
                 view.textStorage.addAttributes([
-                    .font: ReadingTypography.font(compatibleWith: view.traitCollection),
+                    .font: ReadingTypography.font(compatibleWith: view.traitCollection, scale: parent.fontScale),
                     .paragraphStyle: ReadingTypography.paragraph(compatibleWith: view.traitCollection)
                 ], range: NSRange(location: 0, length: length))
             }
@@ -457,6 +467,7 @@ struct TranscriptTextView: UIViewRepresentable {
             appliedWordUnderline = parent.differentiateWithoutColor
             appliedWordLanguage = parent.wordStyleLanguage
             appliedContentSizeCategory = category
+            appliedFontScale = parent.fontScale
         }
 
         private func updateHighlight(in view: UITextView) {
