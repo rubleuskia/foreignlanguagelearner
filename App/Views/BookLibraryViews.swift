@@ -104,8 +104,21 @@ struct BookLibraryShelf: View {
     let recent: LearningItem?
     let resume: (LearningItem) -> Void
     let delete: (IndexSet) -> Void
-    @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Query private var entries: [DictionaryEntry]
+
+    var body: some View {
+        // The search field lives below this boundary, so typing does not regroup the dictionary.
+        let phraseCounts = Dictionary(grouping: entries, by: \.sourceItemID).mapValues(\.count)
+        BookLibraryShelfContent(items: items, recent: recent, resume: resume, delete: delete, phraseCounts: phraseCounts)
+    }
+}
+
+private struct BookLibraryShelfContent: View {
+    let items: [LearningItem]
+    let recent: LearningItem?
+    let resume: (LearningItem) -> Void
+    let delete: (IndexSet) -> Void
+    let phraseCounts: [UUID: Int]
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var search = ""
     @State private var filter = 0
@@ -124,7 +137,6 @@ struct BookLibraryShelf: View {
     }
 
     var body: some View {
-        let phraseCounts = Dictionary(grouping: entries, by: \.sourceItemID).mapValues(\.count)
         List {
             Section {
                 HStack {

@@ -100,14 +100,14 @@ struct BookReaderView: View {
             mode = initial?.alignmentStatus.hasTimedTranscript == true ? .track : .full
             playback.open(item: item)
             playback.didFinishTrack = { id in completeTrack(id) }
-            loadFullText()
         }
+        .task(id: transcriptTrack) { await loadTrackTranscript() }
+        .task(id: item.transcriptFilename) { await loadFullText() }
         .onChange(of: playback.activeTrackID) { _, _ in
             scrubbing = false
             scrubPosition = playback.localPosition
             followGeneration += 1
             following = true
-            loadTrackTranscript()
             if activeTrack?.alignmentStatus.hasTimedTranscript != true { mode = .full }
             showAudioTip = false
         }
@@ -261,24 +261,49 @@ struct BookReaderView: View {
         return PhraseAudioTiming.range(for: selectionRange, in: document, duration: track.duration)
     }
 
-    private func loadTrackTranscript() {
-        guard let track = activeTrack, track.alignmentStatus.hasTimedTranscript,
-              trackDocuments[track.id] == nil, track.subtitleFilename != nil else { return }
-        do {
-            trackDocuments[track.id] = try TrackTranscriptLoader.load(
-                track: track, directory: MediaImportService.directory(for: item.id))
-            transcriptError = nil
-        } catch { transcriptError = error.localizedDescription }
+    /// Ignore playhead/completion changes when deciding whether a transcript needs loading.
+    private var transcriptTrack: LearningTrack? {
+        guard var track = activeTrack else { return nil }
+        track.lastPosition = 0
+        track.isCompleted = false
+        return track
     }
 
-    private func loadFullText() {
-        guard !item.transcriptFilename.isEmpty else { loadTrackTranscript(); return }
+    private func loadTrackTranscript() async {
+        guard let track = transcriptTrack, track.alignmentStatus.hasTimedTranscript,
+              trackDocuments[track.id] == nil, track.subtitleFilename != nil else { return }
+        let directory = MediaImportService.directory(for: item.id)
+        let worker = Task.detached(priority: .userInitiated) {
+            try TrackTranscriptLoader.load(track: track, directory: directory)
+        }
         do {
-            let url = MediaImportService.directory(for: item.id).appending(path: item.transcriptFilename)
-            fullDocument = try TranscriptParser.parse(String(contentsOf: url, encoding: .utf8), extension: "txt")
+            let value = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+            try Task.checkCancellation()
+            trackDocuments[track.id] = value
+            transcriptError = nil
+        } catch is CancellationError { }
+        catch {
+            guard !Task.isCancelled else { return }
+            transcriptError = error.localizedDescription
+        }
+    }
+
+    private func loadFullText() async {
+        guard !item.transcriptFilename.isEmpty, fullDocument == nil else { return }
+        let url = MediaImportService.directory(for: item.id).appending(path: item.transcriptFilename)
+        let worker = Task.detached(priority: .userInitiated) {
+            try TranscriptParser.parse(String(contentsOf: url, encoding: .utf8), extension: "txt")
+        }
+        do {
+            let value = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+            try Task.checkCancellation()
+            fullDocument = value
             fullTextError = nil
-        } catch { fullTextError = error.localizedDescription }
-        loadTrackTranscript()
+        } catch is CancellationError { }
+        catch {
+            guard !Task.isCancelled else { return }
+            fullTextError = error.localizedDescription
+        }
     }
 
     private func updateWordTimings(from url: URL) {
@@ -292,7 +317,7 @@ struct BookReaderView: View {
                     let entries = try context.fetch(FetchDescriptor<DictionaryEntry>())
                     let updated = try WordTimingUpdateCommit.apply(prepared, to: item, entries: entries) { try context.save() }
                     trackDocuments.removeAll()
-                    loadTrackTranscript()
+                    await loadTrackTranscript()
                     translationCache = SelectionTranslationCache()
                     message = "Phrase audio updated for \(prepared.filenames.count) tracks and \(updated) saved phrases. Words without usable timings still play their context."
                 } catch {

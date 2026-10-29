@@ -136,6 +136,109 @@ final class NativeDesignFlowTests: XCTestCase {
         app.buttons["Cancel"].tap()
     }
 
+    @MainActor func testTranslationEditingWithAudioPreservesDraftAndRound() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture",
+                               "--audio-boundary-fixture", "--dual-audio-fixture"]
+        app.launch()
+        app.tabBars.buttons["Practice"].tap()
+        app.buttons["practice.quick-start"].tap()
+        XCTAssertTrue(app.buttons["learn.play-audio"].waitForExistence(timeout: 5))
+        let translation = app.staticTexts["learn.translation"]
+        let initial = translation.label
+        let editor = app.textViews["learn.translation-editor"]
+        @discardableResult
+        func insert(_ text: String, into previous: String) -> String {
+            editor.tap()
+            editor.typeText(text)
+            let value = editor.value as? String ?? ""
+            XCTAssertTrue(value.contains(text))
+            XCTAssertEqual(value.replacingOccurrences(of: text, with: ""), previous)
+            return value
+        }
+
+        // Preview exposes the audio panel, the expensive part of the underlying card.
+        app.buttons["learn.edit"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, initial)
+        insert(" preview draft", into: initial)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
+        XCTAssertEqual(translation.label, initial)
+
+        app.buttons["learn.edit"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, initial)
+        let saved = insert(" saved", into: initial).trimmingCharacters(in: .whitespacesAndNewlines)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
+        XCTAssertEqual(translation.label, saved)
+
+        app.buttons["learn.preview-learn"].tap()
+        XCTAssertTrue(app.buttons["learn.check"].waitForExistence(timeout: 5))
+        app.buttons["learn.check"].tap()
+        XCTAssertTrue(app.buttons["learn.play-audio"].waitForExistence(timeout: 5))
+        app.buttons["learn.edit"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String, saved)
+        let roundSaved = insert(" round", into: saved).trimmingCharacters(in: .whitespacesAndNewlines)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["learn.right"].waitForExistence(timeout: 5))
+        XCTAssertEqual(translation.label, roundSaved)
+        XCTAssertTrue(app.staticTexts["learn.original"].exists)
+        app.buttons["learn.right"].tap()
+        XCTAssertTrue(app.staticTexts["Round complete"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testDictionaryTranslationAndNotesWithAudioPersistAfterReopening() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--audio-boundary-fixture",
+                               "--editing-context-fixture", "--word-explanation-fixture"]
+        app.launch()
+        app.tabBars.buttons["Dictionary"].tap()
+        let card = app.buttons["dictionary.entry.Kot"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.buttons["dictionary.play-audio"].waitForExistence(timeout: 5))
+        app.buttons["Edit"].tap()
+        let translation = app.textViews["dictionary.translation-editor"]
+        XCTAssertTrue(translation.waitForExistence(timeout: 5))
+        translation.tap()
+        translation.typeText("updated ")
+        let updated = (translation.value as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(updated.contains("updated"))
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["dictionary.detail-translation"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["dictionary.detail-translation"].label, updated)
+
+        let meaning = app.textFields["dictionary.meaning-editor"]
+        for _ in 0..<8 {
+            if meaning.exists && meaning.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(meaning.isHittable)
+        meaning.tap()
+        meaning.typeText("preferred meaning")
+        let note = app.textFields["dictionary.note-editor"]
+        if !note.isHittable { app.swipeUp() }
+        note.tap()
+        note.typeText("personal note")
+        let saveNote = app.buttons["Save Meaning and Note"]
+        if !saveNote.isHittable { app.swipeUp() }
+        saveNote.tap()
+        XCTAssertFalse(saveNote.isEnabled)
+        app.buttons["Close"].tap()
+        card.tap()
+        for _ in 0..<8 {
+            if meaning.exists && meaning.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertEqual(meaning.value as? String, "preferred meaning")
+        XCTAssertEqual(note.value as? String, "personal note")
+    }
+
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

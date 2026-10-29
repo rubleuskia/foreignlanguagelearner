@@ -261,39 +261,43 @@ struct DictionaryEntryDetailView: View {
                         .onChange(of: audioMode) { _, _ in playback.close(); openedAudioIdentity = nil }
                     }
 
-                    HStack(alignment: .top, spacing: 12) {
-                        Text(entry.text)
-                            .font(.title2.weight(.semibold))
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityIdentifier("dictionary.original")
-                        if let source = audioSource {
-                            Button { toggleAudio(source) } label: {
-                                Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
-                                      systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                    .labelStyle(.iconOnly)
-                                    .font(.title2)
-                                    .frame(minWidth: 44, minHeight: 44)
+                    ResolvedPhraseAudio(request: .init(entry: entry, items: sourceItems,
+                        mode: entry.phraseAudioStart == nil ? .selection : audioMode)) { source in
+                        HStack(alignment: .top, spacing: 12) {
+                            Text(entry.text)
+                                .font(.title2.weight(.semibold))
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("dictionary.original")
+                            if let source {
+                                Button { toggleAudio(source) } label: {
+                                    Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
+                                          systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                        .labelStyle(.iconOnly)
+                                        .font(.title2)
+                                        .frame(minWidth: 44, minHeight: 44)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityIdentifier("dictionary.play-audio")
+                                .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier("dictionary.play-audio")
-                            .modifier(PhraseAudioEditing(entry: entry, items: sourceItems, source: source, stopPlayback: { playback.pause() }, mode: entry.phraseAudioStart == nil ? .selection : audioMode))
+                            CopyButton(value: entry.text, label: "Copy original",
+                                       identifier: "dictionary.copy-original")
                         }
-                        CopyButton(value: entry.text, label: "Copy original",
-                                   identifier: "dictionary.copy-original")
-                    }
-                    if let source = audioSource {
-                        Text("\(formatTime(source.identity.range.lowerBound))–\(formatTime(source.identity.range.upperBound)) · \(source.itemTitle)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Label("Audio unavailable on this device", systemImage: "speaker.slash")
-                            .foregroundStyle(.secondary)
+                        if let source {
+                            Text("\(formatTime(source.identity.range.lowerBound))–\(formatTime(source.identity.range.upperBound)) · \(source.itemTitle)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Label("Audio unavailable on this device", systemImage: "speaker.slash")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 Section("Russian translation") {
                     if editing {
                         TextEditor(text: $draft).frame(minHeight: 100)
+                            .accessibilityIdentifier("dictionary.translation-editor")
                     } else if let translation = entry.translationText {
                         HStack(alignment: .top, spacing: 12) {
                             Text(translation).textSelection(.enabled)
@@ -378,7 +382,9 @@ struct DictionaryEntryDetailView: View {
                 if ContextSentenceExtractor.sentence(for: entry) != nil {
                     Section("Your interpretation") {
                         TextField("Preferred meaning", text: $senseDraft)
+                            .accessibilityIdentifier("dictionary.meaning-editor")
                         TextField("Personal note", text: $noteDraft, axis: .vertical).lineLimit(2...5)
+                            .accessibilityIdentifier("dictionary.note-editor")
                         if let value = entry.selectedSenseText, !value.isEmpty {
                             CopyButton(value: value, label: "Copy preferred meaning",
                                        identifier: "dictionary.copy-meaning")
@@ -462,10 +468,6 @@ struct DictionaryEntryDetailView: View {
                 if case .failed(let message) = contextual.status { Text(AppLanguage.text(message)) }
             }
         }.presentationDetents([.medium, .large])
-    }
-
-    private var audioSource: PhraseAudioSource? {
-        PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: entry.phraseAudioStart == nil ? .selection : audioMode)
     }
 
     private func toggleAudio(_ source: PhraseAudioSource) {

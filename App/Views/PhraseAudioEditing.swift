@@ -106,13 +106,19 @@ private struct PhraseAudioBoundaryEditor: View {
         let candidateStart = isEnd ? start : min(max(0, rounded), floor((end - 0.1) * 10) / 10)
         let candidateEnd = isEnd ? max(min(trackDuration, rounded), ceil((start + 0.1) * 10) / 10) : end
         guard resolved(start: candidateStart, end: candidateEnd) != nil else { return }
-        playback.close()
+        if playback.player.currentItem != nil { playback.close() }
         start = candidateStart
         end = candidateEnd
         resetToAutomatic = false
     }
 
     var body: some View {
+        ResolvedPhraseAudio(request: .init(entry: entry, items: items, mode: mode, ignoreManualRange: true)) { automatic in
+            editor(automatic: automatic)
+        }
+    }
+
+    private func editor(automatic: PhraseAudioSource?) -> some View {
         NavigationStack {
             Form {
                 Section("Phrase") {
@@ -174,14 +180,14 @@ private struct PhraseAudioBoundaryEditor: View {
                     }
                     .disabled(resolved(start: start, end: end) == nil)
                     Button("Reset to automatic boundaries") {
-                        guard let automatic = PhraseAudioSourceResolver.resolve(entry: entry, items: items, mode: mode, ignoreManualRange: true) else { return }
+                        guard let automatic else { return }
                         playback.close()
                         start = automatic.identity.range.lowerBound
                         end = automatic.identity.range.upperBound
                         resetToAutomatic = true
                         sliderWindow = nil
                     }
-                    .disabled(PhraseAudioSourceResolver.resolve(entry: entry, items: items, mode: mode, ignoreManualRange: true) == nil)
+                    .disabled(automatic == nil)
                     if resetToAutomatic { Text("Automatic boundaries will be restored when you save.").font(.caption) }
                     if let message = error ?? playback.errorMessage { Text(AppLanguage.text(message)).foregroundStyle(.red) }
                 }

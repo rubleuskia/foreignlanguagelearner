@@ -59,6 +59,12 @@ import SwiftData
                 entry.phraseAudioStart = 1
                 entry.phraseAudioEnd = 5
             }
+            if ProcessInfo.processInfo.arguments.contains("--editing-context-fixture") {
+                entry.contextText = "Kot i kot."
+                entry.contextSelectionLocation = 0
+                entry.contextSelectionLength = 3
+                entry.contextTranslationText = "Kot — kot — кот"
+            }
             entry.translationText = "Кот"
             entry.translationStatus = .ready
             context.insert(entry)

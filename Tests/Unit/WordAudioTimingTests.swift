@@ -86,6 +86,36 @@ final class WordAudioTimingTests: XCTestCase {
         XCTAssertEqual(PhraseAudioTiming.range(for: (doc.text as NSString).range(of: "jaźń"), in: doc, duration: 7), 5...6)
     }
 
+    func testSavedSelectionSearchStopsNearCueEvenInLongChapter() {
+        let first = TranscriptSegment(start: 0, end: 1, text: "first word")
+        let tail = (1...30_000).map { TranscriptSegment(start: Double($0), end: Double($0 + 1), text: "word word word") }
+        let document = TranscriptDocument(segments: [first] + tail)
+        XCTAssertEqual(PhraseAudioTiming.selectionSearchRange(firstSegment: 0, wordCount: 1, document: document),
+                       document.ranges[0])
+        let expected = NSRange(location: 6, length: 4)
+        measure {
+            for _ in 0..<100 {
+                XCTAssertEqual(PhraseAudioTiming.savedSelection(selectedText: "word", firstSegment: 0,
+                    document: document, storedRange: 0...1), expected)
+            }
+        }
+    }
+
+    func testBoundedSearchPreservesWhitespaceAndCrossCueSelections() {
+        let document = TranscriptDocument(segments: [
+            .init(start: 0, end: 1, text: "Before first"),
+            .init(start: 1, end: 2, text: "  \t"),
+            .init(start: 2, end: 3, text: "second"),
+            .init(start: 3, end: 4, text: "third after"),
+            .init(start: 4, end: 5, text: "first second third")])
+        let expected = NSRange(location: 7, length: document.ranges[3].location + "third".utf16.count - 7)
+        let selection = PhraseAudioTiming.savedSelection(selectedText: "first second third", firstSegment: 0,
+            document: document, storedRange: 0...4)
+        XCTAssertEqual(selection, expected)
+        XCTAssertEqual(PhraseAudioTiming.removingLegacyPadding(from: 0...4.5, selectedText: "first second third",
+            firstSegment: 0, document: document), 0...4)
+    }
+
     func testZeroDurationSpokenWordFallsBackToCueButPunctuationDoesNot() throws {
         let raw = TranscriptDocument(segments: [.init(start: 1, end: 8, text: "— owrzodzona noga")])
         func aligned(_ end: Double) throws -> TranscriptDocument {

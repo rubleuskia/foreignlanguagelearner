@@ -31,9 +31,7 @@ struct LearningSessionView: View {
     @State private var revealed = false
     @State private var pendingUndo: LearningAnswerUndo?
     @State private var errorMessage: String?
-    @State private var editingEntry: DictionaryEntry?
     @State private var detailEntry: DictionaryEntry?
-    @State private var translationDraft = ""
     @State private var playback = PlaybackController()
     @State private var audioMode: PhraseAudioMode = .selection
     @State private var openedAudioIdentity: PhraseAudioSource.Identity?
@@ -122,7 +120,6 @@ struct LearningSessionView: View {
         } message: {
             Text("Your answers and word levels are saved. You can continue this round later.")
         }
-        .sheet(item: $editingEntry) { entry in editingView(entry) }
         .sheet(item: $detailEntry) { entry in DictionaryEntryDetailView(entry: entry) }
         .onChange(of: previewRound?.currentPresentationID ?? round?.currentPresentationID) { _, _ in contextual.cancelCurrentRequest() }
         .onDisappear {
@@ -232,18 +229,11 @@ struct LearningSessionView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("learn.translation")
-                    Button {
-                        closeAudio()
-                        translationDraft = entry.translationText ?? ""
-                        editingEntry = entry
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.title2.weight(.medium))
-                            .frame(width: 48, height: 48)
+                    LearningTranslationEditButton(entry: entry, beforeEditing: {
+                        if openedAudioIdentity != nil { closeAudio() }
+                    }) { value in
+                        try saveTranslation(entry, value: value)
                     }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Edit translation")
-                    .accessibilityIdentifier("learn.edit")
                 }
 
                 if revealed || (preview != nil && entry.learningLevel == 1) {
@@ -372,7 +362,8 @@ struct LearningSessionView: View {
                     Spacer()
                     if candidate != entry.translationText {
                         Button("Use this as translation") {
-                            saveTranslation(entry, value: candidate)
+                            do { try saveTranslation(entry, value: candidate) }
+                            catch { errorMessage = error.localizedDescription }
                         }
                         .nativeSecondaryAction()
                         .accessibilityIdentifier("learn.use-context-translation")
@@ -494,88 +485,66 @@ struct LearningSessionView: View {
 
     private func phraseAudio(for entry: DictionaryEntry) -> some View {
         let mode: PhraseAudioMode = entry.phraseAudioStart == nil ? .selection : audioMode
-        let source = PhraseAudioSourceResolver.resolve(entry: entry, items: sourceItems, mode: mode)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Audio").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                Spacer()
-                if let source {
-                    PhraseAudioEditButton(entry: entry, items: sourceItems, source: source,
-                                          stopPlayback: { playback.pause() }, mode: mode)
+        return ResolvedPhraseAudio(request: .init(entry: entry, items: sourceItems, mode: mode)) { source in
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Audio").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    Spacer()
+                    if let source {
+                        PhraseAudioEditButton(entry: entry, items: sourceItems, source: source,
+                                              stopPlayback: { playback.pause() }, mode: mode)
+                            .font(.subheadline.weight(.medium))
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("learn.edit-audio")
+                    }
+                }
+                HStack(alignment: .center, spacing: 12) {
+                    if let source {
+                        Button { toggleAudio(source) } label: {
+                            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.title3.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                                .background(Color.accentColor.opacity(0.12), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                        .accessibilityLabel(playback.isPlaying ? source.pauseLabel : source.playLabel)
+                        .accessibilityIdentifier("learn.play-audio")
+                    }
+                    if entry.phraseAudioStart != nil {
+                        Menu {
+                            Picker("Audio fragment", selection: $audioMode) {
+                                ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(AppLanguage.text(audioMode.title)).multilineTextAlignment(.leading)
+                                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                            }
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
                         .font(.subheadline.weight(.medium))
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("learn.edit-audio")
-                }
-            }
-            HStack(alignment: .center, spacing: 12) {
-                if let source {
-                    Button { toggleAudio(source) } label: {
-                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                        .accessibilityLabel("Audio fragment")
+                        .accessibilityValue(audioMode.title)
+                        .accessibilityIdentifier("learn.audio-mode")
+                        .onChange(of: audioMode) { _, _ in closeAudio() }
+                    } else if source != nil {
+                        Text("Phrase audio").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
-                    .accessibilityLabel(playback.isPlaying ? source.pauseLabel : source.playLabel)
-                    .accessibilityIdentifier("learn.play-audio")
+                    Spacer(minLength: 0)
+                    if source != nil { PlaybackRateMenu(playback: playback, compact: true) }
                 }
-                if entry.phraseAudioStart != nil {
-                    Menu {
-                        Picker("Audio fragment", selection: $audioMode) {
-                            ForEach(PhraseAudioMode.allCases) { mode in Text(AppLanguage.text(mode.title)).tag(mode) }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(AppLanguage.text(audioMode.title)).multilineTextAlignment(.leading)
-                            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
-                        }
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.subheadline.weight(.medium))
-                    .accessibilityLabel("Audio fragment")
-                    .accessibilityValue(audioMode.title)
-                    .accessibilityIdentifier("learn.audio-mode")
-                    .onChange(of: audioMode) { _, _ in closeAudio() }
-                } else if source != nil {
-                    Text("Phrase audio").font(.subheadline).foregroundStyle(.secondary)
+                if source == nil {
+                    Label("Audio unavailable on this device", systemImage: "speaker.slash")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
-                if source != nil { PlaybackRateMenu(playback: playback, compact: true) }
             }
-            if source == nil {
-                Label("Audio unavailable on this device", systemImage: "speaker.slash")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
+            .padding(12)
+            .background(Color.accentColor.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("learn.audio-panel")
         }
-        .padding(12)
-        .background(Color.accentColor.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("learn.audio-panel")
-    }
-
-    private func editingView(_ entry: DictionaryEntry) -> some View {
-        NavigationStack {
-            Form {
-                Section("Original") { Text(entry.text) }
-                Section("Russian translation") {
-                    TextEditor(text: $translationDraft).frame(minHeight: 120)
-                }
-            }
-            .navigationTitle("Edit translation")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { editingEntry = nil }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveTranslation(entry) }
-                        .disabled(translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 
     private func startRound() {
@@ -717,11 +686,7 @@ struct LearningSessionView: View {
         return result
     }
 
-    private func saveTranslation(_ entry: DictionaryEntry) {
-        saveTranslation(entry, value: translationDraft)
-    }
-
-    private func saveTranslation(_ entry: DictionaryEntry, value: String) {
+    private func saveTranslation(_ entry: DictionaryEntry, value: String) throws {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         let previousText = entry.translationText
@@ -737,14 +702,87 @@ struct LearningSessionView: View {
         entry.translationStatus = .ready
         do {
             try context.save()
-            editingEntry = nil
         } catch {
             entry.translationText = previousText
             entry.translationOrigin = previousOrigin
             entry.translationRevision = previousRevision
             entry.translationUpdatedAt = previousUpdatedAt
             entry.translationStatus = previousStatus
-            errorMessage = error.localizedDescription
+            throw error
         }
+    }
+}
+
+/// Own presentation here so opening the editor does not invalidate the practice card.
+private struct LearningTranslationEditButton: View {
+    let entry: DictionaryEntry
+    let beforeEditing: () -> Void
+    let save: (String) throws -> Void
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            beforeEditing()
+            isPresented = true
+        } label: {
+            Image(systemName: "pencil")
+                .font(.title2.weight(.medium))
+                .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Edit translation")
+        .accessibilityIdentifier("learn.edit")
+        .sheet(isPresented: $isPresented) {
+            LearningTranslationEditor(original: entry.text, translation: entry.translationText ?? "", save: save)
+        }
+    }
+}
+
+/// Keep keystrokes local: the card resolves audio/transcript data when its body updates.
+private struct LearningTranslationEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    let original: String
+    let save: (String) throws -> Void
+    @State private var draft: String
+    @State private var errorMessage: String?
+
+    init(original: String, translation: String, save: @escaping (String) throws -> Void) {
+        self.original = original
+        self.save = save
+        _draft = State(initialValue: translation)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Original") { Text(original) }
+                Section("Russian translation") {
+                    TextEditor(text: $draft)
+                        .frame(minHeight: 120)
+                        .accessibilityIdentifier("learn.translation-editor")
+                }
+            }
+            .navigationTitle("Edit translation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        do {
+                            try save(draft)
+                            dismiss()
+                        } catch { errorMessage = error.localizedDescription }
+                    }
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .alert("Could not save progress", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) { Button("OK") {} } message: { Text(AppLanguage.text(errorMessage ?? "")) }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

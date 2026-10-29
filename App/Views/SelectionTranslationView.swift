@@ -120,21 +120,23 @@ struct SelectionTranslationView: View {
     }
 
     @ViewBuilder private var audioContent: some View {
-        if let source = PhraseAudioSourceResolver.resolve(preview: preview, items: sourceItems) {
-            HStack {
-                Button {
-                    toggleAudio(source)
-                } label: {
-                    Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
-                          systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+        ResolvedPhraseAudio(request: .init(preview: preview, items: sourceItems)) { source in
+            if let source {
+                HStack {
+                    Button {
+                        toggleAudio(source)
+                    } label: {
+                        Label(AppLanguage.text(playback.isPlaying ? source.pauseLabel : source.playLabel),
+                              systemImage: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    }
+                    .accessibilityIdentifier("preview.play-audio")
+                    Spacer()
+                    PlaybackRateMenu(playback: playback)
                 }
-                .accessibilityIdentifier("preview.play-audio")
-                Spacer()
-                PlaybackRateMenu(playback: playback)
+            } else {
+                Label("Audio unavailable on this device", systemImage: "speaker.slash")
+                    .foregroundStyle(.secondary)
             }
-        } else {
-            Label("Audio unavailable on this device", systemImage: "speaker.slash")
-                .foregroundStyle(.secondary)
         }
     }
 

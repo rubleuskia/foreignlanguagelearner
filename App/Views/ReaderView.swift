@@ -23,11 +23,9 @@ struct ReaderView: View {
     @State private var selecting = false
 
     private var currentPart: LearningPart? { item.parts.indices.contains(selectedPart) ? item.parts[selectedPart] : nil }
-    private var document: TranscriptDocument {
-        guard let part = currentPart else { return TranscriptDocument(segments: item.segments) }
-        let indexed = item.segments.enumerated().filter { ($0.element.end ?? -.infinity) > part.start && ($0.element.start ?? .infinity) < part.end }
-        return TranscriptDocument(segments: indexed.map(\.element), sourceIndices: indexed.map(\.offset))
-    }
+    @State private var document: TranscriptDocument?
+    @State private var preparedPart: Int?
+
     private var lowerBound: Double { currentPart?.start ?? 0 }
     private var upperBound: Double { currentPart?.end ?? item.duration }
     private var displayedLanguages: [SourceLanguage] {
@@ -46,6 +44,7 @@ struct ReaderView: View {
                     .font(.caption).foregroundStyle(.secondary).padding()
             }
             if item.hasText {
+            if let document {
             VocabularyTranscriptView(document: document, language: item.sourceLanguageCode,
                                activeSegment: document.activeSegment(at: playback.position),
                                following: $following,
@@ -74,6 +73,7 @@ struct ReaderView: View {
                 }
             }
             .id(manualChapterGeneration)
+            } else { ProgressView("Loading transcript…") }
             } else {
                 ContentUnavailableView("Listen to your book", systemImage: "headphones", description: Text("Add text from the ⋮ menu to read and save phrases."))
             }
@@ -118,6 +118,24 @@ struct ReaderView: View {
             openCurrentPart()
         }
         .task { sourceLanguages = await SourceLanguage.availableForRussian() }
+        .task(id: selectedPart) {
+            guard preparedPart != selectedPart else { return }
+            let partIndex = selectedPart
+            let segments = item.segments
+            let part = currentPart
+            document = nil
+            let worker = Task.detached(priority: .userInitiated) {
+                guard let part else { return TranscriptDocument(segments: segments) }
+                let indexed = segments.enumerated().filter {
+                    ($0.element.end ?? -.infinity) > part.start && ($0.element.start ?? .infinity) < part.end
+                }
+                return TranscriptDocument(segments: indexed.map(\.element), sourceIndices: indexed.map(\.offset))
+            }
+            let value = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled else { return }
+            document = value
+            preparedPart = partIndex
+        }
         .sheet(item: $chapterPicker) { snapshot in
             ChapterPickerView(snapshot: snapshot) { id in
                 if let index = item.parts.firstIndex(where: { $0.id.uuidString == id }) { switchToPart(index) }
@@ -203,7 +221,8 @@ struct ReaderView: View {
     }
 
     private func audioRange(for selectionRange: NSRange) -> ClosedRange<Double>? {
-        PhraseAudioTiming.range(for: selectionRange, in: document, duration: item.duration)
+        guard let document else { return nil }
+        return PhraseAudioTiming.range(for: selectionRange, in: document, duration: item.duration)
     }
 
     private func openCurrentPart() {
