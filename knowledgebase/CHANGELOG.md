@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-29 — Responsive audio during selection translation
+
+- Move synchronous audio-session setup and teardown off the UI executor so tapping Play in a selection's dictionary/translation popup cannot block translation rendering and other interface actions while the media server responds. Playback starts only after session activation; pause, close and source replacement invalidate pending starts and errors. Rate changes and seek completions cannot bypass activation.
+- Enqueue player time, end and seek callbacks on the UI executor before reading or changing playback state, retaining stale-event checks and safe chapter transitions. Repeated play requests coalesce while activation is pending; explicit Play still resumes after a system interruption.
+- Add a delayed translation UI fixture and cover selecting text, adding to the dictionary, playing audio before translation completes, saving the result, closing the popup and resuming the reader. Unit coverage holds audio activation open and verifies responsive pause/close, stale-result rejection, failure/retry and seek/rate gating.
+- Verification: all 239 unit tests and three targeted UI scenarios pass on the iOS 26.5 iPhone 17 Pro simulator, covering selection translation/audio, natural chapter transition and audio-boundary editing. The original physical-device stall has not been measured or reproduced with a device stack trace.
+- DECISIONS.md records audio-session execution and callback handling. No project purpose, supported workflow or major boundary changed, so PROJECT.md is unchanged.
+
 ## 2026-10-28 — Audit repeated work across interactive screens
 
 - Dictionary translation/meaning/note editing, selection translation, practice audio and boundary sliders no longer read/parse transcripts or resolve aligned audio inside view rendering. Resolve immutable source snapshots on a worker and reuse results until actual audio inputs change, including manual bounds, resource replacement or new timing sidecars. Boundary drags also skip repeated audio-session teardown once the preview is closed. Playback positions and unrelated edits do not invalidate them; cancelled loads cannot install stale controls.

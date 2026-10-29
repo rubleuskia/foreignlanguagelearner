@@ -104,11 +104,11 @@ actor ContextAnalysisService: ContextAnalysisServing {
 }
 
 private struct ContextAnalysisServiceEnvironmentKey: EnvironmentKey {
-    static let defaultValue = ContextAnalysisService()
+    static let defaultValue: any ContextAnalysisServing = ContextAnalysisService()
 }
 
 extension EnvironmentValues {
-    var contextAnalysisService: ContextAnalysisService {
+    var contextAnalysisService: any ContextAnalysisServing {
         get { self[ContextAnalysisServiceEnvironmentKey.self] }
         set { self[ContextAnalysisServiceEnvironmentKey.self] = newValue }
     }
