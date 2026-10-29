@@ -69,11 +69,11 @@ struct NativeBookCover: View {
 
 /// Serif typography is confined to reading; controls retain the system sans serif.
 enum ReadingTypography {
-    static func font(compatibleWith traits: UITraitCollection) -> UIFont {
+    static func font(compatibleWith traits: UITraitCollection, scale: Double = 1) -> UIFont {
         let descriptor = UIFont.systemFont(ofSize: 21).fontDescriptor.withDesign(.serif)
             ?? UIFont.systemFont(ofSize: 21).fontDescriptor
         return UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: UIFont(descriptor: descriptor, size: 21), compatibleWith: traits)
+            for: UIFont(descriptor: descriptor, size: 21 * min(max(scale, 0.75), 1.75)), compatibleWith: traits)
     }
 
     static func paragraph(compatibleWith traits: UITraitCollection) -> NSParagraphStyle {
@@ -124,5 +124,25 @@ struct NativeTransportControls: View {
         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
             .font(.title3.weight(.semibold))
             .frame(width: 40, height: 40)
+    }
+}
+
+struct ReaderFontSizeMenu: View {
+    @AppStorage("reader.font-scale") private var scale = 1.0
+
+    var body: some View {
+        Menu {
+            Button("Smaller text", systemImage: "textformat.size.smaller") { scale = max(0.75, scale - 0.125) }
+                .disabled(scale <= 0.75)
+            Button("Larger text", systemImage: "textformat.size.larger") { scale = min(1.75, scale + 0.125) }
+                .disabled(scale >= 1.75)
+            Button("Default text size") { scale = 1 }
+        } label: {
+            Image(systemName: "textformat.size")
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .accessibilityLabel("Text size")
+        .accessibilityValue(scale.formatted(.percent.precision(.fractionLength(0))))
+        .accessibilityIdentifier("reader.text-size")
     }
 }

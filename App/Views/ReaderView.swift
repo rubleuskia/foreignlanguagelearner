@@ -3,6 +3,8 @@ import SwiftData
 import AVKit
 
 struct ReaderView: View {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
@@ -34,10 +36,12 @@ struct ReaderView: View {
             : [.init(code: item.sourceLanguageCode, name: SourceLanguage.name(for: item.sourceLanguageCode))] + sourceLanguages
     }
 
+    private var compactPlayer: Bool { verticalSizeClass == .compact && !dynamicTypeSize.isAccessibilitySize }
+
     var body: some View {
         VStack(spacing: 0) {
             if item.mediaKind == "video" {
-                VideoPlayer(player: playback.player).frame(height: 200)
+                VideoPlayer(player: playback.player).frame(height: compactPlayer ? 100 : 200)
             }
             if item.hasAudio && item.hasText && item.segments.first?.start == nil {
                 Text("This transcript has no timestamps. You can read and save phrases; synchronized scrolling requires SRT or WebVTT.")
@@ -87,7 +91,7 @@ struct ReaderView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
-        .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: item.hasText && !selecting && translationPreview == nil) }
+        .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: !compactPlayer && item.hasText && !selecting && translationPreview == nil) }
         .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.player.timeControlStatus == .playing })
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -95,6 +99,7 @@ struct ReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
+                    ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
                     Menu("Language", systemImage: "character.book.closed") {
                         ForEach(displayedLanguages) { language in
@@ -163,8 +168,8 @@ struct ReaderView: View {
         } message: { Text(AppLanguage.text(playback.errorMessage ?? "")) }
     }
 
-    private var playerBar: some View {
-        VStack(spacing: 8) {
+    private var trackControls: some View {
+        Group {
             if !item.parts.isEmpty {
                 HStack {
                     Button(AppLanguage.format("Part %d of %d", selectedPart + 1, item.parts.count)) {
@@ -180,40 +185,72 @@ struct ReaderView: View {
             } else {
                 HStack { Text("Audio").font(.subheadline.weight(.medium)); Spacer(); PlaybackRateMenu(playback: playback) }
             }
-            Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
-                scrubbing = editing
-                if !editing { playback.seek(to: scrubPosition); followGeneration += 1; following = true }
-            }.accessibilityLabel("Playback position")
-            HStack {
-                Text(time(playback.position - lowerBound))
-                Spacer()
-                Text(time(upperBound - lowerBound))
+        }
+    }
+
+    private var positionSlider: some View {
+        Slider(value: Binding(get: { scrubbing ? scrubPosition : min(max(playback.position, lowerBound), upperBound) }, set: { scrubPosition = $0 }), in: lowerBound...max(upperBound, lowerBound + 0.01)) { editing in
+            scrubbing = editing
+            if !editing { playback.seek(to: scrubPosition); followGeneration += 1; following = true }
+        }.accessibilityLabel("Playback position")
+    }
+
+    private var transport: some View {
+        NativeTransportControls(isPlaying: playback.isPlaying, back: {
+            playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true
+        }, toggle: {
+            let wasPlaying = playback.isPlaying
+            playback.toggle()
+            if !wasPlaying {
+                let previous = item.lastPlayedAt
+                item.lastPlayedAt = .now
+                do { try context.save() }
+                catch { item.lastPlayedAt = previous; message = error.localizedDescription }
             }
-            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            NativeTransportControls(isPlaying: playback.isPlaying, back: {
-                playback.seek(to: max(lowerBound, playback.position - 10)); followGeneration += 1; following = true
-            }, toggle: {
-                let wasPlaying = playback.isPlaying
-                playback.toggle()
-                if !wasPlaying {
-                    let previous = item.lastPlayedAt
-                    item.lastPlayedAt = .now
-                    do { try context.save() }
-                    catch { item.lastPlayedAt = previous; message = error.localizedDescription }
+            if playback.isPlaying {
+                followGeneration += 1
+                following = true
+            }
+        }, forward: {
+            playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true
+        })
+    }
+
+    private var playerBar: some View {
+        Group {
+            if compactPlayer {
+                HStack(spacing: 16) {
+                    VStack(spacing: 0) {
+                        trackControls
+                        HStack {
+                            Text(time(playback.position - lowerBound))
+                            positionSlider
+                            Text(time(upperBound - lowerBound))
+                        }.font(.caption.monospacedDigit())
+                    }
+                    transport
                 }
-                if playback.isPlaying {
-                    followGeneration += 1
-                    following = true
+            } else {
+                VStack(spacing: 8) {
+                    trackControls
+                    positionSlider
+                    HStack {
+                        Text(time(playback.position - lowerBound))
+                        Spacer()
+                        Text(time(upperBound - lowerBound))
+                    }
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    transport
                 }
-            }, forward: {
-                playback.seek(to: min(upperBound, playback.position + 10)); followGeneration += 1; following = true
-            })
+            }
         }
         .font(.subheadline)
-        .padding(16)
+        .padding(compactPlayer ? 8 : 16)
         .nativeFloatingSurface()
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.bottom, compactPlayer ? 0 : 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reader.player")
     }
     private func time(_ value: Double) -> String {
         let seconds = Int(max(0, value))
@@ -229,6 +266,7 @@ struct ReaderView: View {
         guard item.hasAudio else { return }
         let range = currentPart.map { $0.start...$0.end }
         playback.open(url: MediaImportService.directory(for: item.id).appending(path: item.mediaFilename), position: currentPart?.lastPosition ?? item.lastPosition, range: range)
+        playback.mediaTitle = item.title
     }
 
     private func switchToPart(_ index: Int) {

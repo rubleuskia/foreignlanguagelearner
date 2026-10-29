@@ -62,7 +62,7 @@ final class NativeDesignFlowTests: XCTestCase {
         if !quick.isHittable { app.swipeUp() }
         quick.tap()
         let learn = app.buttons["learn.preview-learn"]
-        XCTAssertTrue(app.staticTexts["learn.translation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["learn.translation"].waitForExistence(timeout: 5))
         for _ in 0..<8 {
             if learn.exists && learn.isHittable { break }
             app.swipeUp()
@@ -83,7 +83,7 @@ final class NativeDesignFlowTests: XCTestCase {
         app.tabBars.buttons["Practice"].tap()
         app.buttons["practice.quick-start"].tap()
         app.buttons["learn.preview-learn"].tap()
-        let translation = app.staticTexts["learn.translation"]
+        let translation = app.buttons["learn.translation"]
         let edit = app.buttons["learn.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Edit translation"].exists)
@@ -145,7 +145,7 @@ final class NativeDesignFlowTests: XCTestCase {
         app.tabBars.buttons["Practice"].tap()
         app.buttons["practice.quick-start"].tap()
         XCTAssertTrue(app.buttons["learn.play-audio"].waitForExistence(timeout: 5))
-        let translation = app.staticTexts["learn.translation"]
+        let translation = app.buttons["learn.translation"]
         let initial = translation.label
         let editor = app.textViews["learn.translation-editor"]
         @discardableResult

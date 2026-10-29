@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-29 — System audio controls and easier reading/practice
+
+- Publish book/chapter and phrase playback to iOS Now Playing for the Lock Screen, Control Center and supported Dynamic Island media surfaces. System play/pause, ten-second skips and scrubbing control the current player; chapter commands use the book coordinator and phrase timelines stay relative to their clip. Only one app player owns the session. Interruptions and disconnected headphones pause playback.
+- Tap the practice card to reveal the answer and tap its translation to hide it again. Show a hand/tap hint before reveal and explicit left=Right, right=Wrong swipe hints afterward; answer buttons and undo remain available.
+- Use compact landscape playback panels in both readers, reduce the book mode selector spacing and hide secondary vocabulary/tutorial chrome in compact height. Add a persistent Aa text-size menu in both readers, retaining Dynamic Type, selection and audio following.
+- Verification: all 237 unit tests and 16 targeted UI scenarios pass across simulator runs on iOS 26.5 / iPhone 17 Pro, including system metadata, clip-relative remote seeking, playback ownership, interruptions, card tap/swipe/undo, both landscape readers, persistent font size and Russian accessibility text. Dynamic Island presentation and third-party media widgets still need a physical-device check.
+- DECISIONS.md records the playback ownership and reader preference policies. No project purpose, supported workflow or major boundary changed, so PROJECT.md is unchanged.
+
 ## 2026-10-28 — Audit repeated work across interactive screens
 
 - Dictionary translation/meaning/note editing, selection translation, practice audio and boundary sliders no longer read/parse transcripts or resolve aligned audio inside view rendering. Resolve immutable source snapshots on a worker and reuse results until actual audio inputs change, including manual bounds, resource replacement or new timing sidecars. Boundary drags also skip repeated audio-session teardown once the preview is closed. Playback positions and unrelated edits do not invalidate them; cancelled loads cannot install stale controls.

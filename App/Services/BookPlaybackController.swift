@@ -11,6 +11,7 @@ import Observation
     var wantsToPlay = false
     var didFinishTrack: ((String) -> Void)?
 
+    private var bookTitle = ""
     private var tracks: [LearningTrack] = []
     private var itemID: UUID?
     private var generation = 0
@@ -23,6 +24,7 @@ import Observation
     func open(item: LearningItem) {
         close()
         itemID = item.id
+        bookTitle = item.title
         tracks = item.tracks
         do {
             timeline = try BookTimeline(tracks: tracks.map { ($0.id, $0.duration) })
@@ -125,6 +127,14 @@ import Observation
             }
             if shouldPlay, self.wantsToPlay { self.playback.play() }
         }
+        playback.mediaTitle = track.title
+        playback.mediaSubtitle = bookTitle
+        playback.remotePlay = { [weak self] in
+            guard let self, !self.wantsToPlay else { return }
+            self.toggle()
+        }
+        playback.remotePause = { [weak self] in self?.pause() }
+        playback.remoteSeek = { [weak self] in self?.seekLocal($0) }
         playback.didReachEnd = { [weak self] in
             self?.handleEnd(generation: currentGeneration, trackID: id)
         }

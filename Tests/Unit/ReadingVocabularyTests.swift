@@ -1,4 +1,5 @@
 import AVFoundation
+import MediaPlayer
 import ZIPFoundation
 import Foundation
 import SwiftData
@@ -50,6 +51,76 @@ final class ReadingVocabularyTests: XCTestCase {
         try await waitForAwake(true)
         playback.close()
         try await waitForAwake(false)
+    }
+
+    @MainActor func testNowPlayingMetadataRangePauseAndOwnership() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "now-playing-\(UUID()).wav")
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 160000))
+        buffer.frameLength = buffer.frameCapacity
+        do {
+            let audio = try AVAudioFile(forWriting: url, settings: format.settings)
+            try audio.write(from: buffer)
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let first = PlaybackController(), second = PlaybackController()
+        defer { first.close(); second.close() }
+        first.open(url: url, position: 4, range: 2...12)
+        first.mediaTitle = "Chapter one"
+        first.mediaSubtitle = "My book"
+        first.play()
+        for _ in 0..<100 where first.player.timeControlStatus != .playing {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        first.pause()
+        let info = try XCTUnwrap(MPNowPlayingInfoCenter.default().nowPlayingInfo)
+        XCTAssertEqual(info[MPMediaItemPropertyTitle] as? String, "Chapter one")
+        XCTAssertEqual(info[MPMediaItemPropertyArtist] as? String, "My book")
+        XCTAssertEqual(info[MPMediaItemPropertyPlaybackDuration] as? Double, 10)
+        XCTAssertEqual(try XCTUnwrap(info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double), 2, accuracy: 0.5)
+        XCTAssertEqual((info[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber)?.doubleValue, 0)
+        PlaybackController.performRemote(.seek(7))
+        XCTAssertEqual(first.position, 9, "System scrubbing is relative to the start of the clip")
+        PlaybackController.performRemote(.skip(-10))
+        XCTAssertEqual(first.position, 2, "System skips stay inside the clip")
+        PlaybackController.performRemote(.play)
+        XCTAssertTrue(first.wantsToPlay)
+        PlaybackController.performRemote(.pause)
+        XCTAssertFalse(first.wantsToPlay)
+        first.play()
+        second.open(url: url, position: 0)
+        second.mediaTitle = "Another book"
+        second.play()
+        XCTAssertFalse(first.wantsToPlay)
+        first.close()
+        XCTAssertEqual(MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] as? String, "Another book")
+        NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil,
+            userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
+        for _ in 0..<100 where second.wantsToPlay { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(second.wantsToPlay)
+        second.close()
+        XCTAssertNil(MPNowPlayingInfoCenter.default().nowPlayingInfo)
+    }
+
+    @MainActor func testReaderFontResizePreservesTextAndDefersUntilSelectionEnds() throws {
+        let document = TranscriptDocument(segments: [.init(start: 0, end: 10, text: "A long passage to read.")])
+        var parent = TranscriptTextView(document: document, activeSegment: nil, following: .constant(false),
+            followGeneration: 0, onSelectionBegan: {}, handleSelection: { _, _, _, _, _ in })
+        let coordinator = parent.makeCoordinator()
+        let view = TranscriptTextView.makeTextView(frame: CGRect(x: 0, y: 0, width: 390, height: 500))
+        coordinator.apply(to: view)
+        let original = try XCTUnwrap(view.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        view.selectedRange = NSRange(location: 2, length: 4)
+        parent.fontScale = 1.5
+        coordinator.parent = parent
+        coordinator.apply(to: view)
+        XCTAssertEqual(view.selectedRange, NSRange(location: 2, length: 4))
+        XCTAssertEqual(view.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont, original)
+        view.selectedRange = NSRange(location: 0, length: 0)
+        coordinator.apply(to: view)
+        let resized = try XCTUnwrap(view.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        XCTAssertEqual(resized.pointSize, original.pointSize * 1.5, accuracy: 1)
+        XCTAssertEqual(view.text, document.text)
     }
 
     @MainActor private func container() throws -> ModelContainer {
