@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-10-29 — Responsive audio during selection translation
+
+- Move synchronous audio-session setup and teardown off the UI executor so tapping Play in a selection's dictionary/translation popup cannot block translation rendering and other interface actions while the media server responds. Playback starts only after session activation; pause, close and source replacement invalidate pending starts and errors. Rate changes and seek completions cannot bypass activation.
+- Enqueue player time, end and seek callbacks on the UI executor before reading or changing playback state, retaining stale-event checks and safe chapter transitions. Repeated play requests coalesce while activation is pending; explicit Play still resumes after a system interruption.
+- Add a delayed translation UI fixture and cover selecting text, adding to the dictionary, playing audio before translation completes, saving the result, closing the popup and resuming the reader. Unit coverage holds audio activation open and verifies responsive pause/close, stale-result rejection, failure/retry and seek/rate gating.
+- Verification: all 241 unit tests and the selection translation/audio and natural chapter-transition UI scenarios pass on the iOS 26.5 iPhone 17 Pro simulator after integrating the current Now Playing controls. Audio-boundary editing UI also passed before integration. The original physical-device stall has not been measured or reproduced with a device stack trace.
+- DECISIONS.md records audio-session execution and callback handling. No project purpose, supported workflow or major boundary changed, so PROJECT.md is unchanged.
+
 ## 2026-10-29 — System audio controls and easier reading/practice
 
 - Publish book/chapter and phrase playback to iOS Now Playing for the Lock Screen, Control Center and supported Dynamic Island media surfaces. System play/pause, ten-second skips and scrubbing control the current player; chapter commands use the book coordinator and phrase timelines stay relative to their clip. Only one app player owns the session. Interruptions and disconnected headphones pause playback.

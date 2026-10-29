@@ -6,7 +6,16 @@ struct ForeignLanguageLearnerApp: App {
     @AppStorage(AppLanguage.key) private var selectedLanguage = "ru"
     @State private var readingVocabulary = ReadingVocabularyStore(indexURL: ProcessInfo.processInfo.arguments.contains("--uitesting") ? nil : VocabularyIndex.defaultURL)
     @State private var translationCoordinator = DictionaryTranslationCoordinator()
-    private let contextAnalysisService = ContextAnalysisService()
+    private let liveContextAnalysisService = ContextAnalysisService()
+    private var contextAnalysisService: any ContextAnalysisServing {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           ProcessInfo.processInfo.arguments.contains("--slow-selection-translation-fixture") {
+            return SlowSelectionTranslationUIFixture()
+        }
+        #endif
+        return liveContextAnalysisService
+    }
     private var wordExplanationService: any WordExplanationServing {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitesting"),
@@ -47,6 +56,15 @@ private struct WordExplanationUIFixture: WordExplanationServing {
                      meaningInContext: "Здесь человек вежливо здоровается.", examples: [
                         .init(phrase: "dzień dobry", translation: "добрый день"),
                         .init(phrase: "miłego dnia", translation: "хорошего дня")])
+    }
+}
+#endif
+
+#if DEBUG
+private struct SlowSelectionTranslationUIFixture: ContextAnalysisServing {
+    func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
+        try await Task.sleep(for: .seconds(15))
+        return .init(directTranslation: "Кот", contextExplanation: "Kot — kot — кот")
     }
 }
 #endif

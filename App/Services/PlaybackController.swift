@@ -14,6 +14,27 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     var title: String { "\(rawValue.formatted(.number.precision(.fractionLength(0...2))))×" }
 }
 
+protocol PlaybackAudioSession: Sendable {
+    func activate() async throws
+    func deactivate() async
+}
+
+/// Audio-session IPC can wait for the media server. Keep it off the UI executor
+/// and serialize activation/deactivation for all players.
+actor SystemPlaybackAudioSession: PlaybackAudioSession {
+    static let shared = SystemPlaybackAudioSession()
+
+    func activate() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio)
+        try session.setActive(true)
+    }
+
+    func deactivate() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
+
 @MainActor @Observable final class PlaybackController {
     let player = AVPlayer()
     private(set) var position = 0.0
@@ -36,7 +57,13 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     private var statusObserver: NSKeyValueObservation?
     private var lastPublishedSecond: Double?
 
-    init() {
+    private let audioSession: any PlaybackAudioSession
+    private var activationTask: Task<Void, Never>?
+    private var activationGeneration = 0
+    private var sessionReady = false
+
+    init(audioSession: any PlaybackAudioSession = SystemPlaybackAudioSession.shared) {
+        self.audioSession = audioSession
         Self.activeControllers.add(self)
         Self.installRemoteCommands()
         statusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
@@ -84,7 +111,8 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         observer = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main
         ) { [weak self] time in
-            MainActor.assumeIsolated {
+            // Leave AVFoundation's callback before touching player state or replacing items.
+            Task { @MainActor in
                 guard let self, self.observationGeneration == generation,
                       self.player.currentItem === item,
                       !self.seekInProgress else { return }
@@ -104,7 +132,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
         ) { [weak self, weak item] _ in
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 guard let item else { return }
                 self?.finishPlayback(item: item, generation: generation)
             }
@@ -115,38 +143,57 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     func setRate(_ rate: PlaybackRate) {
         defer { updateNowPlaying() }
         selectedRate = rate
-        if wantsToPlay, !seekInProgress {
+        if wantsToPlay, sessionReady, !seekInProgress {
             player.playImmediately(atRate: rate.rawValue)
         }
     }
 
     func play() {
         guard player.currentItem != nil else { return }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-            try AVAudioSession.sharedInstance().setActive(true)
-            if let previous = Self.nowPlayingController, previous !== self {
-                if let pause = previous.remotePause { pause() } else { previous.pause() }
+        guard activationTask == nil else { return }
+        sessionReady = false
+        if let previous = Self.nowPlayingController, previous !== self {
+            if let pause = previous.remotePause { pause() } else { previous.pause() }
+        }
+        Self.nowPlayingController = self
+        wantsToPlay = true
+        isPlaying = true
+        updateNowPlaying()
+        errorMessage = nil
+        activationGeneration += 1
+        let generation = activationGeneration
+        activationTask = Task { [weak self, audioSession] in
+            do {
+                try Task.checkCancellation()
+                try await audioSession.activate()
+                guard let self, !Task.isCancelled,
+                      self.activationGeneration == generation, self.wantsToPlay else { return }
+                self.activationTask = nil
+                self.sessionReady = true
+                if self.reachedEnd || self.isAtEnd {
+                    self.reachedEnd = false
+                    self.seek(to: self.playbackRange?.lowerBound ?? 0)
+                } else if !self.seekInProgress {
+                    self.player.playImmediately(atRate: self.selectedRate.rawValue)
+                }
+            } catch {
+                guard let self, !Task.isCancelled,
+                      self.activationGeneration == generation else { return }
+                self.activationTask = nil
+                self.wantsToPlay = false
+                self.isPlaying = false
+                self.errorMessage = error.localizedDescription
+                self.updateNowPlaying()
             }
-            Self.nowPlayingController = self
-            wantsToPlay = true
-            isPlaying = true
-            updateNowPlaying()
-            if reachedEnd || isAtEnd {
-                reachedEnd = false
-                seek(to: playbackRange?.lowerBound ?? 0)
-            } else if !seekInProgress {
-                player.playImmediately(atRate: selectedRate.rawValue)
-            }
-        } catch {
-            wantsToPlay = false
-            isPlaying = false
-            errorMessage = error.localizedDescription
         }
     }
 
     func pause() {
         defer { updateNowPlaying() }
+        activationGeneration += 1
+        activationTask?.cancel()
+        activationTask = nil
+        sessionReady = false
         wantsToPlay = false
         isPlaying = false
         player.pause()
@@ -172,7 +219,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
             to: CMTime(seconds: position, preferredTimescale: 600),
             toleranceBefore: .zero, toleranceAfter: .zero
         ) { [weak self] finished in
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 guard let self, self.seekGeneration == generation else {
                     completion?(false)
                     return
@@ -180,7 +227,7 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
                 self.seekInProgress = false
                 let actual = self.player.currentTime().seconds
                 if actual.isFinite { self.position = self.clamped(actual) }
-                if self.wantsToPlay {
+                if self.wantsToPlay, self.sessionReady {
                     self.player.playImmediately(atRate: self.selectedRate.rawValue)
                 }
                 self.updateNowPlaying()
@@ -190,6 +237,11 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
     }
 
     func close(keepAudioSession: Bool = false) {
+        let hadAudio = player.currentItem != nil || activationTask != nil
+        activationGeneration += 1
+        activationTask?.cancel()
+        activationTask = nil
+        sessionReady = false
         seekGeneration += 1
         observationGeneration += 1
         seekInProgress = false
@@ -211,8 +263,8 @@ enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
             Self.nowPlayingController = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         }
-        if !keepAudioSession, Self.nowPlayingController == nil {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if !keepAudioSession, hadAudio, Self.nowPlayingController == nil {
+            Task { [audioSession] in await audioSession.deactivate() }
         }
     }
 
