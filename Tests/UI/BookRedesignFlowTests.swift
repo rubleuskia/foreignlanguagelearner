@@ -66,6 +66,7 @@ final class BookRedesignFlowTests: XCTestCase {
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
         let title = app.staticTexts["Reading vocabulary story"].firstMatch
+        for _ in 0..<8 where !title.exists || !title.isHittable { app.swipeUp() }
         XCTAssertTrue(title.waitForExistence(timeout: 10))
         title.tap()
         XCTAssertTrue(app.navigationBars["О книге"].waitForExistence(timeout: 5))
@@ -75,6 +76,60 @@ final class BookRedesignFlowTests: XCTestCase {
         capture(app, "Redesign — Russian accessibility text")
         button.tap()
         XCTAssertTrue(app.textViews["reader.transcript"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testLandscapeReaderAndPersistentFontSize() {
+        verifyLandscapeReaderAndPersistentFontSize(extraArguments: [])
+    }
+
+    @MainActor func testLegacyLandscapeReaderAndPersistentFontSize() {
+        verifyLandscapeReaderAndPersistentFontSize(extraArguments: ["--legacy-reader-fixture"])
+    }
+
+    @MainActor private func verifyLandscapeReaderAndPersistentFontSize(extraArguments: [String]) {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"] + extraArguments
+        app.launch()
+        let fromDetails = extraArguments.contains("--legacy-reader-fixture")
+        if fromDetails {
+            let book = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'library.book.'")).firstMatch
+            XCTAssertTrue(book.waitForExistence(timeout: 5))
+            book.tap()
+            let resume = app.buttons["book.continue"]
+            for _ in 0..<8 where !resume.exists || !resume.isHittable { app.swipeUp() }
+            resume.tap()
+        } else {
+            app.buttons["library.continue"].tap()
+        }
+        let transcript = app.textViews["reader.transcript"]
+        XCTAssertTrue(transcript.waitForExistence(timeout: 10))
+        let font = app.buttons["reader.text-size"]
+        font.tap()
+        app.buttons["Default text size"].tap()
+        font.tap()
+        app.buttons["Larger text"].tap()
+        XCTAssertEqual(font.value as? String, "112%")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(font.waitForExistence(timeout: 5))
+        XCTAssertTrue(font.isHittable)
+        XCTAssertTrue(app.sliders.firstMatch.isHittable)
+        XCTAssertTrue(app.buttons["Play"].isHittable)
+        XCTAssertGreaterThan(transcript.frame.height, 100)
+        XCTAssertLessThan(app.descendants(matching: .any)["reader.player"].firstMatch.frame.height, 115)
+        let landscape = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        landscape.name = "Reader — landscape and larger text"
+        landscape.lifetime = .keepAlways
+        add(landscape)
+        XCUIDevice.shared.orientation = .portrait
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons[fromDetails ? "book.continue" : "library.continue"].tap()
+        XCTAssertTrue(font.waitForExistence(timeout: 5))
+        XCTAssertEqual(font.value as? String, "112%")
+        font.tap()
+        app.buttons["Default text size"].tap()
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

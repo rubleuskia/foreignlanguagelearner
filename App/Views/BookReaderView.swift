@@ -9,6 +9,8 @@ struct BookReaderView: View {
         var id: String { rawValue }
     }
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var context
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.scenePhase) private var scenePhase
@@ -45,16 +47,19 @@ struct BookReaderView: View {
         }
     }
 
+    private var compactPlayer: Bool { verticalSizeClass == .compact && !dynamicTypeSize.isAccessibilitySize }
+
     var body: some View {
         VStack(spacing: 0) {
             if item.hasText && item.tracks.contains(where: { $0.alignmentStatus.hasTimedTranscript }) {
-            Picker("Reading mode", selection: $mode) {
-                ForEach(ReadingMode.allCases) { Text(AppLanguage.text($0.rawValue)).tag($0) }
+                Picker("Reading mode", selection: $mode) {
+                    ForEach(ReadingMode.allCases) { Text(AppLanguage.text($0.rawValue)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, compactPlayer ? 4 : 16)
             }
-            .pickerStyle(.segmented)
-            .padding()
-            }
-            if item.hasText && activeTrack?.alignmentStatus.hasTimedTranscript != true {
+            if !compactPlayer && item.hasText && activeTrack?.alignmentStatus.hasTimedTranscript != true {
                 Text("Read and listen independently. Add synchronization from the ⋮ menu to follow the recording.")
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
             }
@@ -71,7 +76,7 @@ struct BookReaderView: View {
         .safeAreaInset(edge: .bottom) { playerBar }
         .safeAreaInset(edge: .top) {
             OnboardingTip(step: showAudioTip ? .synchronization : .reading,
-                allowed: item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
+                allowed: !compactPlayer && item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
                 .id(showAudioTip)
         }
         .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.playback.player.timeControlStatus == .playing })
@@ -81,6 +86,7 @@ struct BookReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
+                    ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
                     BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() },
                         onUpdatePhraseAudio: { choosingWordTimings = true },
@@ -192,59 +198,91 @@ struct BookReaderView: View {
         }
     }
 
+    private var chapterButton: some View {
+        Button {
+            chapterPicker = .init(chapters: item.tracks.map {
+                .init(id: $0.id, title: $0.title, completed: $0.isCompleted, duration: $0.duration)
+            }, selectedID: playback.activeTrackID)
+        } label: {
+            Text(activeTrack?.title ?? AppLanguage.text("Track"))
+                .lineLimit(1).frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("reader.choose-chapter")
+    }
+
+    private var positionSlider: some View {
+        Slider(value: Binding(
+            get: { scrubbing ? scrubPosition : playback.localPosition },
+            set: { scrubPosition = $0 }
+        ), in: 0...max(activeTrack?.duration ?? 0, 0.01)) { editing in
+            scrubbing = editing
+            if !editing { savePosition(); playback.seekLocal(scrubPosition); followGeneration += 1; following = true }
+        }
+        .accessibilityLabel("Track playback position")
+    }
+
+    private var transport: some View {
+        NativeTransportControls(isPlaying: playback.wantsToPlay, back: {
+            playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true
+        }, toggle: {
+            let wasPlaying = playback.wantsToPlay
+            playback.toggle()
+            if !wasPlaying {
+                let previous = item.lastPlayedAt
+                item.lastPlayedAt = .now
+                do { try context.save() }
+                catch { item.lastPlayedAt = previous; message = error.localizedDescription }
+            }
+            if playback.wantsToPlay { followGeneration += 1; following = true }
+        }, forward: {
+            playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true
+        })
+    }
+
     private var playerBar: some View {
-        VStack(spacing: 8) {
-            Text(AppLanguage.format("%@: %@", AppLanguage.text(item.hasText ? "Read" : "Listened"),
-                                    item.readingProgress.formatted(.percent.precision(.fractionLength(0)))))
-                .font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Button(activeTrack?.title ?? "Track") {
-                    chapterPicker = .init(chapters: item.tracks.map {
-                        .init(id: $0.id, title: $0.title, completed: $0.isCompleted, duration: $0.duration)
-                    }, selectedID: playback.activeTrackID)
+        Group {
+            if compactPlayer {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        chapterButton
+                        HStack {
+                            Text(time(scrubbing ? scrubPosition : playback.localPosition))
+                            positionSlider
+                            Text(time(activeTrack?.duration ?? 0))
+                        }
+                        .font(.caption.monospacedDigit())
+                    }
+                    transport
+                    PlaybackRateMenu(playback: playback.playback, compact: true)
                 }
-                .accessibilityIdentifier("reader.choose-chapter")
-                Spacer()
-                PlaybackRateMenu(playback: playback.playback)
-            }
-            Slider(value: Binding(
-                get: { scrubbing ? scrubPosition : playback.localPosition },
-                set: { scrubPosition = $0 }
-            ), in: 0...max(activeTrack?.duration ?? 0, 0.01)) { editing in
-                scrubbing = editing
-                if !editing { savePosition(); playback.seekLocal(scrubPosition); followGeneration += 1; following = true }
-            }
-            .accessibilityLabel("Track playback position")
-            HStack {
-                Text(time(scrubbing ? scrubPosition : playback.localPosition))
-                Spacer()
-                Text(time(activeTrack?.duration ?? 0))
-            }
-            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            NativeTransportControls(isPlaying: playback.wantsToPlay, back: {
-                playback.seekLocal(playback.localPosition - 10); followGeneration += 1; following = true
-            }, toggle: {
-                let wasPlaying = playback.wantsToPlay
-                playback.toggle()
-                if !wasPlaying {
-                    let previous = item.lastPlayedAt
-                    item.lastPlayedAt = .now
-                    do { try context.save() }
-                    catch { item.lastPlayedAt = previous; message = error.localizedDescription }
+            } else {
+                VStack(spacing: 8) {
+                    Text(AppLanguage.format("%@: %@", AppLanguage.text(item.hasText ? "Read" : "Listened"),
+                                            item.readingProgress.formatted(.percent.precision(.fractionLength(0)))))
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        chapterButton
+                        Spacer()
+                        PlaybackRateMenu(playback: playback.playback)
+                    }
+                    positionSlider
+                    HStack {
+                        Text(time(scrubbing ? scrubPosition : playback.localPosition))
+                        Spacer()
+                        Text(time(activeTrack?.duration ?? 0))
+                    }
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    transport
                 }
-                if playback.wantsToPlay {
-                    followGeneration += 1
-                    following = true
-                }
-            }, forward: {
-                playback.seekLocal(playback.localPosition + 10); followGeneration += 1; following = true
-            })
+            }
         }
         .font(.subheadline)
-        .padding(16)
+        .padding(compactPlayer ? 8 : 16)
         .nativeFloatingSurface()
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.bottom, compactPlayer ? 0 : 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reader.player")
     }
 
     private var documentRevision: String {

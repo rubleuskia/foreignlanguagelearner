@@ -476,6 +476,8 @@ struct DictionaryEntryDetailView: View {
         } else {
             playback.open(url: source.identity.url, position: source.identity.range.lowerBound,
                           range: source.identity.range)
+            playback.mediaTitle = entry.text
+            playback.mediaSubtitle = source.itemTitle
             openedAudioIdentity = source.identity
             playback.play()
         }

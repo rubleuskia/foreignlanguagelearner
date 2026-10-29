@@ -122,6 +122,8 @@ struct VocabularyStatisticsView: View {
 
 /// Tokenization is tied to document text, not playback ticks or vocabulary revisions.
 struct VocabularyTranscriptView: View {
+    @AppStorage("reader.font-scale") private var fontScale = 1.0
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     let document: TranscriptDocument
@@ -142,34 +144,36 @@ struct VocabularyTranscriptView: View {
     var body: some View {
         VStack(spacing: 4) {
             ReadingVocabularyStatus()
-            VStack(alignment: .leading, spacing: 8) {
-                Button { showingStatistics.toggle() } label: {
-                    HStack {
-                        Label("Reading vocabulary", systemImage: "text.book.closed")
-                        Spacer()
-                        Image(systemName: showingStatistics ? "chevron.up" : "chevron.down")
-                            .font(.caption.weight(.semibold))
+            if verticalSizeClass != .compact || showingStatistics {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button { showingStatistics.toggle() } label: {
+                        HStack {
+                            Label("Reading vocabulary", systemImage: "text.book.closed")
+                            Spacer()
+                            Image(systemName: showingStatistics ? "chevron.up" : "chevron.down")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .font(.subheadline)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    .font(.subheadline)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Reading vocabulary")
+                    .accessibilityValue(showingStatistics ? "Expanded" : "Collapsed")
+                    .accessibilityIdentifier("reader.vocabulary-details")
+                    if showingStatistics {
+                        VocabularyStatisticsView(words: indexedText == document.text ? textIndex?.uniqueForms : nil, language: language, error: error)
+                        Toggle("New words", isOn: $enabled)
+                            .accessibilityIdentifier("reader.new-words")
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Reading vocabulary")
-                .accessibilityValue(showingStatistics ? "Expanded" : "Collapsed")
-                .accessibilityIdentifier("reader.vocabulary-details")
-                if showingStatistics {
-                    VocabularyStatisticsView(words: indexedText == document.text ? textIndex?.uniqueForms : nil, language: language, error: error)
-                    Toggle("New words", isOn: $enabled)
-                        .accessibilityIdentifier("reader.new-words")
-                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 4)
             TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
-                               wordStyleRevision: vocabulary.revision,
+                               fontScale: fontScale, wordStyleRevision: vocabulary.revision,
                                differentiateWithoutColor: differentiateWithoutColor,
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,

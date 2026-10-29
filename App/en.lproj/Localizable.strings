@@ -40,3 +40,13 @@
 "Share of saved phrases in this language" = "Share of saved phrases in this language";
 "Phrases: %d" = "Phrases: %d";
 "Continue" = "Continue";
+
+// Reader and practice controls
+"Tap to flip the card" = "Tap to flip the card";
+"Tap the card to reveal" = "Tap the card to reveal";
+"Swipe left: Right" = "Swipe left: Right";
+"Swipe right: Wrong" = "Swipe right: Wrong";
+"Smaller text" = "Smaller text";
+"Larger text" = "Larger text";
+"Default text size" = "Default text size";
+"Text size" = "Text size";

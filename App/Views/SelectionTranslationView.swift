@@ -144,6 +144,8 @@ struct SelectionTranslationView: View {
         if openedAudioIdentity != source.identity {
             playback.open(url: source.identity.url, position: source.identity.range.lowerBound,
                           range: source.identity.range)
+            playback.mediaTitle = source.itemTitle
+            playback.mediaSubtitle = AppLanguage.text("Phrase audio")
             openedAudioIdentity = source.identity
             playback.play()
         } else {

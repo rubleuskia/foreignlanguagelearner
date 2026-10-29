@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import MediaPlayer
 import UIKit
 
 enum PlaybackRate: Float, CaseIterable, Identifiable, Sendable {
@@ -43,8 +44,18 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
     var errorMessage: String?
     var didReachEnd: (() -> Void)?
 
+    var mediaTitle = "Language Learner"
+    var mediaSubtitle = ""
+    var remotePlay: (() -> Void)?
+    var remotePause: (() -> Void)?
+    var remoteSeek: ((Double) -> Void)?
+    private static weak var nowPlayingController: PlaybackController?
+    private static var remoteCommandsInstalled = false
+    private static var audioSessionObservers: [NSObjectProtocol] = []
+
     private static let activeControllers = NSHashTable<PlaybackController>.weakObjects()
     private var statusObserver: NSKeyValueObservation?
+    private var lastPublishedSecond: Double?
 
     private let audioSession: any PlaybackAudioSession
     private var activationTask: Task<Void, Never>?
@@ -54,8 +65,12 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
     init(audioSession: any PlaybackAudioSession = SystemPlaybackAudioSession.shared) {
         self.audioSession = audioSession
         Self.activeControllers.add(self)
-        statusObserver = player.observe(\.timeControlStatus, options: [.new]) { _, _ in
-            Task { @MainActor in Self.updateScreenAwake() }
+        Self.installRemoteCommands()
+        statusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                Self.updateScreenAwake()
+                self?.updateNowPlaying()
+            }
         }
     }
 
@@ -82,6 +97,8 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
         close(keepAudioSession: true)
         errorMessage = nil
         playbackRange = Self.validRange(range)
+        mediaTitle = url.deletingPathExtension().lastPathComponent
+        mediaSubtitle = ""
         let item = AVPlayerItem(url: url)
         if let playbackRange {
             item.forwardPlaybackEndTime = CMTime(seconds: playbackRange.upperBound, preferredTimescale: 600)
@@ -102,6 +119,7 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
                 let seconds = time.seconds
                 guard seconds.isFinite else { return }
                 self.position = self.clamped(seconds)
+                self.updateNowPlaying(force: false)
                 if let error = self.player.currentItem?.error {
                     self.errorMessage = error.localizedDescription
                 }
@@ -123,6 +141,7 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
     }
 
     func setRate(_ rate: PlaybackRate) {
+        defer { updateNowPlaying() }
         selectedRate = rate
         if wantsToPlay, sessionReady, !seekInProgress {
             player.playImmediately(atRate: rate.rawValue)
@@ -133,8 +152,13 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
         guard player.currentItem != nil else { return }
         guard activationTask == nil else { return }
         sessionReady = false
+        if let previous = Self.nowPlayingController, previous !== self {
+            if let pause = previous.remotePause { pause() } else { previous.pause() }
+        }
+        Self.nowPlayingController = self
         wantsToPlay = true
         isPlaying = true
+        updateNowPlaying()
         errorMessage = nil
         activationGeneration += 1
         let generation = activationGeneration
@@ -159,11 +183,13 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
                 self.wantsToPlay = false
                 self.isPlaying = false
                 self.errorMessage = error.localizedDescription
+                self.updateNowPlaying()
             }
         }
     }
 
     func pause() {
+        defer { updateNowPlaying() }
         activationGeneration += 1
         activationTask?.cancel()
         activationTask = nil
@@ -204,6 +230,7 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
                 if self.wantsToPlay, self.sessionReady {
                     self.player.playImmediately(atRate: self.selectedRate.rawValue)
                 }
+                self.updateNowPlaying()
                 completion?(finished)
             }
         }
@@ -230,9 +257,100 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
         player.replaceCurrentItem(with: nil)
         playbackRange = nil
         position = 0
+        lastPublishedSecond = nil
         didReachEnd = nil
-        if !keepAudioSession, hadAudio {
+        if Self.nowPlayingController === self {
+            Self.nowPlayingController = nil
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
+        if !keepAudioSession, hadAudio, Self.nowPlayingController == nil {
             Task { [audioSession] in await audioSession.deactivate() }
+        }
+    }
+
+    /// System media surfaces (Lock Screen, Control Center and Dynamic Island) share this session.
+    private func updateNowPlaying(force: Bool = true) {
+        guard Self.nowPlayingController === self, player.currentItem != nil else { return }
+        let second = floor(position)
+        guard force || lastPublishedSecond != second else { return }
+        lastPublishedSecond = second
+        let start = playbackRange?.lowerBound ?? 0
+        let end = playbackRange?.upperBound ?? player.currentItem?.duration.seconds ?? 0
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: mediaTitle,
+            MPMediaItemPropertyArtist: mediaSubtitle,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: max(0, position - start),
+            MPNowPlayingInfoPropertyPlaybackRate: player.timeControlStatus == .playing ? Double(selectedRate.rawValue) : 0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(selectedRate.rawValue)
+        ]
+        if end.isFinite { info[MPMediaItemPropertyPlaybackDuration] = max(0, end - start) }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    enum RemoteAction: Sendable {
+        case play, pause, toggle, seek(Double), skip(Double)
+    }
+
+    static func performRemote(_ action: RemoteAction) {
+        guard let owner = nowPlayingController else { return }
+        switch action {
+        case .play:
+            if let play = owner.remotePlay { play() } else { owner.play() }
+        case .pause:
+            if let pause = owner.remotePause { pause() } else { owner.pause() }
+        case .toggle:
+            performRemote(owner.wantsToPlay ? .pause : .play)
+        case .seek(let relative):
+            let position = relative + (owner.playbackRange?.lowerBound ?? 0)
+            if let seek = owner.remoteSeek { seek(position) } else { owner.seek(to: position) }
+        case .skip(let interval):
+            let position = owner.clamped(owner.position + interval)
+            if let seek = owner.remoteSeek { seek(position) } else { owner.seek(to: position) }
+        }
+    }
+
+    private static func installRemoteCommands() {
+        guard !remoteCommandsInstalled else { return }
+        remoteCommandsInstalled = true
+        audioSessionObservers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { notification in
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            Task { @MainActor in performRemote(.pause) }
+        })
+        audioSessionObservers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { notification in
+            guard let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
+            Task { @MainActor in performRemote(.pause) }
+        })
+        let center = MPRemoteCommandCenter.shared()
+        for (command, action) in [(center.playCommand, RemoteAction.play),
+                                  (center.pauseCommand, .pause),
+                                  (center.togglePlayPauseCommand, .toggle)] {
+            command.isEnabled = true
+            command.addTarget { _ in
+                Task { @MainActor in performRemote(action) }
+                return .success
+            }
+        }
+        center.changePlaybackPositionCommand.isEnabled = true
+        center.changePlaybackPositionCommand.addTarget { event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            let seconds = event.positionTime
+            Task { @MainActor in performRemote(.seek(seconds)) }
+            return .success
+        }
+        for (command, interval) in [(center.skipBackwardCommand, -10.0), (center.skipForwardCommand, 10.0)] {
+            command.isEnabled = true
+            command.preferredIntervals = [10]
+            command.addTarget { _ in
+                Task { @MainActor in performRemote(.skip(interval)) }
+                return .success
+            }
         }
     }
 
@@ -249,6 +367,7 @@ actor SystemPlaybackAudioSession: PlaybackAudioSession {
         isPlaying = false
         reachedEnd = true
         if let end = playbackRange?.upperBound { position = end }
+        updateNowPlaying()
         didReachEnd?()
     }
 

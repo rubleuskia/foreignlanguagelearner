@@ -176,6 +176,8 @@ private struct PhraseAudioBoundaryEditor: View {
                         if playback.isPlaying { playback.close(); return }
                         guard let preview = resolved(start: start, end: end) else { return }
                         playback.open(url: preview.identity.url, position: start, range: preview.identity.range)
+                        playback.mediaTitle = preview.itemTitle
+                        playback.mediaSubtitle = AppLanguage.text("Phrase audio")
                         playback.play()
                     }
                     .disabled(resolved(start: start, end: end) == nil)
