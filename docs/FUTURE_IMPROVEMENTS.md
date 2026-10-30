@@ -1,5 +1,7 @@
 # Future improvements
 
+Related plan (2026-10-30): [Paid cloud backend](PAID_CLOUD_BACKEND_PLAN.md) develops the identity, subscription, translation-proxy and usage-accounting work below into a proposed delivery sequence. Product choices remain open; no feature or deployment is marked complete by that plan.
+
 **Status:** General project backlog, not an implementation order or a list of shipped features.  
 **Updated:** 2026-09-22.
 

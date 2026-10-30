@@ -1,5 +1,10 @@
 # Architectural and product decisions
 
+## Paid cloud backend proposal (2026-10-30; not adopted)
+
+[The paid cloud backend plan](../docs/PAID_CLOUD_BACKEND_PLAN.md) proposes shared account identity, Apple-verified subscription entitlements, server-operated AI translation with durable usage accounting, and later account-authorized alignment. It recommends independent billing/translation deployment so the existing alignment benchmark gate remains intact. Tariffs, quota periods, account recovery policy, BYOK migration and retention remain open. This is a planning reference, not a replacement for the current local-first/BYOK or anonymous alignment-test decisions, and does not authorize implementation or deployment.
+
+
 ## System playback ownership and reader controls (2026-10-29)
 
 All audio uses the shared PlaybackController integration with MPNowPlayingInfoCenter and MPRemoteCommandCenter. The most recently played controller owns the app's system media session and pauses the previous owner through its coordinator. Pausing retains the session for remote resume; closing clears it only for its owner and does not deactivate another player's audio session. Register remote commands and audio interruption/route notifications once per app process, routing to a weak current owner. Book commands enter BookPlaybackController so playback intent, chapter progression and seeks stay consistent. Clip metadata and remote scrubbing use a zero-based clip timeline while the player retains source-file times. Publish actual playback rate, elapsed time, duration and human-readable book/chapter or phrase metadata. iOS controls presentation on Lock Screen, Control Center, Dynamic Island and compatible widgets; no widget extension or duplicate Live Activity is added.

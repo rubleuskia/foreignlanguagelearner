@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-30 — Paid cloud backend implementation plan
+
+- Add [the paid cloud backend plan](../docs/PAID_CLOUD_BACKEND_PLAN.md) covering account identity, Apple subscription verification, server-operated translations, durable request/usage accounting and later integration with the existing alignment backend.
+- Record proposed API/data boundaries, rollout order, failure/recovery cases and unresolved tariff, quota, BYOK and retention choices. Link the plan from the alignment architecture and future-work backlog.
+- Documentation only: no implementation, deployment, subscription configuration or tariff approval. DECISIONS.md indexes the proposal without replacing current decisions. No adopted architectural/product decision, shipped workflow or project overview changed; PROJECT.md is unchanged.
+
+
 ## 2026-10-29 — Responsive audio during selection translation
 
 - Move synchronous audio-session setup and teardown off the UI executor so tapping Play in a selection's dictionary/translation popup cannot block translation rendering and other interface actions while the media server responds. Playback starts only after session activation; pause, close and source replacement invalidate pending starts and errors. Rate changes and seek completions cannot bypass activation.
