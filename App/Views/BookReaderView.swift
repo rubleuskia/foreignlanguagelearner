@@ -168,7 +168,8 @@ struct BookReaderView: View {
                 playback.pause()
                 following = false
                 selecting = true
-            }, initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
+            }, keepsTranscriptLinesUnwrapped: mode == .track,
+                initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
                 onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {
                     message = "The transcript changed. Select the text again."

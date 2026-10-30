@@ -42,6 +42,7 @@ struct TranscriptTextView: UIViewRepresentable {
     let followGeneration: Int
     let onSelectionBegan: () -> Void
     var fontScale = 1.0
+    var keepsTranscriptLinesUnwrapped = false
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
@@ -68,11 +69,16 @@ struct TranscriptTextView: UIViewRepresentable {
         view.isEditable = false
         view.isSelectable = true
         view.alwaysBounceVertical = true
+        view.alwaysBounceHorizontal = keepsTranscriptLinesUnwrapped
         view.adjustsFontForContentSizeCategory = true
         view.font = ReadingTypography.font(compatibleWith: view.traitCollection)
         view.textColor = .label
         view.backgroundColor = .systemBackground
         view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 48, right: 24)
+        view.textContainer.widthTracksTextView = !keepsTranscriptLinesUnwrapped
+        if keepsTranscriptLinesUnwrapped {
+            view.textContainer.size = CGSize(width: 100_000, height: CGFloat.greatestFiniteMagnitude)
+        }
         view.accessibilityIdentifier = "reader.transcript"
         view.delegate = context.coordinator
         context.coordinator.apply(to: view)
@@ -87,6 +93,11 @@ struct TranscriptTextView: UIViewRepresentable {
 
     func updateUIView(_ view: LayoutAwareTextView, context: Context) {
         context.coordinator.parent = self
+        view.alwaysBounceHorizontal = keepsTranscriptLinesUnwrapped
+        view.textContainer.widthTracksTextView = !keepsTranscriptLinesUnwrapped
+        if keepsTranscriptLinesUnwrapped {
+            view.textContainer.size = CGSize(width: max(100_000, view.bounds.width), height: CGFloat.greatestFiniteMagnitude)
+        }
         context.coordinator.apply(to: view)
     }
 
@@ -266,9 +277,9 @@ struct TranscriptTextView: UIViewRepresentable {
             }
             // Store before scrolling: changing the offset can trigger another layout pass.
             followKey = key
-            guard abs(view.contentOffset.y - y) > 1 else { return }
+            guard abs(view.contentOffset.x) > 1 || abs(view.contentOffset.y - y) > 1 else { return }
             // UIKit replaces the current scrolling destination rather than queueing moves.
-            view.setContentOffset(CGPoint(x: view.contentOffset.x, y: y),
+            view.setContentOffset(CGPoint(x: 0, y: y),
                                   animated: !UIAccessibility.isReduceMotionEnabled && !geometryChanged)
         }
 

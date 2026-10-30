@@ -7,6 +7,11 @@
 - Documentation only: no implementation, deployment, subscription configuration or tariff approval. DECISIONS.md indexes the proposal without replacing current decisions. No adopted architectural/product decision, shipped workflow or project overview changed; PROJECT.md is unchanged.
 
 
+## 2026-10-30 — Horizontal transcript scrolling
+
+- Timed transcript lines in the playback reader remain on one line and can be scrolled horizontally; playback follow keeps the active cue's beginning visible. Full-text reading keeps its existing wrapping.
+- No architectural/product decision or project-overview change was required.
+
 ## 2026-10-29 — Responsive audio during selection translation
 
 - Move synchronous audio-session setup and teardown off the UI executor so tapping Play in a selection's dictionary/translation popup cannot block translation rendering and other interface actions while the media server responds. Playback starts only after session activation; pause, close and source replacement invalidate pending starts and errors. Rate changes and seek completions cannot bypass activation.
