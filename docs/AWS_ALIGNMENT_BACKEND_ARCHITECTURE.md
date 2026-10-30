@@ -1,5 +1,7 @@
 # AWS backend for audio + TXT alignment
 
+Related proposal: [Paid cloud backend plan](PAID_CLOUD_BACKEND_PLAN.md) describes account identity, Apple subscription verification, server-proxied translations and a later paid alignment integration. It does not change this public-test contract or satisfy the alignment deployment gate.
+
 ## Multilingual source contract (2026-10-27)
 
 Create accepts exactly lowercase base codes `en`, `fr`, `es`, `de`, `it`, `pl`; other codes, regional tags, uppercase and non-string values are invalid. The existing canonical request hash includes language, so a changed language conflicts on idempotency replay. Stored jobs, execution input and retries retain the submitted code, and multilingual `base` remains pinned by `base-guided-v1`. New result manifests add a `language` field checked against the job by finalization; older manifests without the field remain compatible. Audio/text timing formats, resource limits and auth policies are unchanged. The deployment gate additionally requires language-specific timing quality evidence recorded in the benchmark matrix; language-contract tests alone are insufficient.
