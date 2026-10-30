@@ -132,6 +132,7 @@ struct VocabularyTranscriptView: View {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
+    var keepsTranscriptLinesUnwrapped = false
     var initialReadingOffset: Int? = nil
     var onReadingOffsetChanged: ((Int) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
@@ -173,7 +174,8 @@ struct VocabularyTranscriptView: View {
             }
             TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
-                               fontScale: fontScale, wordStyleRevision: vocabulary.revision,
+                               fontScale: fontScale, keepsTranscriptLinesUnwrapped: keepsTranscriptLinesUnwrapped,
+                               wordStyleRevision: vocabulary.revision,
                                differentiateWithoutColor: differentiateWithoutColor,
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
