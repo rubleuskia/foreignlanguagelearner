@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-30 — Standalone listening practice
+
+Practice now offers up to ten random dictionary phrases with available selected-fragment audio in the active source language, regardless of level or cooldown. Cards show only playback and five target-language translations, with immediate correct-answer feedback. Requests contain only the saved phrase and source/target languages; the existing configured cloud provider generates one correct answer and four semantic distractors. Selected-fragment playback retains automatic 0.5-second padding and manual overrides. Sessions are memory-only and never change levels, cooldowns, regular checkpoints or activity history. Decisions and project workflow are updated below in their respective documents.
+
+
 ## 2026-10-30 — Paid cloud backend implementation plan
 
 - Add [the paid cloud backend plan](../docs/PAID_CLOUD_BACKEND_PLAN.md) covering account identity, Apple subscription verification, server-operated translations, durable request/usage accounting and later integration with the existing alignment backend.

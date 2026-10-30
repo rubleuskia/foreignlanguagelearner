@@ -1,5 +1,10 @@
 # Foreign Language Learner
 
+## Standalone listening practice
+
+Practice also includes an independent listening exercise: up to ten random audio-backed dictionary phrases in the active language, audio plus five target-language translations, and immediate feedback. Existing cloud configuration generates the choices from the phrase and language pair alone. This exercise does not track progress or affect vocabulary levels and regular training sessions.
+
+
 ## Supported source-language workflow
 
 New books may use English, French, Spanish, German, Italian or Polish, with Russian translations and explanations. Import confirms a separately remembered book language; supported package metadata takes precedence. Reading is available without an Apple translation pair. Historical books/backup languages outside this list remain readable and appear as existing dictionary/practice groups.

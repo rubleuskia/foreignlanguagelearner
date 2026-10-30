@@ -15,7 +15,7 @@ struct PracticeHomeView: View {
     @State private var launch: Launch?
 
     private enum Launch: String, Identifiable {
-        case quick, setup
+        case quick, setup, listening
         var id: Self { self }
     }
 
@@ -71,6 +71,14 @@ struct PracticeHomeView: View {
                     }
                     .padding(.vertical, 12)
                 }
+                Section {
+                    Button("Listening practice", systemImage: "headphones") { launch = .listening }
+                        .frame(minHeight: 44)
+                        .disabled(entries.isEmpty)
+                        .accessibilityIdentifier("practice.listening")
+                } footer: {
+                    Text("Listen and choose a translation. Up to 10 random phrases; progress is not saved.")
+                }
                 if !savedRoundData.isEmpty, LearningRoundCheckpoint.peek(language: activeLanguage, entries: allEntries) != nil {
                     Section {
                         Button("Continue unfinished training", systemImage: "arrow.clockwise") { launch = .setup }
@@ -98,6 +106,12 @@ struct PracticeHomeView: View {
         .onChange(of: languages.map(\.code)) { _, _ in
             activeLanguage = SourceLanguage.resolvedActive(activeLanguage, available: languages)
         }
-        .sheet(item: $launch) { LearningSessionView(sourceLanguage: activeLanguage, quickStart: $0 == .quick) }
+        .sheet(item: $launch) { destination in
+            if destination == .listening {
+                ListeningPracticeView(entries: entries, books: books)
+            } else {
+                LearningSessionView(sourceLanguage: activeLanguage, quickStart: destination == .quick)
+            }
+        }
     }
 }

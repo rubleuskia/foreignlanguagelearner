@@ -1,5 +1,10 @@
 # Architectural and product decisions
 
+## 2026-10-30 — Listening is an independent, ephemeral exercise
+
+A separate Practice button samples without replacement up to ten audio-resolvable dictionary entries in the selected source language, including learnt entries. No ready translation or elapsed cooldown is required. Missing local audio excludes an entry; fewer eligible entries produce a shorter round. Use selection audio, never the sentence mode, retaining the shared resolver's padding and manual ranges. Hide source text throughout, including system playback metadata. Generate choices on demand from exactly phrase/sourceLanguage/targetLanguage using existing cloud opt-in, key and model settings. Shuffle one correct translation plus four plausible semantic distractors locally; validate nonempty, distinct options. Malformed responses offer retry/skip. No saved results, level writes, checkpoint replacement, activity events or backup changes. Answer feedback stays only in memory until the next card; closing discards the round.
+
+
 ## Paid cloud backend proposal (2026-10-30; not adopted)
 
 [The paid cloud backend plan](../docs/PAID_CLOUD_BACKEND_PLAN.md) proposes shared account identity, Apple-verified subscription entitlements, server-operated AI translation with durable usage accounting, and later account-authorized alignment. It recommends independent billing/translation deployment so the existing alignment benchmark gate remains intact. Tariffs, quota periods, account recovery policy, BYOK migration and retention remain open. This is a planning reference, not a replacement for the current local-first/BYOK or anonymous alignment-test decisions, and does not authorize implementation or deployment.
