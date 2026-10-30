@@ -50,3 +50,21 @@
 "Larger text" = "Larger text";
 "Default text size" = "Default text size";
 "Text size" = "Text size";
+
+"Listening practice" = "Listening practice";
+
+"Listen and choose a translation. Up to 10 random phrases; progress is not saved." = "Listen and choose a translation. Up to 10 random phrases; progress is not saved.";
+
+"No dictionary phrases with available audio." = "No dictionary phrases with available audio.";
+
+"Listening practice complete" = "Listening practice complete";
+
+"Progress has not been saved. Your phrase levels are unchanged." = "Progress has not been saved. Your phrase levels are unchanged.";
+
+"Phrase %d of %d" = "Phrase %d of %d";
+
+"Preparing translations…" = "Preparing translations…";
+
+"Correct" = "Correct";
+
+"Incorrect" = "Incorrect";

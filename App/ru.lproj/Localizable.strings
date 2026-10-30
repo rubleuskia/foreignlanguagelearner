@@ -602,3 +602,21 @@
 "Larger text" = "Увеличить шрифт";
 "Default text size" = "Исходный размер шрифта";
 "Text size" = "Размер шрифта";
+
+"Listening practice" = "Аудирование";
+
+"Listen and choose a translation. Up to 10 random phrases; progress is not saved." = "Слушайте и выбирайте перевод. До 10 случайных фраз; прогресс не сохраняется.";
+
+"No dictionary phrases with available audio." = "В словаре нет фраз с доступным аудио.";
+
+"Listening practice complete" = "Аудирование завершено";
+
+"Progress has not been saved. Your phrase levels are unchanged." = "Прогресс не сохранён. Уровни фраз не изменились.";
+
+"Phrase %d of %d" = "Фраза %d из %d";
+
+"Preparing translations…" = "Подготовка переводов…";
+
+"Correct" = "Верно";
+
+"Incorrect" = "Неверно";
