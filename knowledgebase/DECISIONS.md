@@ -10,6 +10,8 @@ Both readers paginate text to the available viewport using the same TextKit font
 
 Timed subtitle CR/LF characters are replaced one-for-one with spaces for presentation, including cue separators. This preserves original UTF-16 offsets for vocabulary, selection context and audio lookup. Subtitle boundaries do not imply literary paragraphs; untimed text retains its source paragraph breaks. Each page translates its selection range back into the full chapter before dictionary/translation actions. Audio following moves to the active cue's page, while manual page turns suspend following. Resizing keeps the current source offset, and explicit Follow audio returns to the current cue.
 
+Follow audio occupies a stable toolbar slot instead of inserting a row below the text. Toggling following therefore does not repaginate the chapter or disturb a live selection, and compact-height readers retain their reading space.
+
 ## Paid cloud backend proposal (2026-10-30; not adopted)
 
 [The paid cloud backend plan](../docs/PAID_CLOUD_BACKEND_PLAN.md) proposes shared account identity, Apple-verified subscription entitlements, server-operated AI translation with durable usage accounting, and later account-authorized alignment. It recommends independent billing/translation deployment so the existing alignment benchmark gate remains intact. Tariffs, quota periods, account recovery policy, BYOK migration and retention remain open. This is a planning reference, not a replacement for the current local-first/BYOK or anonymous alignment-test decisions, and does not authorize implementation or deployment.
