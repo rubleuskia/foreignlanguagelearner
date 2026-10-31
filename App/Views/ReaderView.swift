@@ -224,7 +224,7 @@ struct ReaderView: View {
                     transport
                 }
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: 4) {
                     trackControls
                     positionSlider
                     HStack {
@@ -238,10 +238,10 @@ struct ReaderView: View {
             }
         }
         .font(.subheadline)
-        .padding(compactPlayer ? 8 : 16)
+        .padding(compactPlayer ? 8 : 10)
         .nativeFloatingSurface()
         .padding(.horizontal, 16)
-        .padding(.bottom, compactPlayer ? 0 : 8)
+        .padding(.bottom, compactPlayer ? 0 : 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reader.player")
     }

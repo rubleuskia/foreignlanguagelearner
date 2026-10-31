@@ -77,6 +77,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
     func makeConfiguredTextView(coordinator: Coordinator) -> LayoutAwareTextView {
         let view = Self.makeTextView()
+        view.isBookPage = isBookPage
         view.isEditable = false
         view.isSelectable = true
         view.alwaysBounceVertical = !isBookPage
@@ -88,7 +89,7 @@ struct TranscriptTextView: UIViewRepresentable {
         view.font = ReadingTypography.font(compatibleWith: view.traitCollection)
         view.textColor = .label
         view.backgroundColor = .systemBackground
-        view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 48, right: 24)
+        view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: isBookPage ? 8 : 48, right: 24)
         view.textContainer.widthTracksTextView = true
         view.accessibilityIdentifier = "reader.transcript"
         view.delegate = coordinator
@@ -115,11 +116,12 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     final class LayoutAwareTextView: UITextView {
+        var isBookPage = false
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
             let margin = max(24, (bounds.width - 680) / 2)
             if textContainerInset.left != margin {
-                textContainerInset = UIEdgeInsets(top: 24, left: margin, bottom: 48, right: margin)
+                textContainerInset = UIEdgeInsets(top: 24, left: margin, bottom: isBookPage ? 8 : 48, right: margin)
             }
             super.layoutSubviews()
             didLayout?()

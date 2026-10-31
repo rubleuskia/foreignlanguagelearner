@@ -25,7 +25,7 @@ enum BookTextPagination {
     nonisolated static func ranges(text: String, size: CGSize, scale: Double,
                                    category: String, phrases: [NSRange] = []) throws -> [NSRange] {
         let margin = max(24, (size.width - 680) / 2)
-        let available = CGSize(width: size.width - margin * 2, height: size.height - 72)
+        let available = CGSize(width: size.width - margin * 2, height: size.height - 32)
         guard available.width > 10, available.height > 10 else { return [] }
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(rawValue: category))
         let attributes: [NSAttributedString.Key: Any] = [
@@ -121,7 +121,7 @@ struct BookPagedTranscriptView: View {
     var body: some View {
         GeometryReader { geometry in
             let showsFollow = onFollowAudio != nil && reader.document.segments.contains { $0.start != nil }
-            let footerHeight: CGFloat = showsFollow && verticalSizeClass != .compact ? 84 : 36
+            let footerHeight: CGFloat = showsFollow && verticalSizeClass != .compact ? 68 : 24
             let pageSize = CGSize(width: geometry.size.width, height: max(0, geometry.size.height - footerHeight))
             let key = LayoutKey(text: reader.document.text,
                                 timed: reader.document.segments.contains { $0.start != nil },
@@ -159,9 +159,9 @@ struct BookPagedTranscriptView: View {
                             .accessibilityLabel("Next page")
                     }
                     .font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 24).frame(height: 36)
+                    .padding(.horizontal, 24).frame(height: 24)
                     if showsFollow, verticalSizeClass != .compact {
-                        followButton.frame(height: 48)
+                        followButton.frame(height: 44)
                     }
                 }
             }

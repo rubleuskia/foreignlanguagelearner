@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-10-31 — Compact reader controls
+
+- Remove the Full text / Track transcript picker and select synchronized track text automatically when available, falling back to full text otherwise.
+- Remove the reading-vocabulary disclosure from the reader. Move New words highlighting into the ⋯ resource menu with a shared saved preference.
+- Remove the reading percentage from the player and reduce player padding, spacing, page-navigation height and bottom text inset to give more room to the book.
+- DECISIONS.md records automatic text selection and the saved highlighting preference; PROJECT.md reflects the simplified reading controls.
+
 ## 2026-10-31 — Stable page turns and whole audio phrases
 
 - Replace the rebuilding SwiftUI page window with a native scrolling page controller that retains neighboring pages and defers content refreshes until transitions settle. Manual gestures, cancelled swipes and audio-driven page changes share the same controller lifecycle.
