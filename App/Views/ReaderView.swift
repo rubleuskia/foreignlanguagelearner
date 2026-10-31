@@ -81,14 +81,6 @@ struct ReaderView: View {
             } else {
                 ContentUnavailableView("Listen to your book", systemImage: "headphones", description: Text("Add text from the ⋮ menu to read and save phrases."))
             }
-            if !following && item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
-                Button("Follow audio", systemImage: "arrow.down.to.line") {
-                    followGeneration += 1
-                    following = true
-                }
-                    .nativeSecondaryAction()
-                    .padding(8)
-            }
         }
         .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
         .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: !compactPlayer && item.hasText && !selecting && translationPreview == nil) }
@@ -99,6 +91,16 @@ struct ReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
+                    if item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
+                        Button("Follow audio", systemImage: "arrow.down.to.line") {
+                            followGeneration += 1
+                            following = true
+                        }
+                        .labelStyle(.iconOnly)
+                        .opacity(following ? 0 : 1)
+                        .allowsHitTesting(!following)
+                        .accessibilityHidden(following)
+                    }
                     ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
                     Menu("Language", systemImage: "character.book.closed") {

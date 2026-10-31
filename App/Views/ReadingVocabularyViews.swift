@@ -132,7 +132,6 @@ struct VocabularyTranscriptView: View {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
-    var keepsTranscriptLinesUnwrapped = false
     var initialReadingOffset: Int? = nil
     var onReadingOffsetChanged: ((Int) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
@@ -172,15 +171,15 @@ struct VocabularyTranscriptView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 4)
             }
-            TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
+            BookPagedTranscriptView(reader: TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
-                               fontScale: fontScale, keepsTranscriptLinesUnwrapped: keepsTranscriptLinesUnwrapped,
+                               fontScale: fontScale,
                                wordStyleRevision: vocabulary.revision,
                                differentiateWithoutColor: differentiateWithoutColor,
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
                                initialReadingOffset: initialReadingOffset, onReadingOffsetChanged: onReadingOffsetChanged,
-                               handleSelection: handleSelection)
+                               handleSelection: handleSelection))
         }
         .task(id: document.text) {
             let text = document.text

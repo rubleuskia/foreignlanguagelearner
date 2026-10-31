@@ -4,6 +4,13 @@
 
 A separate Practice button samples without replacement up to ten audio-resolvable dictionary entries in the selected source language, including learnt entries. No ready translation or elapsed cooldown is required. Missing local audio excludes an entry; fewer eligible entries produce a shorter round. Use selection audio, never the sentence mode, retaining the shared resolver's padding and manual ranges. Hide source text throughout, including system playback metadata. Generate choices on demand from exactly phrase/sourceLanguage/targetLanguage using existing cloud opt-in, key and model settings. Shuffle one correct translation plus four plausible semantic distractors locally; validate nonempty, distinct options. Malformed responses offer retry/skip. No saved results, level writes, checkpoint replacement, activity events or backup changes. Answer feedback stays only in memory until the next card; closing discards the round.
 
+## Book pages and subtitle reflow (2026-10-30)
+
+Both readers paginate text to the available viewport using the same TextKit font, spacing and margins as the selectable page. Pages turn horizontally and wrap words within their width. Pagination runs off the main actor and is rebuilt for document, viewport or font changes; playback ticks do not rebuild pages. Only the visible page and its neighbors instantiate text views.
+
+Timed subtitle CR/LF characters are replaced one-for-one with spaces for presentation, including cue separators. This preserves original UTF-16 offsets for vocabulary, selection context and audio lookup. Subtitle boundaries do not imply literary paragraphs; untimed text retains its source paragraph breaks. Each page translates its selection range back into the full chapter before dictionary/translation actions. Audio following moves to the active cue's page, while manual page turns suspend following. Resizing keeps the current source offset, and explicit Follow audio returns to the current cue.
+
+Follow audio occupies a stable toolbar slot instead of inserting a row below the text. Toggling following therefore does not repaginate the chapter or disturb a live selection, and compact-height readers retain their reading space.
 
 ## Paid cloud backend proposal (2026-10-30; not adopted)
 

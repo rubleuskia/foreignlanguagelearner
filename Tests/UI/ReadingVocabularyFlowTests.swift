@@ -84,13 +84,13 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
         let text = app.textViews["reader.transcript"]
         XCTAssertTrue(text.waitForExistence(timeout: 10))
-        text.swipeUp(velocity: .fast)
+        text.swipeLeft()
         XCTAssertTrue(app.buttons["Follow audio"].exists)
         app.buttons["reader.choose-chapter"].tap()
         app.buttons["reader.chapter.one"].tap()
-        let value = try XCTUnwrap(text.value as? String)
-        let offset = try XCTUnwrap(Int(value.replacingOccurrences(of: "offset:", with: "")))
-        XCTAssertLessThanOrEqual(offset, 5)
+        let number = app.staticTexts["reader.page-number"]
+        XCTAssertTrue(number.waitForExistence(timeout: 10))
+        XCTAssertTrue(number.label.hasPrefix("1 /"))
     }
 
     @MainActor func testManualSwipeWhilePausedWithNewWordHighlighting() throws {
@@ -103,28 +103,34 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertTrue(text.waitForExistence(timeout: 10))
         app.buttons["Reading vocabulary"].tap()
         XCTAssertTrue(app.staticTexts["vocabulary.statistics"].waitForExistence(timeout: 10))
-        app.buttons["Play"].tap()
-        let pause = app.buttons["Pause"]
-        XCTAssertTrue(pause.waitForExistence(timeout: 5)); pause.tap()
+        // The reader opens paused. Starting this 20-second fixture here makes
+        // XCTest wait through continuous cue changes and enter the next chapter.
         XCTAssertTrue(app.buttons["Play"].exists)
         func offset() throws -> Int {
-            let value = try XCTUnwrap(text.value as? String)
-            return try XCTUnwrap(Int(value.replacingOccurrences(of: "offset:", with: "")))
+            let value = app.staticTexts["reader.page-number"].label
+            return try XCTUnwrap(Int(value.components(separatedBy: " / ")[0]))
         }
         let initial = try offset()
-        text.swipeUp(velocity: .fast)
+        XCTAssertLessThanOrEqual(text.frame.width, app.frame.width + 1,
+                                 "A book page must wrap within the screen width")
+        text.swipeLeft()
         let first = try offset()
-        XCTAssertGreaterThan(first, initial + 100, "Paused audio must not hold the transcript at its cue")
+        XCTAssertEqual(first, initial + 1, "A horizontal swipe must advance one whole page")
         XCTAssertTrue(app.buttons["Follow audio"].exists)
-        text.swipeUp(velocity: .fast)
+        app.buttons["Next page"].tap()
         let second = try offset()
-        XCTAssertGreaterThan(second, first + 100, "Successive swipes must keep advancing after inertia settles")
+        XCTAssertEqual(second, first + 1)
         app.switches["reader.new-words"].tap()
-        XCTAssertEqual(try offset(), second, accuracy: 5)
+        XCTAssertEqual(try offset(), second)
         app.switches["reader.new-words"].tap()
-        XCTAssertEqual(try offset(), second, accuracy: 5, "Refreshing paint while paused must preserve the viewport")
-        text.swipeDown(velocity: .fast)
-        XCTAssertLessThan(try offset(), second - 100)
+        XCTAssertEqual(try offset(), second, "Refreshing paint while paused must preserve the page")
+        app.buttons["Previous page"].tap()
+        XCTAssertEqual(try offset(), second - 1)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["Follow audio"].tap()
+        XCTAssertEqual(try offset(), initial, "Follow audio must return to the current cue's page")
         XCTAssertTrue(app.buttons["Play"].exists, "Manual scrolling must leave playback paused")
     }
 

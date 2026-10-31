@@ -64,14 +64,6 @@ struct BookReaderView: View {
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
             }
             transcriptContent
-            if !following, mode == .track {
-                Button("Follow audio", systemImage: "arrow.down.to.line") {
-                    followGeneration += 1
-                    following = true
-                }
-                .nativeSecondaryAction()
-                .padding(8)
-            }
         }
         .safeAreaInset(edge: .bottom) { playerBar }
         .safeAreaInset(edge: .top) {
@@ -86,6 +78,16 @@ struct BookReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
+                    if mode == .track {
+                        Button("Follow audio", systemImage: "arrow.down.to.line") {
+                            followGeneration += 1
+                            following = true
+                        }
+                        .labelStyle(.iconOnly)
+                        .opacity(following ? 0 : 1)
+                        .allowsHitTesting(!following)
+                        .accessibilityHidden(following)
+                    }
                     ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
                     BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() },
@@ -168,7 +170,7 @@ struct BookReaderView: View {
                 playback.pause()
                 following = false
                 selecting = true
-            }, keepsTranscriptLinesUnwrapped: mode == .track,
+            },
                 initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
                 onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {
