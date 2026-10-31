@@ -1,5 +1,10 @@
 # Project changelog
 
+## 2026-10-31 — Dictionary-grounded listening answers
+
+Listening uses the saved dictionary translation verbatim as its correct answer and only samples entries with a translation and audio. The model generates only distractors, guided by the saved answer. The prompt analyzes the entire phrase, picks its two hardest independent meaning-bearing elements, and combines two incorrect meanings for each into four 2×2 variants; single-word/indivisible expressions use four single-element variants. Decisions and the project workflow were updated; levels and progress tracking remain unchanged.
+
+
 ## 2026-10-30 — Standalone listening practice
 
 Practice now offers up to ten random dictionary phrases with available selected-fragment audio in the active source language, regardless of level or cooldown. Cards show only playback and five target-language translations, with immediate correct-answer feedback. Requests contain only the saved phrase and source/target languages; the existing configured cloud provider generates one correct answer and four semantic distractors. Selected-fragment playback retains automatic 0.5-second padding and manual overrides. Sessions are memory-only and never change levels, cooldowns, regular checkpoints or activity history. Decisions and project workflow are updated below in their respective documents.

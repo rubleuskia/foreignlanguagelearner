@@ -2,7 +2,7 @@
 
 ## Standalone listening practice
 
-Practice also includes an independent listening exercise: up to ten random audio-backed dictionary phrases in the active language, audio plus five target-language translations, and immediate feedback. Existing cloud configuration generates the choices from the phrase and language pair alone. This exercise does not track progress or affect vocabulary levels and regular training sessions.
+Practice also includes an independent listening exercise: up to ten random audio-backed dictionary phrases in the active language, audio plus five target-language translations, and immediate feedback. Existing cloud configuration generates four distractors from the phrase, language pair and authoritative saved dictionary translation. For two independently meaningful elements the prompt requests a 2×2 combination of two incorrect replacements per element; single-meaning entries use four replacements. The app supplies the correct answer verbatim from the dictionary; entries without a saved translation are excluded. This exercise does not track progress or affect vocabulary levels and regular training sessions.
 
 
 ## Supported source-language workflow

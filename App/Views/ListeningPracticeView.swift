@@ -29,7 +29,7 @@ struct ListeningPracticeView: View {
                     if !prepared {
                         ProgressView()
                     } else if cards.isEmpty {
-                        Text("No dictionary phrases with available audio.")
+                        Text("No dictionary phrases with available audio and a saved translation.")
                     } else if index >= cards.count {
                         Text("Listening practice complete").font(.title2)
                         Text("Progress has not been saved. Your phrase levels are unchanged.")
@@ -85,8 +85,8 @@ struct ListeningPracticeView: View {
         }
         .task {
             guard !prepared else { return }
-            let candidates = entries.shuffled().map { entry in
-                (ListeningInput(phrase: entry.text, sourceLanguage: entry.sourceLanguageCode,
+            let candidates = entries.filter { $0.hasTranslation }.shuffled().map { entry in
+                (ListeningInput(phrase: entry.text, dictionaryTranslation: entry.translationText ?? "", sourceLanguage: entry.sourceLanguageCode,
                                 targetLanguage: entry.targetLanguageCode), PhraseAudioRequest(entry: entry, items: books))
             }
             let worker = Task.detached(priority: .userInitiated) {
