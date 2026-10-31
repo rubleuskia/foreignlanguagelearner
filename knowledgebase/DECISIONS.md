@@ -1,5 +1,11 @@
 # Architectural and product decisions
 
+## Compact reading controls (2026-10-31)
+
+The independent reader.text-layout preference selects pages (default) or vertical scrolling in both readers. Expose it in the ⋯ menu beside highlighting. A shared layout owner retains source-character offsets across presentation changes and forwards normal progress persistence; audio following continues to resolve the active cue. Vertical mode reuses the original selectable transcript and follow behavior, with a stable bottom Follow slot.
+
+The book reader automatically shows synchronized text for the active track, or full text when synchronization is unavailable. No mode picker is exposed. The reading-vocabulary disclosure is removed from the reading canvas; New words highlighting is controlled from the existing ⋯ resource menu and persisted in reader.highlight-new-words across both readers. Completion percentages remain available in library/book progress, while player chrome omits them. Page navigation uses a 24-point row and book text has an 8-point bottom inset; pagination measures the same insets as rendering.
+
 ## Stable transitions and indivisible phrases (2026-10-31)
 
 Use UIPageViewController's native scroll transition with retained current/neighbor controllers. Do not replace page roots, clear the page cache or apply a competing page jump during a transition. Defer vocabulary/highlight updates until completion; coalesce programmatic audio destinations. Cancelling a manual swipe retains the visible controller and disables audio following without an extra reset animation.

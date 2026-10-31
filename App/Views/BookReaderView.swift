@@ -51,14 +51,6 @@ struct BookReaderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if item.hasText && item.tracks.contains(where: { $0.alignmentStatus.hasTimedTranscript }) {
-                Picker("Reading mode", selection: $mode) {
-                    ForEach(ReadingMode.allCases) { Text(AppLanguage.text($0.rawValue)).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, compactPlayer ? 4 : 16)
-            }
             if !compactPlayer && item.hasText && activeTrack?.alignmentStatus.hasTimedTranscript != true {
                 Text("Read and listen independently. Add synchronization from the ⋮ menu to follow the recording.")
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
@@ -106,7 +98,7 @@ struct BookReaderView: View {
             scrubPosition = playback.localPosition
             followGeneration += 1
             following = true
-            if activeTrack?.alignmentStatus.hasTimedTranscript != true { mode = .full }
+            mode = activeTrack?.alignmentStatus.hasTimedTranscript == true ? .track : .full
             showAudioTip = false
         }
         .onChange(of: mode) { _, _ in
@@ -250,10 +242,7 @@ struct BookReaderView: View {
                     PlaybackRateMenu(playback: playback.playback, compact: true)
                 }
             } else {
-                VStack(spacing: 8) {
-                    Text(AppLanguage.format("%@: %@", AppLanguage.text(item.hasText ? "Read" : "Listened"),
-                                            item.readingProgress.formatted(.percent.precision(.fractionLength(0)))))
-                        .font(.caption).foregroundStyle(.secondary)
+                VStack(spacing: 4) {
                     HStack {
                         chapterButton
                         Spacer()
@@ -271,10 +260,10 @@ struct BookReaderView: View {
             }
         }
         .font(.subheadline)
-        .padding(compactPlayer ? 8 : 16)
+        .padding(compactPlayer ? 8 : 10)
         .nativeFloatingSurface()
         .padding(.horizontal, 16)
-        .padding(.bottom, compactPlayer ? 0 : 8)
+        .padding(.bottom, compactPlayer ? 0 : 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reader.player")
     }

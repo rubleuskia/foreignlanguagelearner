@@ -113,7 +113,7 @@ final class BookPaginationTests: XCTestCase {
                 ])
                 let manager = NSLayoutManager()
                 let container = NSTextContainer(size: CGSize(width: size.width - max(24, (size.width - 680) / 2) * 2,
-                                                              height: size.height - 72))
+                                                              height: size.height - 32))
                 storage.addLayoutManager(manager)
                 manager.addTextContainer(container)
                 manager.ensureLayout(for: container)

@@ -5,11 +5,24 @@ struct BookResourceMenu: View {
     var beforeUpdate: () -> Void = {}
     var onUpdatePhraseAudio: (() -> Void)? = nil
     var isUpdatingPhraseAudio = false
+    @AppStorage("reader.highlight-new-words") private var highlightsNewWords = true
+    @AppStorage("reader.text-layout") private var textLayout = ReaderTextLayout.pages.rawValue
     @State private var action: BookResourceAction?
     @State private var showingFiles = false
 
     var body: some View {
         Menu {
+            if item.hasText {
+                Picker("Text layout", selection: $textLayout) {
+                    ForEach(ReaderTextLayout.allCases, id: \.rawValue) { layout in
+                        Text(AppLanguage.text(layout.title)).tag(layout.rawValue)
+                            .accessibilityIdentifier("reader.layout.\(layout.rawValue)")
+                    }
+                }
+                Toggle("New words", isOn: $highlightsNewWords)
+                    .accessibilityIdentifier("reader.new-words")
+                Divider()
+            }
             Button(AppLanguage.text(item.hasText ? "Replace text" : "Add text"), systemImage: "doc.text") { open(.text) }
             Button(AppLanguage.text(item.hasAudio ? "Replace audio" : "Add audio"), systemImage: "headphones") { open(.audio) }
             if item.hasAudio && item.mediaKind != "video" {
