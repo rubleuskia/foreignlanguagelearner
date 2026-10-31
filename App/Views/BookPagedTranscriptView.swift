@@ -245,6 +245,7 @@ struct BookPagedTranscriptView: View {
         if !force, page == destination { return }
         page = destination
         readingOffset = cue.location
+        reader.onReadingOffsetChanged?(readingOffset)
     }
 
     private var uiCategory: UIContentSizeCategory {

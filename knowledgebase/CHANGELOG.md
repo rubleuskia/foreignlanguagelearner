@@ -2,6 +2,8 @@
 
 ## 2026-10-31 — Compact reader controls
 
+- Add a saved Text layout choice in ⋯: Book pages or Vertical scrolling. Both readers preserve the current document offset when switching; bottom Follow remains available in either layout.
+
 - Remove the Full text / Track transcript picker and select synchronized track text automatically when available, falling back to full text otherwise.
 - Remove the reading-vocabulary disclosure from the reader. Move New words highlighting into the ⋯ resource menu with a shared saved preference.
 - Remove the reading percentage from the player and reduce player padding, spacing, page-navigation height and bottom text inset to give more room to the book.

@@ -22,6 +22,8 @@ The project also contains a standalone local subtitle-aligner utility. It extrac
 
 ## Current scope
 
+The ⋯ menu offers a saved choice between book pages and vertical scrolling in both readers, retaining the reading position when switching.
+
 Reading controls automatically choose synchronized track text or full text. The ⋯ menu contains the saved New words highlighting setting; the reading canvas omits vocabulary statistics and the player omits the completion percentage to preserve text space.
 
 Native page transitions retain neighboring pages throughout swipes. Timed audio phrases stay whole on one page; an oversized phrase has its own vertically scrollable page. Follow audio is available in the fixed bottom reader footer.

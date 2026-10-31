@@ -143,7 +143,7 @@ struct VocabularyTranscriptView: View {
     var body: some View {
         VStack(spacing: 0) {
             ReadingVocabularyStatus()
-            BookPagedTranscriptView(reader: TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
+            ReaderLayoutView(reader: TranscriptTextView(document: document, activeSegment: activeSegment, following: $following,
                                followGeneration: followGeneration, onSelectionBegan: onSelectionBegan,
                                fontScale: fontScale,
                                wordStyleRevision: vocabulary.revision,
@@ -152,6 +152,7 @@ struct VocabularyTranscriptView: View {
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
                                initialReadingOffset: initialReadingOffset, onReadingOffsetChanged: onReadingOffsetChanged,
                                handleSelection: handleSelection), onFollowAudio: onFollowAudio)
+                .id(document.text)
         }
         .task(id: document.text) {
             let text = document.text

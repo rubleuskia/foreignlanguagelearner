@@ -1,6 +1,36 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testTextLayoutSwitchKeepsReadingPlaceAndSavedChoice() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
+        openReader(app)
+        func choose(_ title: String) {
+            app.buttons["book.resources"].tap()
+            if app.buttons["Text layout"].exists { app.buttons["Text layout"].tap() }
+            app.buttons[title].firstMatch.tap()
+        }
+        if !app.staticTexts["reader.page-number"].waitForExistence(timeout: 3) { choose("Book pages") }
+        XCTAssertTrue(app.staticTexts["reader.page-number"].waitForExistence(timeout: 10))
+        app.buttons["Next page"].tap()
+        let page = app.staticTexts["reader.page-number"].label
+        choose("Vertical scrolling")
+        XCTAssertTrue(app.textViews["reader.transcript"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["reader.page-number"].exists)
+        choose("Book pages")
+        XCTAssertTrue(app.staticTexts["reader.page-number"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["reader.page-number"].label, page)
+        choose("Vertical scrolling")
+        app.navigationBars.buttons.firstMatch.tap()
+        openReader(app)
+        XCTAssertTrue(app.textViews["reader.transcript"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["reader.page-number"].exists)
+        choose("Book pages")
+    }
+
     @MainActor func testCompactReaderMovesNewWordsIntoOverflowMenu() {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture"]
