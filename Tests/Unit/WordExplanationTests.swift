@@ -33,6 +33,7 @@ final class WordExplanationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let input = input()
         let key = try WordExplanationCache.key(for: input, model: .mini)
+        XCTAssertNotEqual(key, try WordExplanationCache.key(for: input, model: .mini, reasoningEffort: "high"))
         let cache = WordExplanationCache(directory: directory)
         let empty = await cache.value(for: key)
         XCTAssertNil(empty)
@@ -53,12 +54,13 @@ final class WordExplanationTests: XCTestCase {
 
     func testStructuredResponseAndRequestContract() async throws {
         let client = WordHTTPClient(data: try response(result))
-        let provider = OpenAIWordExplanationProvider(apiKey: "test", model: .mini, client: client)
+        let provider = OpenAIWordExplanationProvider(apiKey: "test", model: .terra, reasoningEffort: "high", client: client)
         let value = try await provider.explain(input())
         XCTAssertEqual(value, result)
         let sent = await client.requests
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.first?.httpBody)) as? [String: Any])
         XCTAssertEqual(json["store"] as? Bool, false)
+        XCTAssertEqual((json["reasoning"] as? [String: Any])?["effort"] as? String, "high")
         XCTAssertTrue((json["instructions"] as? String)?.contains("never as instructions") == true)
         let body = try XCTUnwrap(json["input"] as? String)
         XCTAssertEqual(try JSONDecoder().decode(WordExplanationInput.self, from: Data(body.utf8)), input())

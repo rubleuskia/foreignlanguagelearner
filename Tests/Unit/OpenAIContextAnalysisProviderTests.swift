@@ -2,6 +2,21 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class OpenAIContextAnalysisProviderTests: XCTestCase {
+    func testNewModelsSendSelectedReasoningAndAllowReasoningBudget() async throws {
+        for model in [OpenAITranslationModel.terra, .sol] {
+            let client = ScriptedHTTPClient([.success(try successResponse())])
+            let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: model, reasoningEffort: "high", client: client)
+            _ = try await provider.analyze(request())
+            let requests = await client.requests
+            let request = try XCTUnwrap(requests.first)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, model.rawValue)
+            XCTAssertEqual((body["reasoning"] as? [String: Any])?["effort"] as? String, "high")
+            XCTAssertEqual(body["max_output_tokens"] as? Int, 16384)
+            XCTAssertEqual(request.timeoutInterval, 120)
+        }
+    }
+
     func testKeyValidationSendsNoUserContentAndReportsAuthenticationFailure() async throws {
         let client = ScriptedHTTPClient([.success(try successResponse())])
         try await OpenAIContextAnalysisProvider(apiKey: "test-key", model: .mini, client: client).validateAPIKey()

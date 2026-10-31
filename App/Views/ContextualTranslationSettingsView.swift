@@ -6,6 +6,7 @@ struct ContextualTranslationSettingsView: View {
     private var cloudAnalysisEnabled = false
     @AppStorage(ContextAnalysisSettings.modelKey)
     private var selectedModelRawValue = OpenAITranslationModel.mini.rawValue
+    @AppStorage(ContextAnalysisSettings.reasoningEffortKey) private var reasoningEffortRawValue = ""
     @State private var apiKey = ""
     @State private var hasSavedAPIKey = false
     @State private var keyMessage: String?
@@ -40,6 +41,16 @@ struct ContextualTranslationSettingsView: View {
                 }
                 .disabled(checkingKey)
                 .onChange(of: selectedModelRawValue) { _, _ in keyCheckMessage = nil }
+                Picker("Reasoning effort", selection: reasoningBinding) {
+                    ForEach(currentModel.supportedReasoningEfforts, id: \.self) { effort in
+                        Text(AppLanguage.text(reasoningTitle(effort))).tag(effort)
+                    }
+                }
+                .disabled(checkingKey)
+                .accessibilityIdentifier("settings.reasoning-effort")
+                .onChange(of: reasoningEffortRawValue) { _, _ in keyCheckMessage = nil }
+                Text("More reasoning can improve complex answers, but takes longer and uses more tokens.")
+                    .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Configuration") {
                     Text(AppLanguage.text(hasSavedAPIKey ? "API key saved" : "API key required"))
                         .foregroundStyle(hasSavedAPIKey ? Color.secondary : Color.orange)
@@ -163,6 +174,27 @@ struct ContextualTranslationSettingsView: View {
         }
     }
 
+    private var currentModel: OpenAITranslationModel {
+        OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini
+    }
+
+    private var reasoningBinding: Binding<String> {
+        Binding(get: { currentModel.resolvedReasoningEffort(reasoningEffortRawValue) },
+                set: { reasoningEffortRawValue = $0 })
+    }
+
+    private func reasoningTitle(_ value: String) -> String {
+        switch value {
+        case "none": "Off"
+        case "minimal": "Minimal"
+        case "low": "Low"
+        case "medium": "Medium"
+        case "high": "High"
+        case "xhigh": "Extra high"
+        default: "Maximum"
+        }
+    }
+
     private var selectedModelBinding: Binding<OpenAITranslationModel> {
         Binding(
             get: { OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini },
@@ -195,7 +227,7 @@ struct ContextualTranslationSettingsView: View {
             let key = try draft.isEmpty ? OpenAIAPIKeyStore.load() : draft
             guard let key else { throw ContextAnalysisError.missingConfiguration }
             let provider = OpenAIContextAnalysisProvider(apiKey: key,
-                model: OpenAITranslationModel(rawValue: selectedModelRawValue) ?? .mini)
+                model: currentModel, reasoningEffort: currentModel.resolvedReasoningEffort(reasoningEffortRawValue))
             try await provider.validateAPIKey()
             keyCheckFailed = false
             keyCheckMessage = "OK — API key and selected model are available."

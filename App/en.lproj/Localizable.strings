@@ -70,3 +70,21 @@
 "Incorrect" = "Incorrect";
 "Previous page" = "Previous page";
 "Next page" = "Next page";
+
+"Reasoning effort" = "Reasoning effort";
+
+"More reasoning can improve complex answers, but takes longer and uses more tokens." = "More reasoning can improve complex answers, but takes longer and uses more tokens.";
+
+"Off" = "Off";
+
+"Minimal" = "Minimal";
+
+"Low" = "Low";
+
+"Medium" = "Medium";
+
+"High" = "High";
+
+"Extra high" = "Extra high";
+
+"Maximum" = "Maximum";

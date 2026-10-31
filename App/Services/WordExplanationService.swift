@@ -40,11 +40,11 @@ actor WordExplanationCache {
     }
 
     static func key(for input: WordExplanationInput, model: OpenAITranslationModel,
-                    prompt: String = OpenAIWordExplanationProvider.defaultPrompt) throws -> String {
+                    prompt: String = OpenAIWordExplanationProvider.defaultPrompt, reasoningEffort: String? = nil) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         var bytes = try encoder.encode(input)
-        bytes.append(contentsOf: "|\(model.rawValue)|\(OpenAIWordExplanationProvider.promptVersion)|\(prompt)".utf8)
+        bytes.append(contentsOf: "|\(model.rawValue)|\(OpenAIWordExplanationProvider.promptVersion)|\(prompt)|\(model.resolvedReasoningEffort(reasoningEffort))".utf8)
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 
@@ -74,14 +74,15 @@ actor WordExplanationService: WordExplanationServing {
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
         let model = ContextAnalysisSettings.selectedModel()
         let prompt = ContextAnalysisSettings.wordExplanationPrompt()
-        let key = try WordExplanationCache.key(for: input, model: model, prompt: prompt)
+        let effort = ContextAnalysisSettings.reasoningEffort(for: model)
+        let key = try WordExplanationCache.key(for: input, model: model, prompt: prompt, reasoningEffort: effort)
         try Task.checkCancellation()
         if let cached = await cache.value(for: key) { return cached }
         guard ContextAnalysisSettings.isCloudAnalysisEnabled(),
               let apiKey = try OpenAIAPIKeyStore.load(), !apiKey.isEmpty else {
             throw ContextAnalysisError.missingConfiguration
         }
-        let result = try await OpenAIWordExplanationProvider(apiKey: apiKey, model: model, prompt: prompt).explain(input)
+        let result = try await OpenAIWordExplanationProvider(apiKey: apiKey, model: model, reasoningEffort: effort, prompt: prompt).explain(input)
         try Task.checkCancellation()
         try await cache.store(result, for: key)
         return result

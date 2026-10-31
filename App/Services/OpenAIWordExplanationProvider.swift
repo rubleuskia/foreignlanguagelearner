@@ -29,11 +29,13 @@ struct OpenAIWordExplanationProvider: Sendable {
 
     let apiKey: String
     let model: OpenAITranslationModel
+    var reasoningEffort: String? = nil
     var client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient()
 
     var prompt: String = Self.defaultPrompt
 
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
+        let effort = model.resolvedReasoningEffort(reasoningEffort)
         try Task.checkCancellation()
         guard input.selectionLocationUTF16 >= 0, input.selectionLengthUTF16 > 0,
               input.selectionLocationUTF16 <= input.context.utf16.count,
@@ -55,12 +57,12 @@ struct OpenAIWordExplanationProvider: Sendable {
             "required": ["definition", "meaningInContext", "examples"]]
         var request = URLRequest(url: OpenAIContextAnalysisProvider.endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = ReasoningRequestBudget.timeout(effort: effort)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model.rawValue, "store": false, "max_output_tokens": 1_600,
-            "reasoning": ["effort": model.reasoningEffort], "instructions": Self.instructions(for: prompt),
+            "model": model.rawValue, "store": false, "max_output_tokens": ReasoningRequestBudget.outputTokens(effort: effort, base: 1600),
+            "reasoning": ["effort": effort], "instructions": Self.instructions(for: prompt),
             "input": String(decoding: try JSONEncoder().encode(input), as: UTF8.self),
             "text": ["format": ["type": "json_schema", "name": "word_explanation", "strict": true, "schema": schema]]
         ])

@@ -622,3 +622,21 @@
 "Incorrect" = "Неверно";
 "Previous page" = "Предыдущая страница";
 "Next page" = "Следующая страница";
+
+"Reasoning effort" = "Уровень рассуждения";
+
+"More reasoning can improve complex answers, but takes longer and uses more tokens." = "Более глубокое рассуждение может улучшить сложные ответы, но требует больше времени и токенов.";
+
+"Off" = "Выключено";
+
+"Minimal" = "Минимальный";
+
+"Low" = "Низкий";
+
+"Medium" = "Средний";
+
+"High" = "Высокий";
+
+"Extra high" = "Очень высокий";
+
+"Maximum" = "Максимальный";
