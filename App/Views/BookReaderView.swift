@@ -64,13 +64,16 @@ struct BookReaderView: View {
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
             }
             transcriptContent
-            if !following, mode == .track {
+            if mode == .track {
                 Button("Follow audio", systemImage: "arrow.down.to.line") {
                     followGeneration += 1
                     following = true
                 }
                 .nativeSecondaryAction()
                 .padding(8)
+                .opacity(following ? 0 : 1)
+                .allowsHitTesting(!following)
+                .accessibilityHidden(following)
             }
         }
         .safeAreaInset(edge: .bottom) { playerBar }
@@ -168,7 +171,7 @@ struct BookReaderView: View {
                 playback.pause()
                 following = false
                 selecting = true
-            }, keepsTranscriptLinesUnwrapped: mode == .track,
+            },
                 initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
                 onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {

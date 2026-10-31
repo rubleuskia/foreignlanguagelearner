@@ -4,6 +4,11 @@
 
 Practice now offers up to ten random dictionary phrases with available selected-fragment audio in the active source language, regardless of level or cooldown. Cards show only playback and five target-language translations, with immediate correct-answer feedback. Requests contain only the saved phrase and source/target languages; the existing configured cloud provider generates one correct answer and four semantic distractors. Selected-fragment playback retains automatic 0.5-second padding and manual overrides. Sessions are memory-only and never change levels, cooldowns, regular checkpoints or activity history. Decisions and project workflow are updated below in their respective documents.
 
+## 2026-10-30 — Book-style reader pagination
+
+- Replace the unwrapped horizontal transcript with horizontally swiped book pages in both readers. Text wraps within each page; timed subtitle line breaks become spaces so cue boundaries no longer fragment prose. Untimed books retain their paragraphs.
+- Recalculate page boundaries for the available viewport and font size, preserving the reading position. Audio following selects the page containing the current cue; manual page turns suspend following. Page-local selections map back to the original chapter for contextual translation and phrase audio.
+- DECISIONS.md records pagination and offset preservation; PROJECT.md reflects the paginated reading workflow.
 
 ## 2026-10-30 — Paid cloud backend implementation plan
 

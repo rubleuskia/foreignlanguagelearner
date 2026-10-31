@@ -42,7 +42,7 @@ struct TranscriptTextView: UIViewRepresentable {
     let followGeneration: Int
     let onSelectionBegan: () -> Void
     var fontScale = 1.0
-    var keepsTranscriptLinesUnwrapped = false
+    var isBookPage = false
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
@@ -64,21 +64,26 @@ struct TranscriptTextView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: LayoutAwareTextView,
+                      context: Context) -> CGSize? {
+        guard isBookPage, let width = proposal.width, let height = proposal.height else { return nil }
+        return CGSize(width: width, height: height)
+    }
+
     func makeUIView(context: Context) -> LayoutAwareTextView {
         let view = Self.makeTextView()
         view.isEditable = false
         view.isSelectable = true
-        view.alwaysBounceVertical = true
-        view.alwaysBounceHorizontal = keepsTranscriptLinesUnwrapped
+        view.alwaysBounceVertical = !isBookPage
+        view.isScrollEnabled = !isBookPage
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         view.adjustsFontForContentSizeCategory = true
         view.font = ReadingTypography.font(compatibleWith: view.traitCollection)
         view.textColor = .label
         view.backgroundColor = .systemBackground
         view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 48, right: 24)
-        view.textContainer.widthTracksTextView = !keepsTranscriptLinesUnwrapped
-        if keepsTranscriptLinesUnwrapped {
-            view.textContainer.size = CGSize(width: 100_000, height: CGFloat.greatestFiniteMagnitude)
-        }
+        view.textContainer.widthTracksTextView = true
         view.accessibilityIdentifier = "reader.transcript"
         view.delegate = context.coordinator
         context.coordinator.apply(to: view)
@@ -93,11 +98,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
     func updateUIView(_ view: LayoutAwareTextView, context: Context) {
         context.coordinator.parent = self
-        view.alwaysBounceHorizontal = keepsTranscriptLinesUnwrapped
-        view.textContainer.widthTracksTextView = !keepsTranscriptLinesUnwrapped
-        if keepsTranscriptLinesUnwrapped {
-            view.textContainer.size = CGSize(width: max(100_000, view.bounds.width), height: CGFloat.greatestFiniteMagnitude)
-        }
+        view.isScrollEnabled = !isBookPage
         context.coordinator.apply(to: view)
     }
 
@@ -108,18 +109,6 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     final class LayoutAwareTextView: UITextView {
-        #if DEBUG
-        // UI-test telemetry only; production accessibility keeps the native transcript value.
-        override var accessibilityValue: String? {
-            get {
-                if ProcessInfo.processInfo.arguments.contains("--paused-scroll-fixture") {
-                    return "offset:\(Int(contentOffset.y))"
-                }
-                return super.accessibilityValue
-            }
-            set { super.accessibilityValue = newValue }
-        }
-        #endif
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
             let margin = max(24, (bounds.width - 680) / 2)
@@ -226,7 +215,7 @@ struct TranscriptTextView: UIViewRepresentable {
         }
 
         func applyFollow(to view: UITextView) {
-            guard parent.following, view.selectedRange.length == 0,
+            guard !parent.isBookPage, parent.following, view.selectedRange.length == 0,
                   !view.isDragging, !view.isDecelerating,
                   let active = parent.activeSegment,
                   parent.document.ranges.indices.contains(active) else { return }
@@ -451,7 +440,8 @@ struct TranscriptTextView: UIViewRepresentable {
             guard appliedWordRevision != parent.wordStyleRevision
                     || appliedWordUnderline != parent.differentiateWithoutColor
                     || appliedContentSizeCategory != category || appliedFontScale != parent.fontScale || appliedWindow != window
-                    || appliedIndexIdentity != identity || appliedWordLanguage != parent.wordStyleLanguage else { return }
+                    || appliedIndexIdentity != identity || appliedWordLanguage != parent.wordStyleLanguage
+                    || (parent.vocabularyIndex == nil && appliedWordRanges != parent.unknownWordRanges) else { return }
             let ranges = parent.vocabularyIndex?.unknownRanges(in: window, known: parent.knownForms)
                 ?? parent.unknownWordRanges
             appliedWindow = window
