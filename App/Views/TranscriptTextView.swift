@@ -43,6 +43,7 @@ struct TranscriptTextView: UIViewRepresentable {
     let onSelectionBegan: () -> Void
     var fontScale = 1.0
     var isBookPage = false
+    var allowsPageOverflow = false
     var unknownWordRanges: [NSRange] = []
     var wordStyleRevision: Int = 0
     var differentiateWithoutColor = false
@@ -71,11 +72,16 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> LayoutAwareTextView {
+        makeConfiguredTextView(coordinator: context.coordinator)
+    }
+
+    func makeConfiguredTextView(coordinator: Coordinator) -> LayoutAwareTextView {
         let view = Self.makeTextView()
         view.isEditable = false
         view.isSelectable = true
         view.alwaysBounceVertical = !isBookPage
-        view.isScrollEnabled = !isBookPage
+        view.isScrollEnabled = !isBookPage || allowsPageOverflow
+        if isBookPage { view.contentInsetAdjustmentBehavior = .never }
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         view.adjustsFontForContentSizeCategory = true
@@ -85,9 +91,9 @@ struct TranscriptTextView: UIViewRepresentable {
         view.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 48, right: 24)
         view.textContainer.widthTracksTextView = true
         view.accessibilityIdentifier = "reader.transcript"
-        view.delegate = context.coordinator
-        context.coordinator.apply(to: view)
-        view.didLayout = { [weak view, weak coordinator = context.coordinator] in
+        view.delegate = coordinator
+        coordinator.apply(to: view)
+        view.didLayout = { [weak view, weak coordinator] in
             guard let view, let coordinator else { return }
             coordinator.restoreReadingPosition(in: view)
             coordinator.applyFollow(to: view)
@@ -98,7 +104,7 @@ struct TranscriptTextView: UIViewRepresentable {
 
     func updateUIView(_ view: LayoutAwareTextView, context: Context) {
         context.coordinator.parent = self
-        view.isScrollEnabled = !isBookPage
+        view.isScrollEnabled = !isBookPage || allowsPageOverflow
         context.coordinator.apply(to: view)
     }
 

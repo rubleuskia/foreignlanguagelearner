@@ -1,9 +1,21 @@
 import SwiftUI
 import UIKit
+import NaturalLanguage
 
 /// Page ranges use the original document's UTF-16 offsets. Replacing subtitle
 /// newlines with spaces keeps selections, vocabulary and audio timing aligned.
 enum BookTextPagination {
+    nonisolated static func phrases(in document: TranscriptDocument) -> [NSRange] {
+        if document.segments.contains(where: { $0.start != nil }) { return document.ranges }
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = document.text
+        var ranges: [NSRange] = []
+        tokenizer.enumerateTokens(in: document.text.startIndex..<document.text.endIndex) { range, _ in
+            ranges.append(NSRange(range, in: document.text))
+            return true
+        }
+        return ranges
+    }
     nonisolated static func readingText(_ document: TranscriptDocument) -> String {
         guard document.segments.contains(where: { $0.start != nil }) else { return document.text }
         return document.text.replacingOccurrences(of: "\r", with: " ")
@@ -11,7 +23,7 @@ enum BookTextPagination {
     }
 
     nonisolated static func ranges(text: String, size: CGSize, scale: Double,
-                                   category: String) throws -> [NSRange] {
+                                   category: String, phrases: [NSRange] = []) throws -> [NSRange] {
         let margin = max(24, (size.width - 680) / 2)
         let available = CGSize(width: size.width - margin * 2, height: size.height - 72)
         guard available.width > 10, available.height > 10 else { return [] }
@@ -42,7 +54,23 @@ enum BookTextPagination {
                 if consumed < chunk.length || NSMaxRange(chunk) == source.length { break }
                 count = min(count * 2, source.length - offset)
             } while true
-            guard consumed > 0 else { return result }
+            if consumed == 0 {
+                // At very large accessibility sizes even one line may exceed
+                // the viewport. Keep the next phrase accessible via overflow.
+                consumed = phrases.first(where: { NSMaxRange($0) > offset })
+                    .map { NSMaxRange($0) - offset } ?? (source.length - offset)
+            }
+            let proposedEnd = offset + consumed
+            if let phrase = phrases.first(where: {
+                $0.location < proposedEnd && NSMaxRange($0) > proposedEnd
+            }) {
+                // Move a whole cue to the next page. An oversized cue gets its
+                // own scrollable page rather than losing its audio ownership.
+                let prefix = source.substring(with: NSRange(location: offset,
+                    length: max(0, phrase.location - offset)))
+                consumed = phrase.location > offset && !prefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? phrase.location - offset : NSMaxRange(phrase) - offset
+            }
             result.append(NSRange(location: offset, length: consumed))
             offset += consumed
         }
@@ -72,12 +100,15 @@ extension TranscriptDocument {
 
 struct BookPagedTranscriptView: View {
     let reader: TranscriptTextView
+    var onFollowAudio: (() -> Void)? = nil
     @Environment(\.sizeCategory) private var sizeCategory
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var pages: [NSRange] = []
     @State private var displayedText = ""
     @State private var page = 0
     @State private var readingOffset = 0
     @State private var sourceText: String?
+    @State private var layoutRevision = 0
 
     private struct LayoutKey: Equatable {
         let text: String
@@ -89,7 +120,9 @@ struct BookPagedTranscriptView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let pageSize = CGSize(width: geometry.size.width, height: max(0, geometry.size.height - 36))
+            let showsFollow = onFollowAudio != nil && reader.document.segments.contains { $0.start != nil }
+            let footerHeight: CGFloat = showsFollow && verticalSizeClass != .compact ? 84 : 36
+            let pageSize = CGSize(width: geometry.size.width, height: max(0, geometry.size.height - footerHeight))
             let key = LayoutKey(text: reader.document.text,
                                 timed: reader.document.segments.contains { $0.start != nil },
                                 size: pageSize, scale: reader.fontScale, category: sizeCategory)
@@ -97,15 +130,15 @@ struct BookPagedTranscriptView: View {
                 if pages.isEmpty || sourceText != reader.document.text {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    TabView(selection: Binding(get: { page }, set: { move(to: $0) })) {
-                        ForEach(pages.indices, id: \.self) { index in
-                            Group {
-                                if abs(index - page) <= 1 { pageView(index) }
-                                else { Color.clear }
-                            }.tag(index)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    StableBookPager(count: pages.count, selection: page,
+                        revision: .init(active: reader.activeSegment, words: reader.wordStyleRevision,
+                            index: reader.vocabularyIndex.map(ObjectIdentifier.init),
+                            follow: reader.followGeneration, following: reader.following,
+                            underline: reader.differentiateWithoutColor),
+                        makePage: { pageView($0) },
+                        onManualStart: { reader.following = false },
+                        onSelection: { move(to: $0) })
+                    .id(layoutRevision)
                     .frame(height: pageSize.height)
                     .accessibilityIdentifier("reader.pages")
                     HStack {
@@ -116,6 +149,10 @@ struct BookPagedTranscriptView: View {
                         Text("\(page + 1) / \(pages.count)")
                             .monospacedDigit()
                             .accessibilityIdentifier("reader.page-number")
+                        if showsFollow, verticalSizeClass == .compact {
+                            Spacer()
+                            followButton
+                        }
                         Spacer()
                         Button { move(to: page + 1) } label: { Image(systemName: "chevron.right") }
                             .disabled(page >= pages.count - 1)
@@ -123,14 +160,19 @@ struct BookPagedTranscriptView: View {
                     }
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, 24).frame(height: 36)
+                    if showsFollow, verticalSizeClass != .compact {
+                        followButton.frame(height: 48)
+                    }
                 }
             }
             .task(id: key) {
                 let text = BookTextPagination.readingText(reader.document)
                 let category = uiCategory.rawValue
+                let document = reader.document
                 let work = Task.detached(priority: .userInitiated) {
                     try BookTextPagination.ranges(text: text, size: key.size,
-                                                  scale: key.scale, category: category)
+                                                  scale: key.scale, category: category,
+                                                  phrases: BookTextPagination.phrases(in: document))
                 }
                 do {
                     let result = try await withTaskCancellationHandler(operation: { try await work.value },
@@ -142,6 +184,7 @@ struct BookPagedTranscriptView: View {
                     pages = result
                     page = BookTextPagination.page(containing: readingOffset, ranges: result)
                     followAudio()
+                    layoutRevision += 1
                 } catch { /* A newer document or geometry superseded this layout. */ }
             }
             .onChange(of: reader.activeSegment) { _, _ in followAudio() }
@@ -150,7 +193,15 @@ struct BookPagedTranscriptView: View {
         }
     }
 
-    private func pageView(_ index: Int) -> some View {
+    private var followButton: some View {
+        Button("Follow audio", systemImage: "arrow.down.to.line") { onFollowAudio?() }
+            .nativeSecondaryAction()
+            .opacity(reader.following ? 0 : 1)
+            .allowsHitTesting(!reader.following)
+            .accessibilityHidden(reader.following)
+    }
+
+    private func pageView(_ index: Int) -> TranscriptTextView {
         let range = pages[index]
         let document = TranscriptDocument(pageOf: reader.document, text: displayedText, range: range)
         let active = reader.activeSegment.flatMap { segment in
@@ -162,6 +213,7 @@ struct BookPagedTranscriptView: View {
         return TranscriptTextView(document: document, activeSegment: active,
             following: reader.$following, followGeneration: reader.followGeneration,
             onSelectionBegan: reader.onSelectionBegan, fontScale: reader.fontScale, isBookPage: true,
+            allowsPageOverflow: true,
             unknownWordRanges: unknown.compactMap {
                 let overlap = NSIntersectionRange($0, range)
                 return overlap.length > 0 ? NSRange(location: overlap.location - range.location,
@@ -189,9 +241,9 @@ struct BookPagedTranscriptView: View {
               let segment = reader.activeSegment, reader.document.ranges.indices.contains(segment),
               !pages.isEmpty else { return }
         let cue = reader.document.ranges[segment]
-        // If a cue spans two pages, allow its continuation to stay on screen.
-        if !force, pages.indices.contains(page), NSIntersectionRange(pages[page], cue).length > 0 { return }
-        page = BookTextPagination.page(containing: cue.location, ranges: pages)
+        let destination = BookTextPagination.page(containing: cue.location, ranges: pages)
+        if !force, page == destination { return }
+        page = destination
         readingOffset = cue.location
     }
 

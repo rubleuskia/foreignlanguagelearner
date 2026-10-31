@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-10-31 — Stable page turns and whole audio phrases
+
+- Replace the rebuilding SwiftUI page window with a native scrolling page controller that retains neighboring pages and defers content refreshes until transitions settle. Manual gestures, cancelled swipes and audio-driven page changes share the same controller lifecycle.
+- Keep timed subtitle cues whole on a page so audio always selects the page containing the entire phrase. Untimed text uses sentence boundaries. A phrase larger than the viewport occupies one page with vertical overflow instead of being split or clipped.
+- Return Follow audio to the bottom reader controls, with stable footer geometry and a compact horizontal arrangement in landscape. Update the pagination decision and supported reading workflow.
+
 ## 2026-10-31 — Model choice and configurable reasoning
 
 Settings adds GPT-6.1 Terra and GPT-6.1 Sol, and uses full names for GPT-5 mini, GPT-5 nano and GPT-6 Luna. A reasoning-effort picker offers only levels supported by the selected model. The setting applies to contextual translations, word explanations, listening distractors and API-key checks. Explanation caches separate reasoning settings, and portable library backups include the optional preference while accepting older backups. Requests with reasoning get larger bounded output budgets and timeouts. Architectural decisions are recorded in DECISIONS; project purpose and workflow boundaries are unchanged.

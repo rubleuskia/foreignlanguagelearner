@@ -132,6 +132,7 @@ struct VocabularyTranscriptView: View {
     @Binding var following: Bool
     let followGeneration: Int
     let onSelectionBegan: () -> Void
+    var onFollowAudio: (() -> Void)? = nil
     var initialReadingOffset: Int? = nil
     var onReadingOffsetChanged: ((Int) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
@@ -179,7 +180,7 @@ struct VocabularyTranscriptView: View {
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
                                initialReadingOffset: initialReadingOffset, onReadingOffsetChanged: onReadingOffsetChanged,
-                               handleSelection: handleSelection))
+                               handleSelection: handleSelection), onFollowAudio: onFollowAudio)
         }
         .task(id: document.text) {
             let text = document.text

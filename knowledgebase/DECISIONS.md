@@ -1,5 +1,13 @@
 # Architectural and product decisions
 
+## Stable transitions and indivisible phrases (2026-10-31)
+
+Use UIPageViewController's native scroll transition with retained current/neighbor controllers. Do not replace page roots, clear the page cache or apply a competing page jump during a transition. Defer vocabulary/highlight updates until completion; coalesce programmatic audio destinations. Cancelling a manual swipe retains the visible controller and disables audio following without an extra reset animation.
+
+Page boundaries prefer whole timed subtitle cues (the playback/highlight unit), or whole sentences for untimed text. Move a cue that would straddle the bottom to the next page. A cue larger than an empty page occupies that page alone with vertical overflow; never silently split its audio ownership or hide the remainder. All selections retain original UTF-16 offsets.
+
+Follow audio lives in the bottom footer again. Reserve its footer space while it is hidden; in compact height share the page-number row so toggling following cannot change page geometry or disturb a gesture/selection.
+
 ## 2026-10-31 — Explicit model reasoning configuration
 
 Keep the existing model IDs and defaults, adding gpt-6.1-terra and gpt-6.1-sol. Full display names identify each generation. One global reasoning preference is resolved against the selected model before requests: GPT-5 mini/nano support minimal/low/medium/high; GPT-6 Luna and GPT-6.1 Terra support none/low/medium/high/xhigh/max; GPT-6.1 Sol supports low/medium/high/xhigh/max. Missing or incompatible preferences use minimal for mini/nano, none for Luna and medium for Terra/Sol, without overwriting the user's raw preference when switching models. The picker always displays the effective value.
@@ -19,7 +27,7 @@ Both readers paginate text to the available viewport using the same TextKit font
 
 Timed subtitle CR/LF characters are replaced one-for-one with spaces for presentation, including cue separators. This preserves original UTF-16 offsets for vocabulary, selection context and audio lookup. Subtitle boundaries do not imply literary paragraphs; untimed text retains its source paragraph breaks. Each page translates its selection range back into the full chapter before dictionary/translation actions. Audio following moves to the active cue's page, while manual page turns suspend following. Resizing keeps the current source offset, and explicit Follow audio returns to the current cue.
 
-Follow audio occupies a stable toolbar slot instead of inserting a row below the text. Toggling following therefore does not repaginate the chapter or disturb a live selection, and compact-height readers retain their reading space.
+The 2026-10-31 transition policy supersedes the original toolbar placement of Follow audio.
 
 ## Paid cloud backend proposal (2026-10-30; not adopted)
 

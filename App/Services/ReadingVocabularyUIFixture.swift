@@ -42,6 +42,15 @@ import SwiftData
             }.joined(separator: "\n")
             try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
         }
+        if ProcessInfo.processInfo.arguments.contains("--phrase-pages-fixture") {
+            let phrase = String(repeating: "Kot i pies czytają książkę przy oknie. ", count: 8)
+            let subtitles = (0..<10).map { index in
+                let start = String(format: "00:00:%02d,000", index * 2)
+                let end = String(format: "00:00:%02d,000", (index + 1) * 2)
+                return "\(index + 1)\n\(start) --> \(end)\n\(phrase)\n"
+            }.joined(separator: "\n")
+            try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
+        }
         if ProcessInfo.processInfo.arguments.contains("--legacy-reader-fixture") {
             item.tracks = []
             item.lastTrackID = nil
