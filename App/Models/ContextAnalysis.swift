@@ -45,14 +45,18 @@ enum OpenAITranslationModel: String, Codable, CaseIterable, Sendable, Identifiab
     case mini = "gpt-5-mini"
     case nano = "gpt-5-nano"
     case luna = "gpt-6-luna"
+    case terra = "gpt-6.1-terra"
+    case sol = "gpt-6.1-sol"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .mini: "Mini"
-        case .nano: "Nano"
-        case .luna: "Luna"
+        case .mini: "GPT-5 mini"
+        case .nano: "GPT-5 nano"
+        case .luna: "GPT-6 Luna"
+        case .terra: "GPT-6.1 Terra"
+        case .sol: "GPT-6.1 Sol"
         }
     }
 
@@ -60,8 +64,38 @@ enum OpenAITranslationModel: String, Codable, CaseIterable, Sendable, Identifiab
         switch self {
         case .mini, .nano: "minimal"
         case .luna: "none"
+        case .terra, .sol: "medium"
         }
     }
+
+    var supportedReasoningEfforts: [String] {
+        switch self {
+        case .mini, .nano: ["minimal", "low", "medium", "high"]
+        case .luna, .terra: ["none", "low", "medium", "high", "xhigh", "max"]
+        case .sol: ["low", "medium", "high", "xhigh", "max"]
+        }
+    }
+
+    func resolvedReasoningEffort(_ value: String?) -> String {
+        guard let value, supportedReasoningEfforts.contains(value) else { return reasoningEffort }
+        return value
+    }
+}
+
+/// Allow space for reasoning tokens as well as the structured answer.
+enum ReasoningRequestBudget {
+    static func outputTokens(effort: String, base: Int) -> Int {
+        switch effort {
+        case "none", "minimal": base
+        case "low": max(base, 4096)
+        case "medium": max(base, 8192)
+        default: max(base, 16384)
+        }
+    }
+    static func timeout(effort: String) -> TimeInterval {
+        ["none", "minimal"].contains(effort) ? 30 : 120
+    }
+
 }
 
 enum ContextAnalysisStatus: String, Codable, Equatable, Sendable {

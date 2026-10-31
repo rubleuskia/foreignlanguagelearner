@@ -1,5 +1,14 @@
 # Architectural and product decisions
 
+## 2026-10-31 — Explicit model reasoning configuration
+
+Keep the existing model IDs and defaults, adding gpt-6.1-terra and gpt-6.1-sol. Full display names identify each generation. One global reasoning preference is resolved against the selected model before requests: GPT-5 mini/nano support minimal/low/medium/high; GPT-6 Luna and GPT-6.1 Terra support none/low/medium/high/xhigh/max; GPT-6.1 Sol supports low/medium/high/xhigh/max. Missing or incompatible preferences use minimal for mini/nano, none for Luna and medium for Terra/Sol, without overwriting the user's raw preference when switching models. The picker always displays the effective value.
+
+Snapshot the effective effort for queued context requests and word explanation generation/cache keys. All three content providers and the key check send that value. Preserve 30-second/base-token limits for none/minimal; allow 120 seconds and 4,096/8,192/16,384 output tokens for low/medium/high-or-above respectively, including reasoning tokens. These remain bounded app budgets, not guarantees that every high-effort response will complete. Key checks retain their small token cap and accept an incomplete successful response as before. Backup settings gain an optional validated reasoningEffort; restoring an old backup clears the preference and uses the model default.
+
+Compatibility references: [Terra](https://developers.openai.com/api/docs/models/gpt-6.1-terra), [Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol), [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-5 guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5). Live API access remains account-dependent and was not tested as part of this change.
+
+
 ## 2026-10-30 — Listening is an independent, ephemeral exercise
 
 A separate Practice button samples without replacement up to ten audio-resolvable dictionary entries in the selected source language, including learnt entries. No ready translation or elapsed cooldown is required. Missing local audio excludes an entry; fewer eligible entries produce a shorter round. Use selection audio, never the sentence mode, retaining the shared resolver's padding and manual ranges. Hide source text throughout, including system playback metadata. Generate choices on demand from exactly phrase/sourceLanguage/targetLanguage using existing cloud opt-in, key and model settings. Shuffle one correct translation plus four plausible semantic distractors locally; validate nonempty, distinct options. Malformed responses offer retry/skip. No saved results, level writes, checkpoint replacement, activity events or backup changes. Answer feedback stays only in memory until the next card; closing discards the round.

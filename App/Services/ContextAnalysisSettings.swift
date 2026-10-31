@@ -1,6 +1,7 @@
 import Foundation
 
 enum ContextAnalysisSettings {
+    static let reasoningEffortKey = "contextAnalysis.reasoningEffort"
     static let modelKey = "contextAnalysis.openAIModel"
     static let cloudAnalysisEnabledKey = "contextAnalysis.cloudEnabled"
     static let promptOverrideKey = "contextAnalysis.promptOverride"
@@ -18,6 +19,10 @@ enum ContextAnalysisSettings {
     static func setSelectedModel(_ model: OpenAITranslationModel,
                                  in defaults: UserDefaults = .standard) {
         defaults.set(model.rawValue, forKey: modelKey)
+    }
+
+    static func reasoningEffort(for model: OpenAITranslationModel, in defaults: UserDefaults = .standard) -> String {
+        model.resolvedReasoningEffort(defaults.string(forKey: reasoningEffortKey))
     }
 
     static func isCloudAnalysisEnabled(in defaults: UserDefaults = .standard) -> Bool {

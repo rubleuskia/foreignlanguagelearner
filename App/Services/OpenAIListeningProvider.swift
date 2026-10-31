@@ -37,9 +37,11 @@ struct OpenAIListeningProvider: Sendable {
     """
     let apiKey: String
     let model: OpenAITranslationModel
+    var reasoningEffort: String? = nil
     var client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient()
 
     func generate(_ input: ListeningInput) async throws -> ListeningChoices {
+        let effort = model.resolvedReasoningEffort(reasoningEffort)
         try Task.checkCancellation()
         guard !input.phrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               input.phrase.utf16.count <= ContextAnalysisLimits.maximumContextUTF16,
@@ -53,12 +55,12 @@ struct OpenAIListeningProvider: Sendable {
             "required": ["correct", "distractors"]]
         var request = URLRequest(url: OpenAIContextAnalysisProvider.endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = ReasoningRequestBudget.timeout(effort: effort)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model.rawValue, "store": false, "max_output_tokens": 1_600,
-            "reasoning": ["effort": model.reasoningEffort], "instructions": Self.prompt,
+            "model": model.rawValue, "store": false, "max_output_tokens": ReasoningRequestBudget.outputTokens(effort: effort, base: 1600),
+            "reasoning": ["effort": effort], "instructions": Self.prompt,
             "input": String(decoding: try JSONEncoder().encode(input), as: UTF8.self),
             "text": ["format": ["type": "json_schema", "name": "listening_choices", "strict": true, "schema": schema]]
         ])

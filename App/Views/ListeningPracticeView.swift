@@ -116,7 +116,9 @@ struct ListeningPracticeView: View {
                   let key = try OpenAIAPIKeyStore.load(), !key.isEmpty else {
                 throw ContextAnalysisError.missingConfiguration
             }
-            let provider = OpenAIListeningProvider(apiKey: key, model: ContextAnalysisSettings.selectedModel())
+            let model = ContextAnalysisSettings.selectedModel()
+            let provider = OpenAIListeningProvider(apiKey: key, model: model,
+                reasoningEffort: ContextAnalysisSettings.reasoningEffort(for: model))
             let result = try await provider.generate(cards[index].input)
             try Task.checkCancellation()
             correct = result.correct

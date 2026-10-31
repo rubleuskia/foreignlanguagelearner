@@ -10,6 +10,7 @@ actor ContextAnalysisService: ContextAnalysisServing {
         let apiKey: String
         let model: OpenAITranslationModel
         let prompt: String
+        let reasoningEffort: String
         let continuation: CheckedContinuation<ContextualPhraseResult, Error>
     }
 
@@ -46,6 +47,7 @@ actor ContextAnalysisService: ContextAnalysisServing {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 enqueue(Job(request: request, apiKey: apiKey, model: model, prompt: prompt,
+                            reasoningEffort: ContextAnalysisSettings.reasoningEffort(for: model),
                             continuation: continuation))
             }
         } onCancel: {
@@ -67,7 +69,7 @@ actor ContextAnalysisService: ContextAnalysisServing {
 
     private func start(_ job: Job) {
         let provider = OpenAIContextAnalysisProvider(
-            apiKey: job.apiKey, model: job.model, prompt: job.prompt
+            apiKey: job.apiKey, model: job.model, prompt: job.prompt, reasoningEffort: job.reasoningEffort
         )
         let task = Task {
             let result: Result<ContextualPhraseResult, Error>

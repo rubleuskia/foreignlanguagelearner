@@ -52,15 +52,17 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
 
     private let apiKey: String
     private let model: OpenAITranslationModel
+    private let reasoningEffort: String
     private let instructions: String
     private let endpointURL: URL
     private let client: any ContextAnalysisHTTPClient
 
-    init(apiKey: String, model: OpenAITranslationModel, prompt: String = Self.defaultPrompt,
+    init(apiKey: String, model: OpenAITranslationModel, prompt: String = Self.defaultPrompt, reasoningEffort: String? = nil,
          endpoint: URL = Self.endpoint,
          client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient()) {
         self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         self.model = model
+        self.reasoningEffort = model.resolvedReasoningEffort(reasoningEffort)
         let cleanedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         instructions = Self.instructions(for: cleanedPrompt.isEmpty ? Self.defaultPrompt : cleanedPrompt)
         endpointURL = endpoint
@@ -77,7 +79,7 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model.rawValue, "input": "Reply OK.", "max_output_tokens": 32,
-            "store": false, "reasoning": ["effort": model.reasoningEffort]
+            "store": false, "reasoning": ["effort": reasoningEffort]
         ])
         let (data, response) = try await client.data(for: request)
         guard (200..<300).contains(response.statusCode) else {
@@ -131,15 +133,16 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
         }
         var urlRequest = URLRequest(url: endpointURL)
         urlRequest.httpMethod = "POST"
-        urlRequest.timeoutInterval = 30
+        urlRequest.timeoutInterval = ReasoningRequestBudget.timeout(effort: reasoningEffort)
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         urlRequest.httpBody = try JSONEncoder().encode(OpenAIRequest(
             model: model.rawValue,
             input: input,
-            reasoning: .init(effort: model.reasoningEffort),
-            instructions: instructions
+            reasoning: .init(effort: reasoningEffort),
+            instructions: instructions,
+            maxOutputTokens: ReasoningRequestBudget.outputTokens(effort: reasoningEffort, base: ContextAnalysisLimits.maximumResponseTokens)
         ))
 
         let data: Data
@@ -285,7 +288,7 @@ private struct OpenAIRequest: Encodable {
     let reasoning: Reasoning
     let instructions: String
     let store = false
-    let maxOutputTokens = ContextAnalysisLimits.maximumResponseTokens
+    var maxOutputTokens = ContextAnalysisLimits.maximumResponseTokens
     let text = TextConfiguration()
 
     enum CodingKeys: String, CodingKey {

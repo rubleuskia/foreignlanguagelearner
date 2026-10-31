@@ -40,6 +40,7 @@ struct LibraryBackupDocument: Codable {
         var interfaceLanguage: String? = nil
         var activeSourceLanguage: String? = nil
         var newBookSourceLanguage: String? = nil
+        var reasoningEffort: String? = nil
         let model: String
         let cloudEnabled: Bool
         let translationPrompt: String
@@ -51,6 +52,7 @@ struct LibraryBackupDocument: Codable {
             activeSourceLanguage = defaults.string(forKey: SourceLanguage.activeKey)
             newBookSourceLanguage = defaults.string(forKey: SourceLanguage.importKey)
             model = ContextAnalysisSettings.selectedModel(in: defaults).rawValue
+            reasoningEffort = ContextAnalysisSettings.reasoningEffort(for: ContextAnalysisSettings.selectedModel(in: defaults), in: defaults)
             cloudEnabled = ContextAnalysisSettings.isCloudAnalysisEnabled(in: defaults)
             translationPrompt = ContextAnalysisSettings.prompt(in: defaults)
             wordPrompt = ContextAnalysisSettings.wordExplanationPrompt(in: defaults)
@@ -66,6 +68,7 @@ struct LibraryBackupDocument: Codable {
             try ContextAnalysisSettings.setPrompt(translationPrompt, in: defaults)
             try ContextAnalysisSettings.setWordExplanationPrompt(wordPrompt, in: defaults)
             defaults.set(model, forKey: ContextAnalysisSettings.modelKey)
+            defaults.set(reasoningEffort, forKey: ContextAnalysisSettings.reasoningEffortKey)
             defaults.set(cloudEnabled, forKey: ContextAnalysisSettings.cloudAnalysisEnabledKey)
             for (index, hours) in cooldowns.enumerated() {
                 defaults.set(hours, forKey: "learning.cooldown.level.\(index + 1)")
@@ -174,6 +177,7 @@ enum LibraryBackupError: LocalizedError {
         guard document.books.count <= 10_000,
               Set(document.books.map(\.id)).count == document.books.count,
               OpenAITranslationModel(rawValue: document.settings.model) != nil,
+              (document.settings.reasoningEffort == nil || OpenAITranslationModel(rawValue: document.settings.model)?.supportedReasoningEfforts.contains(document.settings.reasoningEffort!) == true),
               document.settings.cooldowns.count == 3,
               document.settings.cooldowns.allSatisfy({ $0.isFinite && $0 >= 0 }),
               validPrompt(document.settings.translationPrompt), validPrompt(document.settings.wordPrompt),
