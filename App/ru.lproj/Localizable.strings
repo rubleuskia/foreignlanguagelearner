@@ -620,3 +620,5 @@
 "Correct" = "Верно";
 
 "Incorrect" = "Неверно";
+
+"No dictionary phrases with available audio and a saved translation." = "В словаре нет фраз с доступным аудио и сохранённым переводом.";
