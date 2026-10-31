@@ -78,16 +78,6 @@ struct BookReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
-                    if mode == .track {
-                        Button("Follow audio", systemImage: "arrow.down.to.line") {
-                            followGeneration += 1
-                            following = true
-                        }
-                        .labelStyle(.iconOnly)
-                        .opacity(following ? 0 : 1)
-                        .allowsHitTesting(!following)
-                        .accessibilityHidden(following)
-                    }
                     ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
                     BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() },
@@ -171,6 +161,7 @@ struct BookReaderView: View {
                 following = false
                 selecting = true
             },
+                onFollowAudio: { followGeneration += 1; following = true },
                 initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
                 onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {

@@ -22,6 +22,8 @@ The project also contains a standalone local subtitle-aligner utility. It extrac
 
 ## Current scope
 
+Native page transitions retain neighboring pages throughout swipes. Timed audio phrases stay whole on one page; an oversized phrase has its own vertically scrollable page. Follow audio is available in the fixed bottom reader footer.
+
 Both readers present book pages with horizontal page turns and text wrapped to the viewport. Timed subtitle breaks are reflowed into continuous prose; untimed text preserves paragraphs. Font and viewport changes repaginate around the current reading position, and audio following selects the active cue's page.
 
 The interface defaults to Russian and can be switched to English in Settings without changing the language of a book or dictionary entry. The chosen interface language is saved locally and included in library-state backups.

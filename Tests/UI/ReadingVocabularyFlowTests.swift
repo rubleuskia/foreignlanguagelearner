@@ -1,6 +1,32 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testAudioAdvancesWholePhrasePagesAndFollowStaysAtBottom() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
+        openReader(app)
+        let number = app.staticTexts["reader.page-number"]
+        XCTAssertTrue(number.waitForExistence(timeout: 10))
+        XCTAssertTrue(number.label.hasPrefix("1 /"))
+        app.buttons["Play"].tap()
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let current = Int(number.label.components(separatedBy: " / ")[0]) ?? 0
+            return current > 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 10), .completed)
+        app.buttons["Pause"].tap()
+        let audioPage = number.label
+        app.buttons["Next page"].tap()
+        let follow = app.buttons["Follow audio"]
+        XCTAssertTrue(follow.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(follow.frame.midY, app.textViews["reader.transcript"].frame.maxY)
+        follow.tap()
+        XCTAssertEqual(number.label, audioPage)
+    }
+
     @MainActor private func openReader(_ app: XCUIApplication) {
         if app.buttons["library.continue"].exists {
             app.buttons["library.continue"].tap()
@@ -115,6 +141,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
                                  "A book page must wrap within the screen width")
         text.swipeLeft()
         let first = try offset()
+        XCTAssertEqual(text.frame.minX, 0, accuracy: 1, "The settled page must align with the viewport")
         XCTAssertEqual(first, initial + 1, "A horizontal swipe must advance one whole page")
         XCTAssertTrue(app.buttons["Follow audio"].exists)
         app.buttons["Next page"].tap()

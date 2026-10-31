@@ -57,7 +57,8 @@ struct ReaderView: View {
                 playback.pause()
                 following = false
                 selecting = true
-            }, initialReadingOffset: item.readingCharacterOffset,
+            }, onFollowAudio: { followGeneration += 1; following = true },
+                initialReadingOffset: item.readingCharacterOffset,
                 onReadingOffsetChanged: { item.readingCharacterOffset = $0 }) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
                 let audio = audioRange(for: selectionRange)
@@ -91,16 +92,6 @@ struct ReaderView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 8) {
-                    if item.segments.contains(where: { $0.start != nil && $0.end != nil }) {
-                        Button("Follow audio", systemImage: "arrow.down.to.line") {
-                            followGeneration += 1
-                            following = true
-                        }
-                        .labelStyle(.iconOnly)
-                        .opacity(following ? 0 : 1)
-                        .allowsHitTesting(!following)
-                        .accessibilityHidden(following)
-                    }
                     ReaderFontSizeMenu()
                     ReadingActionsMenu(item: item, chapterScope: currentPart.map { .part($0.id) })
                     Menu("Language", systemImage: "character.book.closed") {
