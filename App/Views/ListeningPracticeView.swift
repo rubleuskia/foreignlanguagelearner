@@ -112,6 +112,7 @@ struct ListeningPracticeView: View {
         loading = true
         error = nil
         do {
+            guard CloudProviderMode.current == .personalKey else { throw ContextAnalysisError.personalKeyRequired }
             guard ContextAnalysisSettings.isCloudAnalysisEnabled(),
                   let key = try OpenAIAPIKeyStore.load(), !key.isEmpty else {
                 throw ContextAnalysisError.missingConfiguration

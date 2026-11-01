@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="control-token" content="{{CONTROL_TOKEN}}">
+  <title>Cloud Control · FLL</title>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<aside>
+  <a class="brand" href="/" aria-label="Cloud Control"><span class="brand-mark">f</span><span>Cloud Control<small>Foreign Language Learner</small></span></a>
+  <div class="nav-label">УПРАВЛЕНИЕ</div>
+  <nav aria-label="Разделы панели">
+    <button data-tab="overview" aria-current="page"><span>◫</span> Обзор</button>
+    <button data-tab="releases"><span>↗</span> Версии и деплой</button>
+    <button data-tab="tests"><span>✓</span> Проверки API</button>
+    <button data-tab="settings"><span>⚙</span> Настройка</button>
+  </nav>
+  <div class="sidebar-note"><span class="dot"></span> Работает локально<p>AWS-профиль остаётся на этом компьютере.</p></div>
+</aside>
+<div class="workspace">
+  <header><div class="breadcrumbs">Рабочее пространство <span>/</span> Облако</div><div class="environment"><span class="dot"></span> PRODUCTION <span class="region">eu-central-1</span></div></header>
+  <main>
+    <div id="notice" role="status" hidden></div>
+    <section id="overview" class="page">
+      <div class="page-heading"><div><div class="eyebrow">ПУНКТ УПРАВЛЕНИЯ</div><h1>Состояние продакшена</h1><p>Версия, инфраструктура и доступность API — в одном месте.</p></div><button id="refresh-status" class="secondary">↻ Обновить</button></div>
+      <div class="cards">
+        <article class="metric"><span class="metric-label">AWS · инфраструктура</span><strong id="infra-status">Не подключено</strong><span id="infra-detail" class="muted">Укажите AWS-профиль</span></article>
+        <article class="metric"><span class="metric-label">Развёрнутая версия</span><strong id="release-status" class="tag-value">—</strong><span id="release-detail" class="muted">Тег из состояния AWS</span></article>
+        <article class="metric"><span class="metric-label">Проверки API</span><strong id="api-status">Не запускались</strong><span id="api-detail" class="muted">Отдельно от состояния стеков</span></article>
+      </div>
+      <div id="connection-note" class="callout">Подключите AWS, чтобы увидеть фактическое состояние сервера. Демо-данные не используются.</div>
+      <div class="two-columns"><article class="panel"><div class="panel-heading"><h2>Облачные компоненты</h2><span id="checked-at" class="muted">—</span></div><div id="stacks" class="rows empty">Состояние появится после подключения</div></article><article class="panel"><div class="panel-heading"><h2>Сигналы мониторинга</h2><span class="pill neutral">CloudWatch</span></div><div id="alarms" class="rows empty">Нет данных из AWS</div></article></div>
+      <article class="panel"><div class="panel-heading"><h2>Последние операции</h2><button class="text-button" data-goto="releases">Все операции ↗</button></div><div id="recent-operations" class="rows empty">Операций ещё не было</div></article>
+    </section>
+    <section id="releases" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ВЕРСИИ</div><h1>Деплой и откат</h1><p>Выберите проверенный тег основной ветки. Сначала изучите план изменений.</p></div><button id="refresh-tags" class="secondary operation-button">↻ Получить теги</button></div>
+      <article class="panel release-form"><div class="step">01</div><div class="grow"><h2>Подготовить версию</h2><p class="muted">Тег должен принадлежать main и иметь успешный CI. Подготовка не меняет ресурсы AWS.</p><div class="inline-form"><label class="grow">Тег релиза<input id="release-tag" list="release-options" placeholder="backend-123-012345abcdef" autocomplete="off"><datalist id="release-options"></datalist></label><button id="prepare" class="primary operation-button">Подготовить план →</button></div><p class="hint">Для отката укажите старый тег. Код будет собран заново с текущей конфигурацией prod. Данные и резервные копии не откатываются.</p></div></article>
+      <article class="panel"><div class="panel-heading"><h2>Подготовленные планы</h2><span class="muted">Действуют 1 час</span></div><div id="plans" class="rows empty">Подготовьте план, чтобы просмотреть изменения и запустить деплой.</div></article>
+      <article class="panel"><div class="panel-heading"><h2>История операций</h2><span class="muted">Хранится на компьютере</span></div><div id="operations" class="rows empty">Операций ещё не было</div></article>
+    </section>
+    <section id="tests" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ДОСТУПНОСТЬ И КОНТРАКТЫ</div><h1>Проверки API прода</h1><p>Результаты реальных HTTPS-запросов к endpoint из CloudFormation.</p></div></div>
+      <div class="two-columns"><article class="panel test-card"><span class="icon-block">✓</span><h2>Базовая проверка</h2><p>Защита маршрутов, профиль, подписка и каталог. Без платных запросов к модели.</p><p class="hint">Без тестового access token проверяется только публичная граница доступа. Остальные проверки отмечаются как пропущенные.</p><button id="smoke-tests" class="primary operation-button">Запустить проверки</button></article><article class="panel test-card"><span class="icon-block amber">↗</span><h2>Сквозная проверка</h2><p>Контекстный перевод и объяснение слова, получение результата, проверка схемы и повтор ключа.</p><p class="hint">Две новые операции для тестового подписчика и повторы с теми же ключами. Расходует квоту и средства провайдера; после деплоя автоматически не запускается.</p><button id="inference-tests" class="secondary operation-button">Запустить с подтверждением</button></article></div>
+      <article class="panel"><div class="panel-heading"><h2>Последний отчёт</h2><span id="test-report-time" class="muted">—</span></div><div id="test-report" class="rows empty">Проверки ещё не запускались</div></article>
+    </section>
+    <section id="settings" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ЛОКАЛЬНАЯ КОНФИГУРАЦИЯ</div><h1>Подключение к AWS</h1><p>Номер аккаунта и профиль доступа. Секретные ключи не вводятся в панель.</p></div></div>
+      <article class="panel setup-guide"><h2>Как подключить аккаунт</h2><p>Войдите в AWS под своей почтой. Номер аккаунта из 12 цифр находится в меню аккаунта в правом верхнем углу консоли; адрес почты вместо него не подходит.</p><p>Для профиля IAM Identity Center выполните на компьютере:</p><pre>aws configure sso --profile fll-prod
+aws sso login --profile fll-prod</pre><p class="hint">Для обычного IAM-профиля используйте существующую настройку AWS SDK. Профиль для просмотра требует только чтения; запуск деплоя потребует отдельных прав CDK. AWS bootstrap выполняется отдельно.</p></article>
+      <form id="config-form" class="panel">
+        <h2>Аккаунт продакшена</h2><div class="form-grid"><label>AWS account ID<input id="account-id" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" placeholder="123456789012" required></label><label>Локальный AWS-профиль<input id="profile" list="profiles" placeholder="fll-prod" required><datalist id="profiles"></datalist></label><label>Регион<select id="region"><option value="eu-central-1">Франкфурт · eu-central-1</option></select></label></div>
+        <label>Файл access token тестового подписчика <span class="optional">необязательно</span><input id="access-token-file" placeholder="/absolute/path/to/access-token.txt"></label><p class="hint">Cognito access token отдельного prod-аккаунта хранится только в файле с правами 600. Он не отправляется в браузер и не записывается в отчёты. Не используйте refresh token или AWS access key.</p>
+        <details><summary>Параметры деплоя и файлы политики</summary><p class="hint">Публичные идентификаторы Apple, ARN секретов, пути к DER-сертификатам и проверенной политике. Для просмотра AWS заполнять их не обязательно. Пример: tools/cloud_control/config.example.json. Не вставляйте содержимое секретов.</p><label>JSON параметров<textarea id="deploy-config" rows="15" spellcheck="false"></textarea></label></details>
+        <div class="form-footer"><span class="hint">Сохраняется локально в .cloud-control/config.json</span><button class="primary" type="submit">Сохранить настройки</button></div>
+      </form>
+    </section>
+    <section id="operation-detail" class="panel" hidden><div class="panel-heading"><h2 id="operation-title">Операция</h2><button id="close-operation" class="text-button">Закрыть ×</button></div><div id="operation-summary"></div><pre id="operation-log" tabindex="0"></pre></section>
+    <footer><span class="dot"></span> Только локальный доступ <span>·</span> Деплой запускается вручную <span>·</span> Без автоматического отката данных</footer>
+  </main>
+</div>
+<dialog id="confirm-dialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ ОПЕРАЦИИ</span><h2 id="confirm-title"></h2><p id="confirm-description"></p><label id="confirm-label">Введите подтверждение<input id="confirm-input" autocomplete="off"></label><p id="confirm-expected" class="hint"></p><div class="dialog-actions"><button value="cancel" class="secondary">Отмена</button><button id="confirm-action" value="confirm" class="primary" disabled>Подтвердить</button></div></form></dialog>
+</body></html>

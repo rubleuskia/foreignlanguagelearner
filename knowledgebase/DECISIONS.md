@@ -1,5 +1,28 @@
 # Architectural and product decisions
 
+## Local AWS release control (2026-11-01)
+
+Use a loopback-only Python/vanilla-web operator panel with existing named AWS SDK profiles, not a
+public cloud admin API or credentials in the browser. Verify STS account, explicit Frankfurt prod
+environment and exact verified-main CI tags. A separate workflow_run tagger runs only after successful
+main push CI, keeping its write permission outside the reusable read-only CI/publishing workflow.
+
+Prepare an immutable local cloud assembly from tagged source plus copied reviewed operator files;
+review its diff, then manually confirm its account/tag before deploying that same assembly. Plans are
+single-use, expire after one hour and bind configuration, files and current CloudFormation baseline.
+Record release/commit/operation in stack tags. Serialize local operations, block observed remote
+updates and surviving interrupted child processes; this is not a distributed deployment lock.
+
+Rollback means another reviewed deployment of an older verified code tag with current environment
+configuration. It never restores tables, reverses transactions or guarantees old/new schema compatibility.
+Do not automate rollback on smoke failure: multi-stack updates can be partial and data recovery is a
+separate coordinated runbook action. Do not bootstrap or delete AWS stacks from this panel.
+
+Separate infrastructure/alarms from actual API coverage. Smoke probes never submit valid inference;
+missing authenticated fixtures mean incomplete coverage. Explicitly confirmed inference tests persist
+keys before POST, recover lost replies by key and replay only known success. No automatic paid probes,
+production CI probes, user creation or purchase lifecycle tests are introduced.
+
 ## Chapter-wide selection on paginated text (2026-11-01)
 
 Paginated readers own selection as a UTF-16 range in the entire chapter, independently of individual UITextViews. Disable native per-page selection and overlay highlight rectangles, two draggable/adjustable handles and a compact action toolbar. Map caret positions through each page's original character range; retain the fixed endpoint while the moving endpoint crosses pages or reverses direction. Tokenize only a bounded neighborhood around the moving handle to avoid whole-chapter work per drag frame.
@@ -425,3 +448,88 @@ Transcript reading/parsing in the book reader and construction of legacy reader 
 Playback category changes and audio-session activation/deactivation run on one shared actor, away from the UI executor, because synchronous media-server calls can stall. Controllers publish play intent immediately and wait for activation before allowing seeks or rate changes to start audio. Pause, close and file replacement invalidate the activation generation; late success or failure cannot restart playback or alter a newer presentation. Now Playing ownership follows play intent immediately, so system Pause also cancels a pending start; closing another controller must not deactivate the current owner.
 
 Periodic time, end and seek callbacks enqueue UI-executor tasks before accessing controller/player state. They retain item/seek generation checks, allowing end-of-track handlers to replace items after leaving AVFoundation callbacks. Closing an unopened player does not deactivate the shared session. Translation and dictionary saving remain independent of audio preparation and playback.
+
+
+## 2026-11-01 — Independent paid-cloud foundation and verified subscription projection
+
+Adopt Cognito with Sign in with Apple for recoverable cloud identity, while retaining personal-key
+translation as an explicit separate mode. Native login and StoreKit UI are not yet implemented.
+Cognito authorization-code flow is configured for a public native client; the native implementation
+must use PKCE S256. API routes require scoped access tokens and live Cognito subject/session checks.
+Deleted-account tombstones block new cloud work and concurrent projection writes. Retain minimal
+purchase ownership after deletion; deletion does not cancel Apple subscriptions. Apple authorization
+revocation and retention/support policies remain launch prerequisites.
+
+Keep cloud foundation and billing deployable without the gated alignment image via a separate CDK
+entry point in the existing infrastructure package. Separate account, subscription and event tables
+from temporary alignment content. A server-created UUID binds StoreKit purchases; a subscription
+chain has one owner. Missing/foreign bindings and Family Sharing fail closed pending explicit recovery
+policy. Use Apple's official SDK with reviewed packaged roots and online checks. Always reconcile
+current App Store Server API status on purchase sync/events; never derive current access from a
+historical signed transaction or notification arrival order. Save ownership and projection with an
+account-state condition and subscription revision in one transaction.
+
+Persist verified minimal notification metadata before acknowledgment; dispatch from the DynamoDB
+stream with bounded retries/dead letters, and repair through paginated scheduled SQS tasks. No raw
+signed payloads or content in logs/storage. For initial development, reconcile after 30 minutes and
+mark unexpired projections stale after 60 minutes. Expiry is checked on every read/admission. These
+freshness defaults do not approve a subscription tariff, allowance, reset or production retention
+policy. All compute features remain disabled until durable usage policy/admission is implemented.
+
+
+## 2026-11-01 — Durable subscription operations and client recovery
+
+Implement the remaining paid-cloud code behind explicit configuration and independent translation/alignment
+admission switches, default false. A normal app has no bundled cloud endpoint. Do not infer production
+products, prices, quotas or budgets: a reviewed product map and Apple configuration are operator inputs.
+UTC calendar months apply to both monthly and annual products. One successful context/word operation
+or alignment job consumes one feature unit. All active products share account/period counters at the
+highest eligible limit; upgrades, policy changes and renewals never erase usage. Trials inherit their
+product's allowance; offers require release review. Reserve transactionally against current account and
+subscription revision/freshness/expiry plus account/global concurrency, frequency and daily admission.
+Release failed, cancelled and uncertain user reservations; keep global admission counts to bound cost.
+
+Metadata and temporary input are written in the same transaction. A KEYS_ONLY stream dispatches IDs
+through SQS, with independent paginated recovery. Claim is the conservative provider-submission boundary:
+a duplicate or abandoned running request is never submitted again. Lost responses become outcome_unknown,
+with user allowance released and internal cost uncertainty retained. Strict Responses schemas, bounded
+UTF-16 excerpts, fixed endpoints/model allowlist/prompts/output limits and store:false apply on the server.
+This is not an exactly-once inference or zero-provider-retention promise. Effective policy IDs hash the
+full limits/model/prompts/schemas; incompatible accepted requests cancel before submission. Kill switches
+preserve compatible admitted work and result retrieval. Already running work uses its pinned invocation.
+
+Native login uses Cognito's public authorization-code client with PKCE S256 and exact state/callback
+checks. Keychain session refresh coalesces; sign-out/account changes invalidate in-flight results and
+late refreshes. Billing activation precedes StoreKit finish, with updates/current entitlements/unfinished
+recovery and a verified-purchase guard against repurchase invitations. Personal-key mode remains explicit;
+subscription errors never load/fall back to that key. The existing listening-choice feature requires
+personal-key mode. A local metadata-only, protected/non-backup request ledger persists keys before POST;
+unknown/pending keys survive relaunch and policy changes, known successful caches separate effective policy,
+and a corrupt ledger blocks creation of new intents. Clearing a terminal intent is an explicit user action.
+
+Verify Apple identity notifications independently from App Store signatures. Durable consent-revocation
+floors reject older Cognito auth_time values even after recovery; only a later explicit Apple sign-in can
+restore a revoked account with the same StoreKit UUID. Older events cannot undo newer sign-in; permanent
+deleted accounts cannot reactivate. Delete cloud data even when Apple token revocation is unavailable,
+using an explicit manual-revocation choice/instructions. Preserve minimal account/chain ownership for
+conflict protection. No automatic legacy adoption, cross-account transfer or Family Sharing is supported;
+formal support/recovery policy remains a launch gate.
+
+Translation input is removed at terminal settlement; result recovery is 24 hours, pending input 10 minutes
+and abandoned running claims 120 seconds. Separate content scans issue deletes after access expiry; TTL
+is a fallback. Content PITR is disabled and organization-wide backups must exclude temporary content.
+Operational translation/paid-alignment/idempotency and notification metadata is 90 days; minimal account/
+chain ownership and revocation floors persist. Metadata PITR/retention require operator review. Existing
+anonymous alignment metadata remains seven days. No source text, result, raw purchase/token or key enters
+ordinary logs/queues. Server content cleanup follows deletion, and already saved local dictionary stays local.
+
+Paid alignment uses account-only v2 routes, server-bound owner and an authority namespace unusable by v1
+capabilities. Check current access on creation/upload renewal/start; retain original-period reservation and
+settle once transactionally with existing alignment finalization/expiry. Preserve global admission, private
+version-pinned S3 objects, one-attempt worker, manifest finalization and independent cleanup. Persist scan
+progress to avoid cleanup starvation. Paid assembly requires the exact worker image plus a reviewed six-
+language quality/runtime/memory/cost report. No anonymous route exists in that stack; alignment workers have
+no billing/provider secret access. Real benchmarks, Apple sandbox/TestFlight/production acceptance and all
+deployment remain unexecuted; code/runbooks do not constitute release approval.
+
+Before StoreKit checkout, require an authenticated server catalogue of configured products/allowances with purchases enabled. Show server allowances alongside Apple prices/periods; block checkout for a disabled or unconfigured service, and suppress repurchase when a verified current purchase needs recovery.

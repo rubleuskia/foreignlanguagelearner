@@ -7,6 +7,7 @@ struct ContextualTranslationSettingsView: View {
     @AppStorage(ContextAnalysisSettings.modelKey)
     private var selectedModelRawValue = OpenAITranslationModel.mini.rawValue
     @AppStorage(ContextAnalysisSettings.reasoningEffortKey) private var reasoningEffortRawValue = ""
+    @AppStorage(CloudProviderMode.key) private var providerMode = CloudProviderMode.personalKey.rawValue
     @State private var apiKey = ""
     @State private var hasSavedAPIKey = false
     @State private var keyMessage: String?
@@ -32,8 +33,19 @@ struct ContextualTranslationSettingsView: View {
                 .accessibilityIdentifier("settings.interface-language")
             }
             OnboardingHelpSection()
+            CloudAccountSection()
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
+                Picker("Translation service", selection: $providerMode) {
+                    Text(AppLanguage.text("Personal API key")).tag(CloudProviderMode.personalKey.rawValue)
+                    Text(AppLanguage.text("Subscription")).tag(CloudProviderMode.subscription.rawValue)
+                }
+                .accessibilityIdentifier("settings.provider-mode")
+                if providerMode == CloudProviderMode.subscription.rawValue {
+                    Text(AppLanguage.text("Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. Personal prompts and model settings apply only to personal API key mode."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if providerMode == CloudProviderMode.personalKey.rawValue {
                 Picker("Model", selection: selectedModelBinding) {
                     ForEach(OpenAITranslationModel.allCases) { model in
                         Text(model.displayName).tag(model)
@@ -84,7 +96,9 @@ struct ContextualTranslationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            }
             Section { DisclosureGroup("Diagnostics") { ExportLogsButton() } }
+            if providerMode == CloudProviderMode.personalKey.rawValue {
             Section {
                 DisclosureGroup("Translation prompt") {
                     TextEditor(text: $prompt)
@@ -117,6 +131,7 @@ struct ContextualTranslationSettingsView: View {
                 }
             }
             wordPromptSection
+            }
         }
         .nativeForm()
         .navigationTitle(AppLanguage.text("Settings"))

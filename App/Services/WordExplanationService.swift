@@ -44,7 +44,7 @@ actor WordExplanationCache {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         var bytes = try encoder.encode(input)
-        bytes.append(contentsOf: "|\(model.rawValue)|\(OpenAIWordExplanationProvider.promptVersion)|\(prompt)|\(model.resolvedReasoningEffort(reasoningEffort))".utf8)
+        bytes.append(contentsOf: "|byok|\(model.rawValue)|\(OpenAIWordExplanationProvider.promptVersion)|\(prompt)|\(model.resolvedReasoningEffort(reasoningEffort))".utf8)
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 
@@ -72,18 +72,27 @@ actor WordExplanationService: WordExplanationServing {
     private let cache = WordExplanationCache()
 
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
+        if CloudProviderMode.current == .subscription {
+            guard ContextAnalysisSettings.isCloudAnalysisEnabled() else { throw ContextAnalysisError.missingConfiguration }
+            return try await BackendWordExplanationProvider().explain(input)
+        }
         let model = ContextAnalysisSettings.selectedModel()
         let prompt = ContextAnalysisSettings.wordExplanationPrompt()
         let effort = ContextAnalysisSettings.reasoningEffort(for: model)
         let key = try WordExplanationCache.key(for: input, model: model, prompt: prompt, reasoningEffort: effort)
         try Task.checkCancellation()
-        if let cached = await cache.value(for: key) { return cached }
+        if let cached = await cache.value(for: key) {
+            guard CloudProviderMode.current == .personalKey else { throw ContextAnalysisError.cancelled }
+            return cached
+        }
+        guard CloudProviderMode.current == .personalKey else { throw ContextAnalysisError.cancelled }
         guard ContextAnalysisSettings.isCloudAnalysisEnabled(),
               let apiKey = try OpenAIAPIKeyStore.load(), !apiKey.isEmpty else {
             throw ContextAnalysisError.missingConfiguration
         }
         let result = try await OpenAIWordExplanationProvider(apiKey: apiKey, model: model, reasoningEffort: effort, prompt: prompt).explain(input)
         try Task.checkCancellation()
+        guard CloudProviderMode.current == .personalKey else { throw ContextAnalysisError.cancelled }
         try await cache.store(result, for: key)
         return result
     }

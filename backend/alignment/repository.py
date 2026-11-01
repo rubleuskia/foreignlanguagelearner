@@ -19,6 +19,12 @@ class DynamoRepository:
         self.client = client
         self.table_name = table_name
 
+    def prepare_create(self, job, now):
+        pass
+
+    def transact(self, items, phase, job):
+        self.client.transact_write_items(TransactItems=items)
+
     @staticmethod
     def _s(value: str) -> dict[str, str]:
         return {"S": value}
@@ -101,12 +107,13 @@ class DynamoRepository:
         return int(item.get("count", 0)) if item else 0
 
     def create_job(self, job: dict[str, Any], idem_key: str, body_hash: str, now: int) -> None:
+        self.prepare_create(job, now)
         day = utc_day(now)
         idem = {"pk": f"IDEMP#{job['access_token_hash']}", "sk": idem_key,
                 "job_id": job["job_id"], "request_hash": body_hash,
                 "delete_after": job["delete_after"]}
         try:
-            self.client.transact_write_items(TransactItems=[
+            self.transact([
             {"Put": {"TableName": self.table_name, "Item": self._item(job),
                      "ConditionExpression": "attribute_not_exists(pk)"}},
             {"Put": {"TableName": self.table_name, "Item": self._item(idem),
@@ -129,7 +136,7 @@ class DynamoRepository:
                         "ConditionExpression": "attribute_not_exists(#count) OR #count < :limit",
                         "ExpressionAttributeNames": {"#count": "count"},
                         "ExpressionAttributeValues": {":one": self._n(1), ":limit": self._n(20)}}},
-            ])
+            ], "create", job)
         except self.client.exceptions.TransactionCanceledException:
             if self.get_token_binding(job["access_token_hash"]):
                 raise Conflict("TOKEN_ALREADY_USED", "A job capability may authorize only one job.")
@@ -161,7 +168,7 @@ class DynamoRepository:
         day = utc_day(now)
         revision = job["revision"]
         try:
-            self.client.transact_write_items(TransactItems=[
+            self.transact([
             {"Update": {"TableName": self.table_name, "Key": self._item(job_key(job["job_id"])),
                         "UpdateExpression": "SET #status=:starting, revision=:next, updated_at=:now, "
                                             "start_requested_at=:now, execution_name=:name, "
@@ -192,7 +199,7 @@ class DynamoRepository:
                         "ConditionExpression": "#count > :zero",
                         "ExpressionAttributeNames": {"#count": "count"},
                         "ExpressionAttributeValues": {":minus": self._n(-1), ":zero": self._n(0)}}},
-            ])
+            ], "start", job)
         except self.client.exceptions.TransactionCanceledException:
             if self._counter("COUNTER#ACTIVE") >= 2:
                 raise RateLimited("ACTIVE_CAPACITY", "Processing capacity is full.", 60)
@@ -264,10 +271,11 @@ class DynamoRepository:
         if job["status"] not in {"awaiting_upload", "starting", "running"}:
             raise Conflict("INVALID_STATE", "Job cannot be cancelled from its current state.")
         values = {":cancelling": "cancelling", ":expected": job["status"],
-                  ":revision": job["revision"], ":now": now, ":one": 1, ":yes": True}
+                  ":revision": job["revision"], ":now": now, ":one": 1}
         updates = "SET #status=:cancelling, cancel_requested_at=:now, updated_at=:now"
         transactions: list[dict[str, Any]] = []
         if job["status"] == "awaiting_upload" and not job.get("upload_slot_released", False):
+            values[":yes"] = True
             updates += ", upload_slot_released=:yes"
             transactions.append({"Update": {
                 "TableName": self.table_name,
@@ -307,7 +315,7 @@ class DynamoRepository:
             "ExpressionAttributeNames": {"#count": "count"},
             "ExpressionAttributeValues": {":minus": self._n(-1), ":zero": self._n(0)},
         }}]
-        self.client.transact_write_items(TransactItems=transactions)
+        self.transact(transactions, "expiry", job)
         return self.get_job(job["job_id"])
 
     def finalize(self, job: dict[str, Any], *, status: str, now: int, error_code: str | None = None,
@@ -345,7 +353,7 @@ class DynamoRepository:
                 "ExpressionAttributeNames": {"#count": "count"},
                 "ExpressionAttributeValues": {":minus": self._n(-1), ":zero": self._n(0)},
             }})
-        self.client.transact_write_items(TransactItems=transactions)
+        self.transact(transactions, "finalize", job)
         return self.get_job(job["job_id"])
 
     def mark_cleanup_complete(self, job: dict[str, Any], now: int) -> None:
@@ -522,3 +530,11 @@ class MemoryRepository:
             self.active -= 1
         current["admission_released"] = True
         return deepcopy(current)
+
+
+def configured_repository(client, table_name):
+    import os
+    if os.environ.get('PAID_ALIGNMENT') == 'true':
+        from backend.paid_alignment.runtime import repository
+        return repository(client, table_name)
+    return DynamoRepository(client, table_name)

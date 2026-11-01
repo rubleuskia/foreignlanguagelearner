@@ -7,7 +7,7 @@ from typing import Any
 from .aws_adapters import S3Store
 from .config import Config
 from .domain import ERROR_CODES, epoch_now, validate_manifest
-from .repository import DynamoRepository
+from .repository import DynamoRepository, configured_repository
 
 
 def _error_code(event: dict[str, Any], job: dict[str, Any], storage: S3Store) -> tuple[str, dict[str, Any]]:
@@ -88,6 +88,6 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     import boto3
 
     config = Config.from_env()
-    repository = DynamoRepository(boto3.client("dynamodb"), config.table_name)
+    repository = configured_repository(boto3.client("dynamodb"), config.table_name)
     storage = S3Store(boto3.client("s3"), config.bucket_name)
     return finalize_event(event, repository, storage, epoch_now())

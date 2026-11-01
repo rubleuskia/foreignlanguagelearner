@@ -81,3 +81,9 @@ DerivedData/
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# Environment-specific cloud endpoints and Apple product configuration (never needed for local/BYOK use)
+App/Configuration/CloudConfiguration.plist
+
+# Local AWS control panel configuration, prepared releases, logs and credentials
+.cloud-control/

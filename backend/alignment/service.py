@@ -32,6 +32,12 @@ class AlignmentService:
         self.accept_new_jobs = accept_new_jobs
         self.clock = clock
 
+    def _create_authority(self, authorization, idem_key):
+        return token_hash(authorization)
+
+    def _job_metadata(self):
+        return {}
+
     def _authorized_job(self, job_id: str, authorization: str | None) -> dict[str, Any]:
         presented = token_hash(authorization)
         job = self.repository.get_job(job_id)
@@ -45,8 +51,8 @@ class AlignmentService:
 
     def create(self, body: Any, authorization: str | None, idem_header: str | None) -> tuple[int, dict[str, Any]]:
         self._accepting()
-        access_hash = token_hash(authorization)
         idem_key = validate_idempotency_key(idem_header)
+        access_hash = self._create_authority(authorization, idem_key)
         request = validate_create(body)
         digest = request_hash(request)
         replay = self.repository.get_idempotency(access_hash, idem_key)
@@ -80,6 +86,7 @@ class AlignmentService:
             "admission_released": True, "upload_slot_released": False,
             "upload_complete": False,
         }
+        job.update(self._job_metadata())
         try:
             self.repository.create_job(job, idem_key, digest, now)
         except Exception:

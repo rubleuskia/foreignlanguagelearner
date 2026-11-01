@@ -1,0 +1,338 @@
+openapi: 3.0.3
+info:
+  title: Foreign Language Learner accounts and verified Apple billing
+  version: 1.0.0
+  description: Undeployed account, billing and operator-policy projection. Admission
+    and purchase availability default closed.
+security:
+- session: []
+paths:
+  /v1/me:
+    get:
+      summary: Obtain the signed-in account's stable StoreKit association token
+      responses:
+        '200':
+          description: Account token (not authentication)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - schema_version
+                - user_id
+                - app_account_token
+                - apple_subject
+                properties:
+                  schema_version:
+                    type: integer
+                    enum:
+                    - 1
+                  app_account_token:
+                    type: string
+                    format: uuid
+                  user_id: &id001
+                    type: string
+                  apple_subject:
+                    type: string
+                    nullable: true
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Block cloud access, remove Cognito identity and retain minimal purchase
+        ownership
+      description: Deletes cloud access/Cognito identity, not the Apple subscription.
+        Supports verified native Apple revocation and explicit manual fallback.
+      responses:
+        '200':
+          description: Account removed; use manage_subscription_url to manage Apple
+            billing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    enum:
+                    - true
+                  subscription_cancelled:
+                    type: boolean
+                    enum:
+                    - false
+                  manage_subscription_url:
+                    type: string
+                    format: uri
+                  apple_revocation:
+                    type: string
+                    enum:
+                    - revoked
+                    - manual_required
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: object
+                additionalProperties: false
+                required:
+                - authorization_code
+                properties:
+                  authorization_code:
+                    type: string
+                    minLength: 1
+                    maxLength: 8192
+              - type: object
+                additionalProperties: false
+                required:
+                - manual_revocation
+                properties:
+                  manual_revocation:
+                    type: boolean
+                    enum:
+                    - true
+  /v1/me/entitlements:
+    get:
+      summary: Read owner-only subscription state with expiry and freshness checks
+      responses:
+        '200':
+          $ref: '#/components/responses/Entitlement'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/apple/sync:
+    post:
+      summary: Verify purchase or restore and reconcile current Apple state
+      description: Retry temporary errors and reconciliation conflicts with backoff.
+        Never repurchase to resolve a sync outage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - signed_transaction
+              properties:
+                signed_transaction:
+                  type: string
+                  minLength: 1
+                  maxLength: 60000
+      responses:
+        '200':
+          $ref: '#/components/responses/Entitlement'
+        '409':
+          description: Foreign/missing account binding, unsupported ownership or retryable
+            reconciliation conflict; inspect error.code
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/webhooks/apple:
+    post:
+      security: []
+      summary: Verify Apple V2 notification and durably save minimal inbox metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - signedPayload
+              properties:
+                signedPayload:
+                  type: string
+                  minLength: 1
+                  maxLength: 60000
+      responses:
+        '200':
+          description: Verified notification persisted (including duplicate UUID)
+            for asynchronous processing
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/products:
+    get:
+      summary: Read configured purchasable products and allowance before StoreKit
+        checkout
+      responses:
+        '200':
+          description: No prices; Apple supplies prices/periods. Availability defaults
+            false.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                - schema_version
+                - purchases_enabled
+                - products
+                properties:
+                  schema_version:
+                    type: integer
+                    enum:
+                    - 1
+                  purchases_enabled:
+                    type: boolean
+                  products:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                      - id
+                      - translations
+                      - alignments
+                      properties:
+                        id: *id001
+                        translations:
+                          type: integer
+                          minimum: 0
+                        alignments:
+                          type: integer
+                          minimum: 0
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/webhooks/apple-identity:
+    post:
+      security: []
+      summary: Verify Apple identity JWT and durably accept minimal revocation/deletion
+        metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - payload
+              properties:
+                payload:
+                  type: string
+                  minLength: 1
+                  maxLength: 60000
+      responses:
+        '200':
+          description: Signature/issuer/audience/event verified and inbox persisted
+            before acknowledgement
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    session:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito access token from the intended issuer/client, with paid-cloud/access
+        and aws.cognito.signin.user.admin scopes; live session required
+  responses:
+    Error:
+      description: Stable public error code; no SDK exception, receipt or credentials
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - error
+            properties:
+              error:
+                type: object
+                required:
+                - code
+                properties:
+                  code:
+                    type: string
+    Entitlement:
+      description: Verified subscription projection; does not itself authorize paid
+        compute
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - schema_version
+            - subscription_access
+            - access_expires_at
+            - subscriptions
+            - features
+            - allowance
+            - policy_version
+            properties:
+              schema_version:
+                type: integer
+                enum:
+                - 1
+              subscription_access:
+                type: string
+                enum:
+                - active
+                - inactive
+                - reconciliation_required
+              access_expires_at:
+                type: integer
+                format: int64
+                nullable: true
+              subscriptions:
+                type: array
+                maxItems: 20
+                items:
+                  type: object
+                  properties:
+                    product_id:
+                      type: string
+                    status:
+                      type: string
+                      enum:
+                      - subscribed
+                      - expired
+                      - billing_retry
+                      - grace_period
+                      - revoked
+                    access_expires_at:
+                      type: integer
+                      format: int64
+                    verified_at:
+                      type: integer
+                      format: int64
+              features:
+                type: object
+                properties:
+                  context_analysis:
+                    type: boolean
+                  word_explanation:
+                    type: boolean
+                  alignment:
+                    type: boolean
+              allowance:
+                type: object
+                nullable: true
+                additionalProperties:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - limit
+                  - used
+                  - remaining
+                  - reset_at
+                  properties:
+                    limit:
+                      type: integer
+                      minimum: 0
+                    used:
+                      type: integer
+                      minimum: 0
+                    remaining:
+                      type: integer
+                      minimum: 0
+                    reset_at:
+                      type: integer
+                      minimum: 0
+                description: Used includes in-flight reservations. Monthly UTC reset
+                  applies to monthly/annual plans.
+              policy_version:
+                type: string
+                description: Opaque effective configuration/model/prompt/schema hash
+                  version

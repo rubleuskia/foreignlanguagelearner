@@ -645,3 +645,71 @@
 "Extra high" = "Очень высокий";
 
 "Maximum" = "Максимальный";
+
+
+// Optional cloud account and subscriptions
+"Cloud account" = "Облачный аккаунт";
+"Subscription" = "Подписка";
+"Personal API key" = "Личный API-ключ";
+"Translation service" = "Сервис перевода";
+"Cloud subscriptions are not configured in this build." = "Облачные подписки не настроены в этой сборке.";
+"Sign in to use your subscription." = "Войдите в аккаунт, чтобы пользоваться подпиской.";
+"The cloud account changed. Open the request again after signing in." = "Облачный аккаунт изменился. После входа откройте запрос заново.";
+"Confirm deletion with the Apple account used for cloud sign-in. If accounts do not match, contact support." = "Подтвердите удаление с тем Apple-аккаунтом, который использовался для входа. Если аккаунты не совпадают, обратитесь в поддержку.";
+"An active subscription is required. Restore purchases or check your account." = "Нужна действующая подписка. Восстановите покупки или проверьте аккаунт.";
+"This purchase belongs to another app account. Sign in to the original account or contact support." = "Покупка связана с другим аккаунтом приложения. Войдите в исходный аккаунт или обратитесь в поддержку.";
+"Your allowance or the service capacity is currently unavailable. Check your subscription and try later." = "Лимит запросов или свободная мощность сервиса сейчас недоступны. Проверьте подписку и попробуйте позже.";
+"The provider may have processed this request. It will not be sent again automatically. Your allowance was released." = "Возможно, провайдер уже обработал запрос. Автоматического повтора не будет. Запрос не списан из вашего лимита.";
+"This cloud result has expired. Select the text again to make a new request." = "Срок хранения облачного результата истёк. Чтобы создать новый запрос, выберите текст заново.";
+"The cloud request failed. Your allowance was released." = "Облачный запрос завершился ошибкой. Запрос не списан из вашего лимита.";
+"The request was cancelled before processing." = "Запрос отменён до начала обработки.";
+"Apple is waiting for purchase approval. You do not need to buy again." = "Apple ожидает подтверждения покупки. Покупать повторно не нужно.";
+"Your purchase is waiting for activation. Retry activation or restore purchases; do not buy again." = "Покупка ожидает активации. Повторите активацию или восстановите покупки. Покупать повторно не нужно.";
+"The cloud service is temporarily unavailable. Try again later." = "Облачный сервис временно недоступен. Попробуйте позже.";
+"Check subscription" = "Проверьте подписку";
+"Available translations: %d of %d" = "Доступно переводов: %d из %d";
+"Allowance resets" = "Лимит обновится";
+"Retry activation" = "Повторить активацию";
+"Restore purchases" = "Восстановить покупки";
+"Refresh subscription" = "Обновить статус подписки";
+"Cloud requests" = "Облачные запросы";
+"Manage Apple subscription" = "Управлять подпиской Apple";
+"Sign out" = "Выйти";
+"Delete cloud account" = "Удалить облачный аккаунт";
+"Sign in with Apple" = "Войти с Apple";
+"Use subscription for translations" = "Использовать подписку для переводов";
+"Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and renewal are handled by Apple. Allowance includes requests currently processing." = "Подписка даёт контекстные переводы и объяснения слов. Локальная библиотека и личный API-ключ остаются отдельными. Оплата и продление — через Apple. Лимит учитывает запросы в обработке.";
+"Privacy" = "Конфиденциальность";
+"Terms" = "Условия";
+"Support" = "Поддержка";
+"Delete cloud account?" = "Удалить облачный аккаунт?";
+"Delete and confirm with Apple" = "Удалить с подтверждением Apple";
+"Delete and revoke Apple access manually" = "Удалить и отозвать доступ Apple вручную";
+"Your local books and saved dictionary stay on this device. This does not cancel your Apple subscription. Confirm with Apple to revoke sign-in consent, or delete cloud data and revoke access manually using the provided instructions." = "Книги и сохранённый словарь останутся на устройстве. Подписка Apple не отменяется. Подтвердите удаление через Apple для отзыва доступа либо удалите облачные данные и отзовите доступ вручную по инструкции.";
+"Your cloud account was deleted. Use the Apple instructions below to revoke sign-in access manually." = "Облачный аккаунт удалён. Отзовите доступ для входа вручную по инструкции Apple ниже.";
+"Revoke Apple sign-in manually" = "Инструкция по отзыву доступа Apple";
+"Waiting can be stopped without cancelling provider work. Refresh resumes the existing request. Results remain available for 24 hours. Starting a new request may use allowance again." = "Если прекратить ожидание, провайдер может продолжить обработку. Обновление возвращает к тому же запросу. Результаты доступны 24 часа. Новый запрос может снова использовать лимит.";
+"Word explanation" = "Объяснение слова";
+"Cancel before processing" = "Отменить до обработки";
+"Refresh request" = "Обновить запрос";
+"Allow a new request" = "Разрешить новый запрос";
+"Allow a new request?" = "Разрешить новый запрос?";
+"The next translation of this input will have a new request key and may use allowance again. Existing saved dictionary content is unchanged." = "Следующий перевод этого текста станет новым запросом и может снова использовать лимит. Сохранённые записи словаря не изменятся.";
+"Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. Personal prompts and model settings apply only to personal API key mode." = "Выбранный текст и ограниченный контекст передаются через наш сервер в OpenAI. Успешный результат можно восстановить в течение 24 часов. Личные промпты и выбор модели действуют только в режиме личного API-ключа.";
+"accepted" = "Ожидает обработки";
+"running" = "Обрабатывается";
+"succeeded" = "Готово";
+"failed" = "Ошибка";
+"outcome_unknown" = "Результат неизвестен";
+"cancelled" = "Отменён";
+"Listening practice currently uses personal API key mode. Choose it in Settings to generate answer choices." = "Варианты ответов для аудирования сейчас создаются в режиме личного API-ключа. Выберите этот режим в настройках.";
+
+"The next translation of this text will be a new request and may use allowance again. Existing saved dictionary content is unchanged." = "Следующий перевод этого текста станет новым запросом и может снова использовать лимит. Сохранённые записи словаря не изменятся.";
+
+"Monthly translation allowance: %d" = "Переводов в месяц: %d";
+
+"New subscriptions are currently unavailable. You can still restore purchases and recover existing results." = "Новые подписки сейчас недоступны. Можно восстановить покупки и получить существующие результаты.";
+
+"Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and automatic renewal are handled by Apple until you cancel in subscription settings. Allowance resets at the start of each UTC month, including annual plans, and includes requests currently processing." = "Подписка даёт контекстные переводы и объяснения слов. Локальная библиотека и личный API-ключ остаются отдельными. Apple принимает оплату и автоматически продлевает подписку до её отмены в настройках подписок. Лимит обновляется в начале каждого месяца по UTC, в том числе для годовых планов, и учитывает запросы в обработке.";
+
+"Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support." = "Не удалось проверить вход в облачный аккаунт. Войдите заново с тем же Apple-аккаунтом или обратитесь в поддержку.";

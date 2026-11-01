@@ -1,5 +1,34 @@
 # Project changelog
 
+## 2026-11-01 — Local AWS production control panel
+
+- Add a loopback Russian-language dashboard for real prod stack/release/CloudWatch status, CI tags, reviewed deployment plans, manual deploy/rollback and local history. AWS profiles stay on the computer; startup does not deploy infrastructure.
+- Tag successful main push CI runs as immutable annotated `backend-<CI run number>-<short SHA>` releases through a separate post-CI workflow. Failed/PR/publishing runs cannot tag; no automatic deployment follows.
+- Build exact tagged source into a single-use assembly; enforce account/region, successful main CI, baseline/file/config freshness, serialized operations and explicit target confirmation. Rollback deploys an old code tag with reviewed current configuration, without restoring data.
+- Add real production smoke/authenticated/opt-in inference suites. Missing tokens are skipped coverage; UUIDs persist before submission and lost responses recover without automatic retries. No live AWS deployment, prod probe or paid call was performed during implementation.
+- Validation: 20 isolated control-panel tests, JavaScript/Python/shell checks and browser QA pass. After merging current main, 272 iOS unit tests and two selection/audio UI scenarios pass. No AWS deployment or paid probes were run.
+- DECISIONS.md records local control/deployment/tag choices; PROJECT.md adds the operator workflow. Setup and acceptance limits are in docs/CLOUD_CONTROL.md.
+
+## 2026-11-01 — Complete undeployed paid-cloud workflows
+
+- Add durable context/word translation admission, atomic monthly allowance and global/frequency/concurrency limits, stream/SQS dispatch, one-attempt provider submission, failure/unknown-outcome settlement and independent content cleanup. Effective policy IDs bind model, prompts, schemas and limits; unapproved products/admissions remain disabled.
+- Add iOS Apple/Cognito login with PKCE, device-only session refresh/sign-out, StoreKit purchase/restore/unfinished recovery and subscription settings; persist request keys before submission and recover by owner/key after relaunch. Keep personal API key/model/prompts as a separate mode, with no fallback after subscription errors. Local reading and saved dictionary remain independent.
+- Add verified Apple identity revocation/deletion events, durable session floors and fresh-login recovery. Cloud account deletion supports native Apple revocation and an explicit manual fallback when Apple is unavailable; deletion does not cancel subscriptions.
+- Add scoped account-only `/v2/alignments`, separate job allowance, transactional start/settlement, deletion-aware cleanup and a pinned-image/six-language benchmark gate. Preserve existing media/version/worker/global limits. Fix the shared cancellation transaction's unused placeholder, rejected by real DynamoDB for started jobs.
+- Add isolated AWS/cryptographic/client/UI tests, DynamoDB Local concurrency coverage in CI, public iOS configuration generation and the no-deployment operations/TestFlight/production acceptance runbook. Actual Apple/AWS acceptance, publishing, operating-policy approval and real alignment benchmarks remain unexecuted release gates.
+- Validation: 86 backend tests with DynamoDB Local (including concurrent admission), 26 existing aligner tests, 269 iOS unit tests, four targeted UI flows and an unsigned iOS device Release build pass. Dev/prod CDK assertions and full CLI synthesis, the hash-locked Linux asset build, packaged-source comparison and public configuration generation pass. Real Apple/AWS/provider acceptance remains external.
+- DECISIONS.md records identity, allowance, uncertain outcomes, caching, retention and independent paid alignment boundaries. PROJECT.md reflects the configuration-gated workflow; no deployment or endpoint is added to a normal build.
+
+
+## 2026-11-01 — Paid cloud account and subscription foundation (undeployed)
+
+- Add independent dev/prod Cognito + Sign in with Apple and billing infrastructure, account-issued StoreKit tokens, subscription sync/status and account tombstones. Keep personal-key translation as a separate existing mode.
+- Verify Apple signatures through the official SDK, reconcile live subscription state, bind purchase chains atomically to one account, and handle expiry, grace and revocation. Persist verified notification metadata before acknowledgment, with stream retries, dead letters and scheduled reconciliation.
+- Add backend and CDK acceptance tests, CI installation, a hash-locked Linux Lambda build and an operator runbook. No deployment, iOS subscription UI, inference or approved tariff/quota is included; compute entitlements remain disabled.
+- Validation: 44 backend tests, 26 local-aligner regression tests, dev/prod CDK assertions, hash-locked Linux x86_64 asset build and development CLI synthesis pass. Real Apple sandbox and AWS runtime acceptance remain outstanding.
+- DECISIONS.md records the adopted server boundaries and development freshness settings. PROJECT.md adds the undeployed foundation to the repository map; shipped local/BYOK workflows remain unchanged.
+
+
 ## 2026-11-01 — Selection across book pages
 
 - Add a chapter-wide selection overlay to book pages. Long press a word, then drag either handle to the left/right edge and hold briefly to continue selecting on adjacent pages, in either direction.
