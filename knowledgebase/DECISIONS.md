@@ -1,5 +1,11 @@
 # Architectural and product decisions
 
+## Chapter-wide selection on paginated text (2026-11-01)
+
+Paginated readers own selection as a UTF-16 range in the entire chapter, independently of individual UITextViews. Disable native per-page selection and overlay highlight rectangles, two draggable/adjustable handles and a compact action toolbar. Map caret positions through each page's original character range; retain the fixed endpoint while the moving endpoint crosses pages or reverses direction. Tokenize only a bounded neighborhood around the moving handle to avoid whole-chapter work per drag frame.
+
+Holding within 30 points of a horizontal edge for 0.55 seconds advances the retained native page controller without recreating the selection. The timer runs in common run-loop modes during touch tracking; transitions are serialized and can repeat while held. Pause playback and suspend following when selection begins. Actions resolve source text, context and audio against the full chapter. Clear selection/timers on reader teardown or renewed audio following; layout/document changes create a new selection owner. Vertical scrolling retains its existing native selection.
+
 ## Compact reading controls (2026-10-31)
 
 The independent reader.text-layout preference selects pages (default) or vertical scrolling in both readers. Expose it in the ⋯ menu beside highlighting. A shared layout owner retains source-character offsets across presentation changes and forwards normal progress persistence; audio following continues to resolve the active cue. Vertical mode reuses the original selectable transcript and follow behavior, with a stable bottom Follow slot.

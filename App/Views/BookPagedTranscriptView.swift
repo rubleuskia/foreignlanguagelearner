@@ -137,7 +137,18 @@ struct BookPagedTranscriptView: View {
                             underline: reader.differentiateWithoutColor),
                         makePage: { pageView($0) },
                         onManualStart: { reader.following = false },
-                        onSelection: { move(to: $0) })
+                        onSelection: { move(to: $0) },
+                        selectionDocument: reader.document, pageRanges: pages,
+                        selectionDisplayText: displayedText,
+                        onTextSelection: { action, range in
+                            guard let selected = TranscriptTextView.Coordinator.validatedExpandedSelection(
+                                in: displayedText, selection: range, language: reader.wordStyleLanguage) else { return }
+                            let segment = reader.document.ranges.firstIndex {
+                                NSIntersectionRange($0, selected.range).length > 0
+                            }
+                            reader.handleSelection(action, selected.text, selected.range, segment,
+                                TranscriptTextView.Coordinator.context(in: reader.document.text, selection: selected.range))
+                        })
                     .id(layoutRevision)
                     .frame(height: pageSize.height)
                     .accessibilityIdentifier("reader.pages")
