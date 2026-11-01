@@ -623,6 +623,8 @@
 "Previous page" = "Предыдущая страница";
 "Next page" = "Следующая страница";
 "Text layout" = "Раскладка текста";
+"Selection start" = "Начало выделения";
+"Selection end" = "Конец выделения";
 "Book pages" = "Книжное перелистывание";
 "Vertical scrolling" = "Вертикальная прокрутка";
 
