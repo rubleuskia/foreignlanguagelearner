@@ -25,13 +25,17 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: infra/alignment/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Install billing verification test dependencies
         run: |
           python -m pip install --require-hashes -r backend/billing/requirements.lock
           python -m pip install -r backend/billing/requirements-dev.txt
       - name: Python contracts and existing aligner regression suite
         run: |
-          python -m unittest discover -s backend -p 'test_*.py' -v
+          PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
           python -m compileall -q backend tools/subtitle-aligner/worker
       - name: CDK type and infrastructure assertions

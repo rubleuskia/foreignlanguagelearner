@@ -52,12 +52,20 @@ The interface defaults to Russian and can be switched to English in Settings wit
 - Local Activity dashboard with day/week/month views, language-scoped reading-word counts, distinct phrase advancements and level-4 completions, reading/listening wall time, charts, monthly activity calendar, current streak and recent transitions. Phrase/time history starts with the update, survives source deletion and is included in library-state backups; reading words reuse their existing first-learned dates. Statistics reuse a persistent derived snapshot and prepared reports; pull down from the top of Activity to refresh explicitly. A missing cache is built once, and the last-update timestamp remains visible.
 - XcodeGen project generation, XCTest unit/UI coverage, GitHub Actions CI, and manually triggered signed publishing.
 - Local subtitle alignment with normal and guided modes, diagnostics, review flags, SRT/WebVTT output, and manifest-driven sequential audiobook batch/rerun support.
+- Configuration-gated Apple/Cognito accounts, StoreKit purchase/restore and durable subscription translations/word explanations, with separate personal-key mode and owner-scoped recovery. No endpoint is included in normal builds; external release acceptance remains pending.
 - An undeployed AWS implementation for optional temporary audio + TXT alignment jobs, with a public
   test contract, per-job bearer capabilities, strict global admission limits and a 60-minute ceiling.
 
 ## Boundaries
 
-The shipped app has no project-operated backend endpoint or analytics. Media, saved dictionary data and reading vocabulary remain local unless the user explicitly exports a dictionary file. Ordinary Apple Translation uses installed on-device language models for explicit translation, legacy pending recovery and untranslated imports. Contextual translation is an opt-in cloud feature: the app sends only the selected phrase and bounded surrounding text directly to OpenAI with a user-provided key stored in Keychain; billing and quotas belong to that user's OpenAI account. The app no longer ships the unreachable Wiktionary lookup or its exclusive SGJP morphology pack. Existing cached definitions and historical diagnostics remain readable and exportable; contextual lemmas use the existing OpenAI analysis. The repository's cloud alignment backend has not been deployed or connected to iOS; its benchmark and explicit deployment gate must pass before public testing. Cloud sync, lock-screen controls, in-app alignment, arbitrary track editing after import, automatic TXT chapter detection, and gapless playback remain future work or are not yet established as shipped behavior. The resource menu supports replacing the complete audio set; synchronization attachment verifies current recordings rather than generating alignment.
+An optional, configuration-gated subscription workflow is implemented: Apple/Cognito cloud accounts,
+StoreKit purchase/restore, server-verified entitlement/allowance and durable contextual translation/word
+explanations. Personal-key mode remains separate. Without a generated cloud configuration resource,
+the normal app has no endpoint or purchasable subscription flow. All server stacks are undeployed and
+admissions default disabled. The repository also implements account-only paid alignment routes behind
+an independent image/benchmark gate; in-app alignment UI and real release acceptance remain future work.
+
+The normal build has no configured project-operated backend endpoint or analytics. Media, saved dictionary data and reading vocabulary remain local unless the user explicitly exports a dictionary file. Ordinary Apple Translation uses installed on-device language models for explicit translation, legacy pending recovery and untranslated imports. Contextual translation is opt-in. Personal-key mode sends only selected text and bounded context directly to OpenAI using the device Keychain key and that user's provider billing. Configured subscription mode sends the same bounded excerpt through our undeployed backend, with verified account/subscription and server allowance; it never falls back to a personal key. The app no longer ships the unreachable Wiktionary lookup or its exclusive SGJP morphology pack. Existing cached definitions and historical diagnostics remain readable and exportable; contextual lemmas use the existing OpenAI analysis. The repository's cloud alignment backend has not been deployed or connected to iOS; its benchmark and explicit deployment gate must pass before public testing. Cloud sync, lock-screen controls, in-app alignment, arbitrary track editing after import, automatic TXT chapter detection, and gapless playback remain future work or are not yet established as shipped behavior. The resource menu supports replacing the complete audio set; synchronization attachment verifies current recordings rather than generating alignment.
 
 ## Repository map
 
@@ -65,7 +73,7 @@ The shipped app has no project-operated backend endpoint or analytics. Media, sa
 - `Tests/` — unit and UI tests.
 - `tools/subtitle-aligner/` — local TXT + audio alignment utility.
 - `backend/alignment/` — cloud alignment domain logic, Lambda handlers and OpenAPI contract.
-- `backend/cloud/` and `backend/billing/` — undeployed recoverable cloud identity and Apple subscription verification/projection; compute features remain disabled.
+- `backend/cloud/`, `backend/billing/`, `backend/translation/` and `backend/paid_alignment/` — undeployed identity, Apple billing, durable inference/usage and account-only alignment; admissions default disabled.
 - `infra/alignment/` — independent CDK entry points/assertions for gated alignment and undeployed account/billing foundation.
 - `docs/` — detailed operational and feature documentation.
 - `project.yml` — XcodeGen source of truth.

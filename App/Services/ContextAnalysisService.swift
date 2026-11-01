@@ -7,10 +7,8 @@ protocol ContextAnalysisServing: Sendable {
 actor ContextAnalysisService: ContextAnalysisServing {
     private struct Job {
         let request: ContextAnalysisRequest
-        let apiKey: String
-        let model: OpenAITranslationModel
-        let prompt: String
-        let reasoningEffort: String
+        let provider: any ContextAnalysisProvider
+        let mode: CloudProviderMode
         let continuation: CheckedContinuation<ContextualPhraseResult, Error>
     }
 
@@ -39,16 +37,21 @@ actor ContextAnalysisService: ContextAnalysisServing {
         guard ContextAnalysisSettings.isCloudAnalysisEnabled() else {
             throw ContextAnalysisError.missingConfiguration
         }
-        guard let apiKey = try OpenAIAPIKeyStore.load(), !apiKey.isEmpty else {
-            throw ContextAnalysisError.missingConfiguration
+        let mode = CloudProviderMode.current
+        let provider: any ContextAnalysisProvider
+        if mode == .subscription {
+            provider = BackendContextAnalysisProvider()
+        } else {
+            guard let apiKey = try OpenAIAPIKeyStore.load(), !apiKey.isEmpty else {
+                throw ContextAnalysisError.missingConfiguration
+            }
+            let model = ContextAnalysisSettings.selectedModel()
+            provider = OpenAIContextAnalysisProvider(apiKey: apiKey, model: model, prompt: ContextAnalysisSettings.prompt(),
+                reasoningEffort: ContextAnalysisSettings.reasoningEffort(for: model))
         }
-        let model = ContextAnalysisSettings.selectedModel()
-        let prompt = ContextAnalysisSettings.prompt()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                enqueue(Job(request: request, apiKey: apiKey, model: model, prompt: prompt,
-                            reasoningEffort: ContextAnalysisSettings.reasoningEffort(for: model),
-                            continuation: continuation))
+                enqueue(Job(request: request, provider: provider, mode: mode, continuation: continuation))
             }
         } onCancel: {
             Task { await self.cancel(requestID: request.requestID) }
@@ -68,13 +71,14 @@ actor ContextAnalysisService: ContextAnalysisServing {
     }
 
     private func start(_ job: Job) {
-        let provider = OpenAIContextAnalysisProvider(
-            apiKey: job.apiKey, model: job.model, prompt: job.prompt, reasoningEffort: job.reasoningEffort
-        )
+        let provider = job.provider
         let task = Task {
             let result: Result<ContextualPhraseResult, Error>
             do {
-                result = .success(try await provider.analyze(job.request))
+                guard job.mode == CloudProviderMode.current else { throw ContextAnalysisError.cancelled }
+                let value = try await provider.analyze(job.request)
+                guard job.mode == CloudProviderMode.current else { throw ContextAnalysisError.cancelled }
+                result = .success(value)
             } catch {
                 result = .failure(error)
             }

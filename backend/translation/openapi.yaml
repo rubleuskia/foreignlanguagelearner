@@ -1,0 +1,321 @@
+openapi: 3.0.3
+info:
+  title: Foreign Language Learner durable translation
+  version: 1.0.0
+  description: Scoped account API; no capability, provider key, arbitrary model, URL,
+    tools or custom prompt accepted. All text bounds are UTF-16, not Python length.
+security:
+- session: []
+paths:
+  /v1/context-analyses:
+    post:
+      summary: Atomically reserve allowance and durably admit/replay a request
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextInput'
+      responses:
+        '202':
+          description: Owner-only request state; successful results recoverable for
+            24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/word-explanations:
+    post:
+      summary: Atomically reserve allowance and durably admit/replay a request
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WordInput'
+      responses:
+        '202':
+          description: Owner-only request state; successful results recoverable for
+            24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/requests/{id}:
+    get:
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Owner-only request state; successful results recoverable for
+            24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/requests/{id}/cancel:
+    post:
+      summary: Cancel accepted work; running work may already incur provider cost
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Owner-only request state; successful results recoverable for
+            24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/requests/by-key/{key}:
+    get:
+      summary: Recover a lost POST response without resubmitting input after relaunch
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Owner-only request state; successful results recoverable for
+            24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    session:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito access token from the intended issuer/client, with paid-cloud/access
+        and aws.cognito.signin.user.admin scopes; live session required
+  responses:
+    Error:
+      description: Stable public error code; no content or credentials
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required:
+            - error
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required:
+                - code
+                properties:
+                  code: &id008
+                    type: string
+  schemas:
+    ContextInput:
+      type: object
+      additionalProperties: false
+      required:
+      - schema_version
+      - selected_text
+      - context
+      - selection_location_utf16
+      - selection_length_utf16
+      - source_language
+      - target_language
+      - words_to_explain
+      properties:
+        schema_version: &id001
+          type: integer
+          enum:
+          - 1
+        selected_text: &id002
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: At most 256 UTF-16 code units; whitespace-only is invalid
+        context: &id003
+          type: string
+          minLength: 1
+          maxLength: 1400
+          description: At most 1400 UTF-16 code units
+        selection_location_utf16: &id004
+          type: integer
+          minimum: 0
+        selection_length_utf16: &id005
+          type: integer
+          minimum: 1
+          maximum: 256
+        source_language: &id006
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - de
+          - it
+          - pl
+        target_language: &id007
+          type: string
+          enum:
+          - ru
+        words_to_explain:
+          type: array
+          maxItems: 128
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          description: Exact bounded ordered subsequence of selected whitespace-delimited
+            tokens; preserve repeated occurrences
+    WordInput:
+      type: object
+      additionalProperties: false
+      required:
+      - schema_version
+      - selected_text
+      - context
+      - selection_location_utf16
+      - selection_length_utf16
+      - source_language
+      - target_language
+      - lemma
+      properties:
+        schema_version: *id001
+        selected_text: *id002
+        context: *id003
+        selection_location_utf16: *id004
+        selection_length_utf16: *id005
+        source_language: *id006
+        target_language: *id007
+        lemma:
+          type: string
+          minLength: 1
+          maxLength: 256
+    Request:
+      type: object
+      additionalProperties: false
+      required:
+      - schema_version
+      - request_id
+      - state
+      - kind
+      - created_at
+      - policy_version
+      properties:
+        schema_version:
+          type: integer
+          enum:
+          - 1
+        request_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+          - accepted
+          - running
+          - succeeded
+          - failed
+          - outcome_unknown
+          - cancelled
+        kind:
+          type: string
+          enum:
+          - context
+          - word
+        created_at:
+          type: integer
+        policy_version: *id008
+        result:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - phrase_translation
+            - word_explanations
+            properties:
+              phrase_translation:
+                type: string
+                minLength: 1
+                maxLength: 512
+              word_explanations:
+                type: array
+                maxItems: 128
+                items:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - source_word
+                  - lemma
+                  - meaning
+                  properties:
+                    source_word: *id008
+                    lemma: *id008
+                    meaning: *id008
+          - type: object
+            additionalProperties: false
+            required:
+            - definition
+            - meaningInContext
+            - examples
+            properties:
+              definition:
+                type: string
+                maxLength: 1200
+              meaningInContext:
+                type: string
+                maxLength: 700
+              examples:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - phrase
+                  - translation
+                  properties:
+                    phrase:
+                      type: string
+                      maxLength: 300
+                    translation:
+                      type: string
+                      maxLength: 400
+        result_expires_at:
+          type: integer

@@ -27,10 +27,15 @@ export interface CloudProps extends cdk.StackProps {
   readonly appleSignInSecretArn: string;
   readonly callbackUrl: string;
   readonly domainPrefix: string;
+  readonly cloudPolicy?: string;
+  readonly appleProducts?: string[];
+  readonly acceptTranslations?: boolean;
+  readonly acceptAlignments?: boolean;
 }
 
 export class CloudFoundationStack extends cdk.Stack {
   readonly accounts: db.Table;
+  readonly usage: db.Table;
   readonly subscriptions: db.Table;
   readonly pool: cognito.UserPool;
   readonly client: cognito.UserPoolClient;
@@ -51,6 +56,13 @@ export class CloudFoundationStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     this.accounts = table("Accounts", "user_id");
+    this.accounts.addGlobalSecondaryIndex({ indexName: "AppleSubject", partitionKey: { name: "apple_subject", type: db.AttributeType.STRING }, projectionType: db.ProjectionType.KEYS_ONLY });
+    this.usage = new db.Table(this, "Usage", {
+      partitionKey: { name: "counter_id", type: db.AttributeType.STRING },
+      timeToLiveAttribute: "delete_after", billingMode: db.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      encryption: db.TableEncryption.AWS_MANAGED, removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
     this.subscriptions = table("Subscriptions", "chain_key");
     this.pool = new cognito.UserPool(this, "AccountsPool", {
       selfSignUpEnabled: false,
@@ -91,21 +103,42 @@ export class CloudFoundationStack extends cdk.Stack {
       jwtAudience: [this.client.userPoolClientId],
     });
     this.common = {
+      CLOUD_POLICY: props.cloudPolicy ?? JSON.stringify({ version: "cloud-v1", products: {}, daily_limit: 20,
+        concurrent_limit: 2, per_user_concurrent: 1, per_user_minute: 5, model: "gpt-5-mini", output_tokens: 2048 }),
+      ACCEPT_TRANSLATIONS: String(props.acceptTranslations ?? false),
+      ACCEPT_ALIGNMENTS: String(props.acceptAlignments ?? false),
+      USAGE_TABLE: this.usage.tableName,
       ACCOUNTS_TABLE: this.accounts.tableName, SUBSCRIPTIONS_TABLE: this.subscriptions.tableName,
       APPLE_ENVIRONMENT: props.stage === "prod" ? "Production" : "Sandbox",
       JWT_ISSUER: this.pool.userPoolProviderUrl, JWT_CLIENT_ID: this.client.userPoolClientId,
       JWT_SCOPE: this.scopeName, USER_POOL_ID: this.pool.userPoolId,
+      APPLE_PRODUCTS: JSON.stringify(props.appleProducts ?? []),
+      APPLE_IDENTITY_AUDIENCES: JSON.stringify([props.appleClientId, "com.rubleuskia.foreignlanguagelearner"]),
     };
     const account = new lambda.Function(this, "AccountApi", {
       code: props.code, runtime: lambda.Runtime.PYTHON_3_12, handler: "backend.billing.api.account_handler",
       timeout: cdk.Duration.seconds(15), memorySize: 256, environment: this.common,
       logGroup: new logs.LogGroup(this, "AccountLogs", { retention: logs.RetentionDays.ONE_WEEK }),
     });
+    account.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [this.pool.userPoolArn] }));
     this.accounts.grantReadWriteData(account);
     this.subscriptions.grantReadData(account);
-    account.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminDeleteUser"], resources: [this.pool.userPoolArn] }));
+    this.usage.grantReadData(account);
+    const deletion = new lambda.Function(this, "DeleteAccount", {
+      code: props.code, runtime: lambda.Runtime.PYTHON_3_12, handler: "backend.billing.api.deletion_handler",
+      timeout: cdk.Duration.seconds(29), memorySize: 256,
+      environment: { ...this.common, APPLE_SIGNIN_SECRET_ARN: props.appleSignInSecretArn,
+        APPLE_NATIVE_CLIENT_ID: "com.rubleuskia.foreignlanguagelearner", APPLE_TEAM_ID: props.appleTeamId,
+        APPLE_SIGNIN_KEY_ID: props.appleKeyId },
+      logGroup: new logs.LogGroup(this, "DeletionLogs", { retention: logs.RetentionDays.ONE_WEEK }),
+    });
+    this.accounts.grantReadWriteData(deletion);
+    deletion.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminDeleteUser", "cognito-idp:AdminGetUser"], resources: [this.pool.userPoolArn] }));
+    secrets.Secret.fromSecretCompleteArn(this, "AppleDeletionKey", props.appleSignInSecretArn).grantRead(deletion);
+    this.api.addRoutes({ path: "/v1/me", methods: [apigw.HttpMethod.DELETE], authorizer: this.authorizer,
+      authorizationScopes: [this.scopeName], integration: new HttpLambdaIntegration("DeleteAccount", deletion) });
     for (const [method, path] of [[apigw.HttpMethod.GET, "/v1/me"],
-      [apigw.HttpMethod.GET, "/v1/me/entitlements"], [apigw.HttpMethod.DELETE, "/v1/me"]] as const) {
+      [apigw.HttpMethod.GET, "/v1/me/entitlements"], [apigw.HttpMethod.GET, "/v1/products"]] as const) {
       this.api.addRoutes({ path, methods: [method], authorizer: this.authorizer,
         authorizationScopes: [this.scopeName], integration: new HttpLambdaIntegration(`${method}${path}`, account) });
     }
@@ -146,7 +179,7 @@ export class CloudBillingStack extends cdk.Stack {
     }
     const inbox = new db.Table(this, "BillingEvents", {
       partitionKey: { name: "event_id", type: db.AttributeType.STRING },
-      stream: db.StreamViewType.KEYS_ONLY, billingMode: db.BillingMode.PAY_PER_REQUEST,
+      stream: db.StreamViewType.KEYS_ONLY, timeToLiveAttribute: "delete_after", billingMode: db.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       encryption: db.TableEncryption.AWS_MANAGED, removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
@@ -165,6 +198,7 @@ export class CloudBillingStack extends cdk.Stack {
       logGroup: new logs.LogGroup(this, `${name}Logs`, { retention: logs.RetentionDays.ONE_WEEK }),
     });
     const sync = fn("PurchaseSync", "backend.billing.api.sync_handler", 29, true);
+    const identityWebhook = fn("AppleIdentityWebhook", "backend.cloud.apple_identity_events.handler", 15, false);
     const webhook = fn("AppleWebhook", "backend.billing.api.webhook_handler", 29, false);
     const worker = fn("EventWorker", "backend.billing.worker.handler", 180, true);
     const sweep = fn("Reconciliation", "backend.billing.worker.sweep_handler", 600, true);
@@ -172,6 +206,9 @@ export class CloudBillingStack extends cdk.Stack {
     maintenance.grantSendMessages(sweep);
     // A public webhook can only verify and insert durable events, never change ownership.
     inbox.grant(webhook, "dynamodb:PutItem");
+    inbox.grant(identityWebhook, "dynamodb:PutItem");
+    sync.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [f.pool.userPoolArn] }));
+    for (const target of [worker, sweep]) target.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminDeleteUser"], resources: [f.pool.userPoolArn] }));
     const apiKey = secrets.Secret.fromSecretCompleteArn(this, "AppleApiKey", props.appleApiSecretArn);
     for (const target of [sync, worker, sweep]) {
       f.accounts.grantReadWriteData(target);
@@ -191,6 +228,9 @@ export class CloudBillingStack extends cdk.Stack {
       authorizationScopes: [f.scopeName], integration: new HttpLambdaIntegration("PurchaseSync", sync) });
     new apigw.HttpRoute(this, "WebhookRoute", { httpApi: f.api, routeKey: apigw.HttpRouteKey.with("/v1/webhooks/apple", apigw.HttpMethod.POST),
       integration: new HttpLambdaIntegration("AppleNotifications", webhook) });
+    new apigw.HttpRoute(this, "AppleIdentityRoute", { httpApi: f.api,
+      routeKey: apigw.HttpRouteKey.with("/v1/webhooks/apple-identity", apigw.HttpMethod.POST),
+      integration: new HttpLambdaIntegration("IdentityNotifications", identityWebhook) });
     const metrics = [deadLetters.metricApproximateNumberOfMessagesVisible(), worker.metricErrors(),
       sweep.metricErrors(), worker.metricThrottles(), sweep.metricThrottles(),
       new cw.Metric({ namespace: "AWS/Lambda", metricName: "IteratorAge", dimensionsMap: { FunctionName: worker.functionName }, statistic: "Maximum" })];

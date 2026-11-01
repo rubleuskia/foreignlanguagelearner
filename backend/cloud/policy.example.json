@@ -1,0 +1,10 @@
+{
+  "version": "cloud-v1",
+  "products": {},
+  "daily_limit": 20,
+  "concurrent_limit": 2,
+  "per_user_concurrent": 1,
+  "per_user_minute": 5,
+  "model": "gpt-5-mini",
+  "output_tokens": 2048
+}

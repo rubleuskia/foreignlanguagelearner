@@ -33,7 +33,7 @@ one job. Losing it makes that test job unrecoverable.
 
 ## Validation
 
-From the repository root:
+From the repository root, install `backend/billing/requirements-dev.txt` in a Python 3.12 virtual environment for the full backend suite. `scripts/test-cloud-contracts.sh` adds DynamoDB Local concurrency coverage; see [paid cloud operations](../../docs/PAID_CLOUD_OPERATIONS.md).
 
 ```sh
 python3 -m unittest discover -s backend -p 'test_*.py' -v

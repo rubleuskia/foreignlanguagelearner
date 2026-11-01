@@ -28,7 +28,7 @@ def main():
         "--target", str(args.output), "-r", str(root / "backend/billing/requirements.lock")], check=True)
     (args.output / "backend").mkdir()
     (args.output / "backend/__init__.py").write_text("")
-    for module in ("billing", "cloud"):
+    for module in ("billing", "cloud", "translation", "alignment", "paid_alignment"):
         shutil.copytree(root / "backend" / module, args.output / "backend" / module,
                         ignore=shutil.ignore_patterns("test_*", "__pycache__", "requirements*", "*.md", "*.yaml"))
     (args.output / "apple-roots").mkdir()

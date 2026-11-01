@@ -327,11 +327,11 @@ class HttpAndIdentityTests(unittest.TestCase):
     def test_repair_scan_queues_independent_work_and_next_page(self):
         service = Mock()
         service.repository.events_table = "events"
-        service.repository.scan_page.return_value = ([{"event_id": "pending", "state": "pending"},
-            {"event_id": "done", "state": "processed"}], {"event_id": {"S": "cursor"}})
+        service.repository.scan_page.return_value = ([{"event_id": "pending", "state": "pending", "received_at": 1000},
+            {"event_id": "done", "state": "processed", "received_at": 1000}], {"event_id": {"S": "cursor"}})
         queue = Mock()
         message = {"messageId": "m", "body": '{"kind":"events"}'}
-        with patch.object(worker.runtime, "service", return_value=service), patch("boto3.client", return_value=queue), patch.dict("os.environ", {"MAINTENANCE_QUEUE_URL": "queue"}):
+        with patch.object(worker.runtime, "repository", return_value=service.repository), patch("boto3.client", return_value=queue), patch("backend.billing.worker.time.time", return_value=1000), patch.dict("os.environ", {"MAINTENANCE_QUEUE_URL": "queue"}):
             result = worker.sweep_handler({"Records": [message]}, None)
         self.assertEqual({"batchItemFailures": []}, result)
         tasks = [json.loads(c.kwargs["MessageBody"]) for c in queue.send_message.call_args_list]
@@ -343,7 +343,7 @@ class HttpAndIdentityTests(unittest.TestCase):
         service = Mock()
         service.process_event.side_effect = [RuntimeError("private"), None]
         messages = [{"messageId": str(i), "body": json.dumps({"kind": "event", "id": str(i)})} for i in range(2)]
-        with patch.object(worker.runtime, "service", return_value=service), patch("boto3.client"), patch.dict("os.environ", {"MAINTENANCE_QUEUE_URL": "queue"}):
+        with patch.object(worker.runtime, "process_event", service.process_event), patch.object(worker.runtime,"repository",return_value=service.repository), patch("boto3.client"), patch.dict("os.environ", {"MAINTENANCE_QUEUE_URL": "queue"}):
             result = worker.sweep_handler({"Records": messages}, None)
         self.assertEqual({"batchItemFailures": [{"itemIdentifier": "0"}]}, result)
         self.assertEqual(2, service.process_event.call_count)
@@ -352,7 +352,7 @@ class HttpAndIdentityTests(unittest.TestCase):
         service = Mock()
         service.process_event.side_effect = [RuntimeError("private"), None]
         record = {"eventName": "INSERT", "dynamodb": {"Keys": {"event_id": {"S": "event"}}, "SequenceNumber": "123"}}
-        with patch.object(worker.runtime, "service", return_value=service):
+        with patch.object(worker.runtime, "process_event", service.process_event):
             self.assertEqual({"batchItemFailures": [{"itemIdentifier": "123"}]}, worker.handler({"Records": [record]}, None))
             self.assertEqual({"batchItemFailures": []}, worker.handler({"Records": [record]}, None))
 

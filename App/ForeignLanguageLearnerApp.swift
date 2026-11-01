@@ -3,6 +3,7 @@ import SwiftData
 
 @main
 struct ForeignLanguageLearnerApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.key) private var selectedLanguage = "ru"
     @State private var readingVocabulary = ReadingVocabularyStore(indexURL: ProcessInfo.processInfo.arguments.contains("--uitesting") ? nil : VocabularyIndex.defaultURL)
     @State private var translationCoordinator = DictionaryTranslationCoordinator()
@@ -35,7 +36,9 @@ struct ForeignLanguageLearnerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView().environment(\.locale, Locale(identifier:
+            ContentView().task { CloudAccountModel.shared.start() }.onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await CloudAccountModel.shared.checkIdentity() } }
+            }.environment(\.locale, Locale(identifier:
                 ProcessInfo.processInfo.arguments.contains("--uitesting") &&
                 !ProcessInfo.processInfo.arguments.contains("--test-russian-ui")
                     ? "en" : AppLanguage.resolved(selectedLanguage)))

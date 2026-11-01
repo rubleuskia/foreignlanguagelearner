@@ -7,7 +7,7 @@ from .aws_adapters import S3Store, Workflow
 from .config import Config
 from .domain import epoch_now
 from .finalizer import finalize_event
-from .repository import DynamoRepository
+from .repository import DynamoRepository, configured_repository
 
 
 MAX_BATCH = 50
@@ -42,7 +42,7 @@ def handler(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
     import boto3
 
     config = Config.from_env()
-    repository = DynamoRepository(boto3.client("dynamodb"), config.table_name)
+    repository = configured_repository(boto3.client("dynamodb"), config.table_name)
     storage = S3Store(boto3.client("s3"), config.bucket_name)
     workflow = Workflow(boto3.client("stepfunctions"), boto3.client("ecs"),
                         config.state_machine_arn, config.cluster_arn)
@@ -51,6 +51,9 @@ def handler(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
     repaired = 0
     for job in jobs:
         try:
+            owner_deleted = bool(job.get('owner_user_id') and (repository.usage.account(job['owner_user_id']) or {}).get('state') != 'active')
+            if owner_deleted and job['status'] in {'awaiting_upload', 'starting', 'running'}:
+                job = repository.request_cancel(job, now)
             if job["status"] == "awaiting_upload" and now >= job["upload_expires_at"]:
                 job = repository.expire_upload(job, now)
                 repaired += 1
@@ -111,6 +114,9 @@ def handler(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
             if job.get("cleanup_pending"):
                 _cleanup(storage, repository, job, now)
                 repaired += 1
+            if owner_deleted and job["status"] in {"succeeded", "succeeded_with_review", "failed", "cancelled", "expired"}:
+                storage.delete_versions(storage.list_object_versions(f"jobs/{job['job_id']}/"))
+                repository.mark_artifacts_deleted(job, now)
             if (job.get("result_expires_at", now + 1) <= now
                     and not job.get("retained_artifacts_deleted", False)):
                 _delete_expired_artifacts(storage, repository, job, now)

@@ -446,3 +446,61 @@ signed payloads or content in logs/storage. For initial development, reconcile a
 mark unexpired projections stale after 60 minutes. Expiry is checked on every read/admission. These
 freshness defaults do not approve a subscription tariff, allowance, reset or production retention
 policy. All compute features remain disabled until durable usage policy/admission is implemented.
+
+
+## 2026-11-01 — Durable subscription operations and client recovery
+
+Implement the remaining paid-cloud code behind explicit configuration and independent translation/alignment
+admission switches, default false. A normal app has no bundled cloud endpoint. Do not infer production
+products, prices, quotas or budgets: a reviewed product map and Apple configuration are operator inputs.
+UTC calendar months apply to both monthly and annual products. One successful context/word operation
+or alignment job consumes one feature unit. All active products share account/period counters at the
+highest eligible limit; upgrades, policy changes and renewals never erase usage. Trials inherit their
+product's allowance; offers require release review. Reserve transactionally against current account and
+subscription revision/freshness/expiry plus account/global concurrency, frequency and daily admission.
+Release failed, cancelled and uncertain user reservations; keep global admission counts to bound cost.
+
+Metadata and temporary input are written in the same transaction. A KEYS_ONLY stream dispatches IDs
+through SQS, with independent paginated recovery. Claim is the conservative provider-submission boundary:
+a duplicate or abandoned running request is never submitted again. Lost responses become outcome_unknown,
+with user allowance released and internal cost uncertainty retained. Strict Responses schemas, bounded
+UTF-16 excerpts, fixed endpoints/model allowlist/prompts/output limits and store:false apply on the server.
+This is not an exactly-once inference or zero-provider-retention promise. Effective policy IDs hash the
+full limits/model/prompts/schemas; incompatible accepted requests cancel before submission. Kill switches
+preserve compatible admitted work and result retrieval. Already running work uses its pinned invocation.
+
+Native login uses Cognito's public authorization-code client with PKCE S256 and exact state/callback
+checks. Keychain session refresh coalesces; sign-out/account changes invalidate in-flight results and
+late refreshes. Billing activation precedes StoreKit finish, with updates/current entitlements/unfinished
+recovery and a verified-purchase guard against repurchase invitations. Personal-key mode remains explicit;
+subscription errors never load/fall back to that key. The existing listening-choice feature requires
+personal-key mode. A local metadata-only, protected/non-backup request ledger persists keys before POST;
+unknown/pending keys survive relaunch and policy changes, known successful caches separate effective policy,
+and a corrupt ledger blocks creation of new intents. Clearing a terminal intent is an explicit user action.
+
+Verify Apple identity notifications independently from App Store signatures. Durable consent-revocation
+floors reject older Cognito auth_time values even after recovery; only a later explicit Apple sign-in can
+restore a revoked account with the same StoreKit UUID. Older events cannot undo newer sign-in; permanent
+deleted accounts cannot reactivate. Delete cloud data even when Apple token revocation is unavailable,
+using an explicit manual-revocation choice/instructions. Preserve minimal account/chain ownership for
+conflict protection. No automatic legacy adoption, cross-account transfer or Family Sharing is supported;
+formal support/recovery policy remains a launch gate.
+
+Translation input is removed at terminal settlement; result recovery is 24 hours, pending input 10 minutes
+and abandoned running claims 120 seconds. Separate content scans issue deletes after access expiry; TTL
+is a fallback. Content PITR is disabled and organization-wide backups must exclude temporary content.
+Operational translation/paid-alignment/idempotency and notification metadata is 90 days; minimal account/
+chain ownership and revocation floors persist. Metadata PITR/retention require operator review. Existing
+anonymous alignment metadata remains seven days. No source text, result, raw purchase/token or key enters
+ordinary logs/queues. Server content cleanup follows deletion, and already saved local dictionary stays local.
+
+Paid alignment uses account-only v2 routes, server-bound owner and an authority namespace unusable by v1
+capabilities. Check current access on creation/upload renewal/start; retain original-period reservation and
+settle once transactionally with existing alignment finalization/expiry. Preserve global admission, private
+version-pinned S3 objects, one-attempt worker, manifest finalization and independent cleanup. Persist scan
+progress to avoid cleanup starvation. Paid assembly requires the exact worker image plus a reviewed six-
+language quality/runtime/memory/cost report. No anonymous route exists in that stack; alignment workers have
+no billing/provider secret access. Real benchmarks, Apple sandbox/TestFlight/production acceptance and all
+deployment remain unexecuted; code/runbooks do not constitute release approval.
+
+Before StoreKit checkout, require an authenticated server catalogue of configured products/allowances with purchases enabled. Show server allowances alongside Apple prices/periods; block checkout for a disabled or unconfigured service, and suppress repurchase when a verified current purchase needs recovery.

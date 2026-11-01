@@ -125,6 +125,11 @@ enum ContextAnalysisError: String, Codable, Error, Equatable, Sendable {
     case invalidOutput
     case persistence
     case unknown
+    case subscriptionRequired
+    case cloudAllowanceUnavailable
+    case cloudOutcomeUnknown
+    case cloudResultExpired
+    case personalKeyRequired
 }
 
 extension ContextAnalysisError {
@@ -144,6 +149,11 @@ extension ContextAnalysisError {
         case .busy: "Another context analysis is already queued. Try again when it finishes."
         case .decodingFailure, .invalidOutput: "The service returned an unusable response."
         case .persistence: "The analysis could not be saved. Your previous result is unchanged."
+        case .personalKeyRequired: "Listening practice currently uses personal API key mode. Choose it in Settings to generate answer choices."
+        case .subscriptionRequired: "An active subscription is required. Restore purchases or check your account."
+        case .cloudAllowanceUnavailable: "Your allowance or the service capacity is currently unavailable. Check your subscription and try later."
+        case .cloudOutcomeUnknown: "The provider may have processed this request. It will not be sent again automatically. Your allowance was released."
+        case .cloudResultExpired: "This cloud result has expired. Select the text again to make a new request."
         case .unknown: "Context analysis failed for an unknown reason."
         }
     }

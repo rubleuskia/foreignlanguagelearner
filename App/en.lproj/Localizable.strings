@@ -91,3 +91,71 @@
 "Extra high" = "Extra high";
 
 "Maximum" = "Maximum";
+
+
+// Optional cloud account and subscriptions
+"Cloud account" = "Cloud account";
+"Subscription" = "Subscription";
+"Personal API key" = "Personal API key";
+"Translation service" = "Translation service";
+"Cloud subscriptions are not configured in this build." = "Cloud subscriptions are not configured in this build.";
+"Sign in to use your subscription." = "Sign in to use your subscription.";
+"The cloud account changed. Open the request again after signing in." = "The cloud account changed. Open the request again after signing in.";
+"Confirm deletion with the Apple account used for cloud sign-in. If accounts do not match, contact support." = "Confirm deletion with the Apple account used for cloud sign-in. If accounts do not match, contact support.";
+"An active subscription is required. Restore purchases or check your account." = "An active subscription is required. Restore purchases or check your account.";
+"This purchase belongs to another app account. Sign in to the original account or contact support." = "This purchase belongs to another app account. Sign in to the original account or contact support.";
+"Your allowance or the service capacity is currently unavailable. Check your subscription and try later." = "Your allowance or the service capacity is currently unavailable. Check your subscription and try later.";
+"The provider may have processed this request. It will not be sent again automatically. Your allowance was released." = "The provider may have processed this request. It will not be sent again automatically. Your allowance was released.";
+"This cloud result has expired. Select the text again to make a new request." = "This cloud result has expired. Select the text again to make a new request.";
+"The cloud request failed. Your allowance was released." = "The cloud request failed. Your allowance was released.";
+"The request was cancelled before processing." = "The request was cancelled before processing.";
+"Apple is waiting for purchase approval. You do not need to buy again." = "Apple is waiting for purchase approval. You do not need to buy again.";
+"Your purchase is waiting for activation. Retry activation or restore purchases; do not buy again." = "Your purchase is waiting for activation. Retry activation or restore purchases; do not buy again.";
+"The cloud service is temporarily unavailable. Try again later." = "The cloud service is temporarily unavailable. Try again later.";
+"Check subscription" = "Check subscription";
+"Available translations: %d of %d" = "Available translations: %d of %d";
+"Allowance resets" = "Allowance resets";
+"Retry activation" = "Retry activation";
+"Restore purchases" = "Restore purchases";
+"Refresh subscription" = "Refresh subscription";
+"Cloud requests" = "Cloud requests";
+"Manage Apple subscription" = "Manage Apple subscription";
+"Sign out" = "Sign out";
+"Delete cloud account" = "Delete cloud account";
+"Sign in with Apple" = "Sign in with Apple";
+"Use subscription for translations" = "Use subscription for translations";
+"Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and renewal are handled by Apple. Allowance includes requests currently processing." = "Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and renewal are handled by Apple. Allowance includes requests currently processing.";
+"Privacy" = "Privacy";
+"Terms" = "Terms";
+"Support" = "Support";
+"Delete cloud account?" = "Delete cloud account?";
+"Delete and confirm with Apple" = "Delete and confirm with Apple";
+"Delete and revoke Apple access manually" = "Delete and revoke Apple access manually";
+"Your local books and saved dictionary stay on this device. This does not cancel your Apple subscription. Confirm with Apple to revoke sign-in consent, or delete cloud data and revoke access manually using the provided instructions." = "Your local books and saved dictionary stay on this device. This does not cancel your Apple subscription. Confirm with Apple to revoke sign-in consent, or delete cloud data and revoke access manually using the provided instructions.";
+"Your cloud account was deleted. Use the Apple instructions below to revoke sign-in access manually." = "Your cloud account was deleted. Use the Apple instructions below to revoke sign-in access manually.";
+"Revoke Apple sign-in manually" = "Revoke Apple sign-in manually";
+"Waiting can be stopped without cancelling provider work. Refresh resumes the existing request. Results remain available for 24 hours. Starting a new request may use allowance again." = "Waiting can be stopped without cancelling provider work. Refresh resumes the existing request. Results remain available for 24 hours. Starting a new request may use allowance again.";
+"Word explanation" = "Word explanation";
+"Cancel before processing" = "Cancel before processing";
+"Refresh request" = "Refresh request";
+"Allow a new request" = "Allow a new request";
+"Allow a new request?" = "Allow a new request?";
+"The next translation of this input will have a new request key and may use allowance again. Existing saved dictionary content is unchanged." = "The next translation of this input will have a new request key and may use allowance again. Existing saved dictionary content is unchanged.";
+"Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. Personal prompts and model settings apply only to personal API key mode." = "Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. Personal prompts and model settings apply only to personal API key mode.";
+"accepted" = "Waiting for processing";
+"running" = "Processing";
+"succeeded" = "Ready";
+"failed" = "Failed";
+"outcome_unknown" = "Outcome unknown";
+"cancelled" = "Cancelled";
+"Listening practice currently uses personal API key mode. Choose it in Settings to generate answer choices." = "Listening practice currently uses personal API key mode. Choose it in Settings to generate answer choices.";
+
+"The next translation of this text will be a new request and may use allowance again. Existing saved dictionary content is unchanged." = "The next translation of this text will be a new request and may use allowance again. Existing saved dictionary content is unchanged.";
+
+"Monthly translation allowance: %d" = "Monthly translation allowance: %d";
+
+"New subscriptions are currently unavailable. You can still restore purchases and recover existing results." = "New subscriptions are currently unavailable. You can still restore purchases and recover existing results.";
+
+"Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and automatic renewal are handled by Apple until you cancel in subscription settings. Allowance resets at the start of each UTC month, including annual plans, and includes requests currently processing." = "Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and automatic renewal are handled by Apple until you cancel in subscription settings. Allowance resets at the start of each UTC month, including annual plans, and includes requests currently processing.";
+
+"Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support." = "Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support.";

@@ -50,19 +50,18 @@ def account_handler(event, _context):
         service = runtime.service()
         route = event.get("routeKey")
         if route == "GET /v1/me":
-            account = service.account(user.user_id)
-            return response(200, {"schema_version": 1, "app_account_token": account["app_account_token"]})
+            account = service.repository.bind_identity(user)
+            return response(200, {"schema_version": 1, "user_id": account["user_id"], "app_account_token": account["app_account_token"], "apple_subject": user.apple_subject})
+        if route == 'GET /v1/products':
+            from backend.translation.runtime import policy
+            service.account(user.user_id)
+            selected=policy()
+            allowed=set(json.loads(os.environ.get('APPLE_PRODUCTS','[]')))
+            products=[{'id':product,**benefits} for product,benefits in selected.products.items()
+                if product in allowed and benefits['translations']>0]
+            return response(200,{'schema_version':1,'products':products,'purchases_enabled':selected.enabled and bool(products)})
         if route == "GET /v1/me/entitlements":
             return response(200, service.status(user.user_id))
-        if route == "DELETE /v1/me":
-            service.repository.account(user.user_id)
-            service.repository.disable_account(user.user_id)
-            try:
-                identity.cognito.admin_delete_user(UserPoolId=os.environ["USER_POOL_ID"], Username=user.username)
-            except identity.cognito.exceptions.UserNotFoundException:
-                pass
-            return response(200, {"deleted": True, "subscription_cancelled": False,
-                "manage_subscription_url": "https://apps.apple.com/account/subscriptions"})
         raise CloudError("NOT_FOUND", 404)
     return safe(run, event.get("requestContext", {}).get("requestId"))
 
@@ -81,3 +80,40 @@ def webhook_handler(event, _context):
         result = runtime.service(with_apple=True, verifier_only=True).webhook(signed)
         return response(200, result)
     return safe(run, event.get("requestContext", {}).get("requestId"))
+
+
+def deletion_handler(event, _context):
+    def run():
+        import boto3
+        from backend.cloud.apple_identity import AppleConsent
+        identity = runtime.identity()
+        user = identity.authenticate(event)
+        # A user can still delete cloud data when Apple reauthentication is unavailable.
+        # This fallback is explicit; the client directs them to manual Apple revocation.
+        raw=event.get('body') or '{}'
+        try:
+            if event.get('isBase64Encoded'): raw=base64.b64decode(raw,validate=True).decode()
+            if len(raw.encode())>MAX_BODY_BYTES: raise CloudError('BODY_TOO_LARGE',413)
+            value=json.loads(raw)
+        except (ValueError,TypeError,UnicodeError): raise CloudError('INVALID_JSON') from None
+        manual=value == {'manual_revocation':True} and type(value.get('manual_revocation')) is bool
+        if not manual and (not isinstance(value,dict) or set(value)!={'authorization_code'} or not isinstance(value['authorization_code'],str) or not 1 <= len(value['authorization_code']) <= 8192):
+            raise CloudError('INVALID_REQUEST')
+        prepared=None
+        if not manual:
+            secret=json.loads(boto3.client('secretsmanager').get_secret_value(SecretId=os.environ['APPLE_SIGNIN_SECRET_ARN'])['SecretString'])
+            consent=AppleConsent(os.environ['APPLE_NATIVE_CLIENT_ID'],os.environ['APPLE_TEAM_ID'],os.environ['APPLE_SIGNIN_KEY_ID'],secret['private_key'])
+            prepared=consent.prepare(value['authorization_code'],user.apple_subject)
+        repository = runtime.repository()
+        repository.account(user.user_id)
+        repository.disable_account(user.user_id)
+        revocation='manual_required'
+        if prepared:
+            try: consent.revoke(prepared); revocation='revoked'
+            except Exception: pass
+        try:
+            identity.cognito.admin_delete_user(UserPoolId=os.environ['USER_POOL_ID'], Username=user.username)
+        except identity.cognito.exceptions.UserNotFoundException: pass
+        return response(200, {'deleted': True, 'subscription_cancelled': False, 'apple_revocation':revocation,
+            'manage_subscription_url': 'https://apps.apple.com/account/subscriptions'})
+    return safe(run, event.get('requestContext', {}).get('requestId'))

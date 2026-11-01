@@ -1,21 +1,26 @@
 # Paid cloud backend: subscriptions, translations and alignment
 
-**Status:** Implementation started: account foundation and server billing slice; no deployment or tariff approval.
+**Status:** Implemented in code/offline validation; undeployed, with external acceptance and operating-policy approval pending.
 **Updated:** 2026-11-01.
 **Scope:** Extend the existing AWS alignment architecture with account identity, Apple subscription verification, service-operated AI translation and durable usage limits.
 
 ## Implementation progress (2026-11-01)
 
-The first server slice is implemented in [backend/billing](../backend/billing/README.md) and the
-independent `bin/cloud.ts` CDK entry point: Cognito + Apple login configuration, account tokens and
-tombstones, live Apple purchase reconciliation, account-bound entitlement projection, durable verified
-event inbox/stream, scheduled repair and infrastructure/contract tests. It is undeployed. Sign in with
-Apple and a separate BYOK mode are confirmed implementation choices; native login/StoreKit UI is pending.
+The undeployed implementation covers foundation, verified billing, durable translation and account-only
+alignment code, iOS session/login/StoreKit/recovery UI, independent CDK assemblies, operational gates
+and offline acceptance tests. See [the operations/runbook](PAID_CLOUD_OPERATIONS.md) for the exact
+implemented contracts, policy configuration, rollback/retention rules and remaining external checks.
 
-This does **not** complete phases 1–3: real sandbox acceptance, Apple configuration, consent revocation
-and production retention/support policy remain outstanding. Compute features return disabled and no
-allowance is invented. Translation admission/reservations/provider work, iOS adapters, TestFlight and
-paid alignment remain later steps. See the billing README for exact implemented contracts and gates.
+Implemented choices: Sign in with Apple/Cognito, an explicit separate personal-key mode, UTC calendar
+monthly allowances (also for annual products), one unit per successful operation/job, refund of failed,
+cancelled or uncertain requests, 24-hour result recovery, and 90-day operational request/event metadata.
+Prices, real product IDs/allowances/offers, operating budgets and production policy approval remain
+operator inputs. Empty product configuration and independent admission flags default closed.
+
+No release phase is declared production-complete: no deployment, live Apple sandbox acceptance,
+TestFlight upload, production purchase/provider call, product approval or real alignment benchmark
+approval has occurred. Phase 5/6 release procedures and phase 7 engineering gates are prepared in code
+and documentation; the external actions remain explicitly unexecuted under the no-deployment scope.
 
 ## 1. Existing system and document map
 
@@ -28,7 +33,7 @@ paid alignment remain later steps. See the billing README for exact implemented 
 
 The repository describes an **undeployed public-test alignment backend**: API Gateway HTTP API → Python Lambda → DynamoDB and Step Functions Standard → CPU Fargate worker, with private temporary S3 storage. Its bearer token authorizes exactly one job; it does not identify an account. Global admission counters bound test usage. Deployment still requires measured quality, duration, memory and cost headroom.
 
-The shipped app calls OpenAI directly with the user's Keychain API key. ContextAnalysisService creates OpenAIContextAnalysisProvider; WordExplanationService creates OpenAIWordExplanationProvider. Ordinary Apple Translation is a separate on-device workflow. The new undeployed billing foundation does not enable subscriptions in the shipped app or a shared translation service.
+The shipped app calls OpenAI directly with the user's Keychain API key. ContextAnalysisService creates OpenAIContextAnalysisProvider; WordExplanationService creates OpenAIWordExplanationProvider. Ordinary Apple Translation is a separate on-device workflow. The new opt-in subscription mode is implemented but has no bundled endpoint in normal builds; no shared service is deployed.
 
 Some older paragraphs in the alignment documents still say Polish-only; the newer multilingual contract and current validators support en/fr/es/de/it/pl. Use the current contract when implementing this plan. Historical review findings must be revalidated rather than treated as current defects.
 
@@ -64,7 +69,7 @@ Suggested module locations are backend/billing/, backend/translation/ and a smal
 
 ## 3. Identity, ownership and recovery
 
-Recommended identity option: Cognito User Pool with Sign in with Apple. Final login UX and provider configuration remain implementation prerequisites. Local reading, import and practice stay available without an account; paid cloud operations require a recoverable account.
+Recommended identity option: Cognito User Pool with Sign in with Apple. Native login/session UX is implemented; provider configuration and real-device acceptance remain release prerequisites. Local reading, import and practice stay available without an account; paid cloud operations require a recoverable account.
 
 - Derive internal user_id from a verified session. Never trust an owner ID in request JSON.
 - Require access tokens with the intended issuer, audience/client and scopes on user API routes. Subscription status is checked server-side rather than copied into a long-lived token.
@@ -152,7 +157,7 @@ Add account/session, StoreKit purchase/restore and entitlement services. Introdu
 
 Version cache keys by provider mode and effective server policy so BYOK/custom-prompt results are not confused with subscription results. Handle sign-out/account change for pending remote requests and account-scoped caches. Existing saved dictionary content is not deleted by subscription expiry.
 
-BYOK retention is an open product choice; the recommended migration keeps it as an explicit separate mode. Never silently fall back to the user's personal key after a subscription quota/error. Ordinary Apple Translation remains independent.
+BYOK is retained as an explicit separate mode. Never silently fall back to the user's personal key after a subscription quota/error. Ordinary Apple Translation remains independent.
 
 For paid alignment:
 
@@ -193,12 +198,12 @@ Each implementation PR updates CHANGELOG.md and DECISIONS.md, and PROJECT.md whe
 
 ## 9. Decisions still required
 
-1. Subscription benefits, prices, trial and exact AI allowance; reset timing for monthly and annual products.
-2. Account requirement/UX and recovery when App Store and app accounts do not match; Family Sharing scope.
-3. BYOK availability and handling of existing custom models/prompts.
-4. User allowance policy for failures, uncertain outcomes and cancellation.
-5. Alignment inclusion versus separate allowance, after measured unit cost.
-6. Content/metadata retention, deletion policy and production operating budget.
+1. Approve real subscription products, prices/offers and exact per-product allowances. Code uses shared UTC monthly counters for monthly/annual products; trials inherit their configured product allowance.
+2. Approve operational recovery/support policy for mismatched or deleted accounts. Local use needs no account; cloud requires Apple/Cognito. Family Sharing is rejected by the initial contract.
+3. Confirm release messaging: personal-key mode/custom models/prompts remain separate; subscription never falls back to a personal key.
+4. Approve the implemented user allowance policy: charge valid success only, release failures/unknown/cancelled reservations, preserve global cost admission counts.
+5. Approve alignment allowance after real measured unit cost. Code meters separate successful jobs and preserves the independent six-language benchmark gate.
+6. Review the implemented content/metadata/backup retention and deletion/support policy, configure legal/support URLs and approve the production operating budget.
 
 ## 10. External references
 

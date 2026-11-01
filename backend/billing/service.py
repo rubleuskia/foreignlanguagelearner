@@ -5,9 +5,11 @@ from .domain import canonical_token, entitlement
 
 
 class BillingService:
-    def __init__(self, repository, apple, *, clock=time.time, freshness_seconds=3600):
+    def __init__(self, repository, apple, *, clock=time.time, freshness_seconds=3600, allowance_projection=None, delete_identity=None):
         self.repository, self.apple, self.clock = repository, apple, clock
         self.freshness_seconds = freshness_seconds
+        self.allowance_projection = allowance_projection
+        self.delete_identity = delete_identity
 
     def account(self, user_id):
         account = self.repository.account(user_id)
@@ -18,7 +20,8 @@ class BillingService:
     def status(self, user_id):
         account = self.account(user_id)
         subscriptions = self.repository.subscriptions(account)
-        return entitlement(account, subscriptions, int(self.clock()), self.freshness_seconds)
+        view = entitlement(account, subscriptions, int(self.clock()), self.freshness_seconds)
+        return self.allowance_projection(view, account, subscriptions, int(self.clock())) if self.allowance_projection else view
 
     def sync(self, user_id, signed):
         account = self.account(user_id)
@@ -57,6 +60,9 @@ class BillingService:
         event = self.repository.event(event_id)
         if not event or event["state"] == "processed":
             return
-        if event.get("chain_id"):
+        if event.get('kind') == 'apple_identity':
+            for username in self.repository.apply_identity_event(event, int(self.clock())):
+                if self.delete_identity: self.delete_identity(username)
+        elif event.get("chain_id"):
             self.reconcile(event["chain_id"])
         self.repository.finish_event(event_id, int(self.clock()))

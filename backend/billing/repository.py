@@ -35,6 +35,62 @@ class DynamoRepository:
         except self.client.exceptions.ConditionalCheckFailedException:
             return self._get(self.accounts_table, {"user_id": user_id})
 
+    def bind_identity(self, user):
+        account = self.account(user.user_id)
+        if account['state'] == 'deleted': raise CloudError('ACCOUNT_DISABLED',403)
+        if not user.apple_subject: return account
+        if account['state'] == 'revoked' and user.auth_time <= account.get('valid_after',0):
+            raise CloudError('SESSION_REVOKED',401)
+        try:
+            self.client.update_item(TableName=self.accounts_table,Key=self._encode({'user_id':user.user_id}),
+                UpdateExpression='SET apple_subject=:subject, cognito_username=:username, last_auth_time=:time, #s=:active',
+                ConditionExpression='#s=:expected AND (attribute_not_exists(valid_after) OR valid_after < :auth) AND (attribute_not_exists(apple_subject) OR apple_subject=:subject)',
+                ExpressionAttributeNames={'#s':'state'},ExpressionAttributeValues=self._encode({':subject':user.apple_subject,
+                    ':username':user.username,':time':max(user.auth_time,account.get('last_auth_time',0)),':auth':user.auth_time,
+                    ':expected':account['state'],':active':'active'}))
+        except self.client.exceptions.ConditionalCheckFailedException: raise CloudError('ACCOUNT_STATE_CHANGED',409) from None
+        return self._get(self.accounts_table,{'user_id':user.user_id})
+
+    def record_identity_event(self, event_id, fields, now):
+        item={'event_id':event_id,'kind':'apple_identity','state':'pending','received_at':now,
+              'delete_after':now+90*86400,**fields}
+        try:
+            self.client.put_item(TableName=self.events_table,Item=self._encode(item),ConditionExpression='attribute_not_exists(event_id)')
+        except self.client.exceptions.ConditionalCheckFailedException: pass
+
+    def apply_identity_event(self, event, now):
+        if event['identity_type'] in {'email-enabled','email-disabled'}: return []
+        args={'TableName':self.accounts_table,'IndexName':'AppleSubject',
+              'KeyConditionExpression':'apple_subject=:subject','ExpressionAttributeValues':self._encode({':subject':event['identity_subject']})}
+        users=[]
+        while True:
+            response=self.client.query(**args)
+            users.extend(self._get(self.accounts_table,{'user_id':self._decode(item)['user_id']}) for item in response.get('Items',[]))
+            if not response.get('LastEvaluatedKey'): break
+            args['ExclusiveStartKey']=response['LastEvaluatedKey']
+        if not users and now < event['received_at']+600: raise CloudError('IDENTITY_BINDING_PENDING',503)
+        deleted=[]
+        for account in users:
+            if not account: continue
+            permanent=event['identity_type']=='account-deleted'
+            # Older consent events cannot undo a later explicit, fresh Apple sign-in.
+            if not permanent and account.get('last_auth_time',0) > event['occurred_at']: continue
+            try:
+                when=max(event['occurred_at'],account.get('valid_after',0)) if permanent else event['occurred_at']
+                condition='(attribute_not_exists(valid_after) OR valid_after = :old)' if permanent else '(attribute_not_exists(valid_after) OR valid_after <= :time) AND #s <> :deleted AND (attribute_not_exists(last_auth_time) OR last_auth_time <= :time)'
+                values={':state':'deleted' if permanent else 'revoked',':time':when}
+                values.update({':old':account.get('valid_after',-1)} if permanent else {':deleted':'deleted'})
+                self.client.update_item(TableName=self.accounts_table,Key=self._encode({'user_id':account['user_id']}),
+                    UpdateExpression='SET #s=:state, valid_after=:time',ConditionExpression=condition,
+                    ExpressionAttributeNames={'#s':'state'},ExpressionAttributeValues=self._encode(values))
+                if permanent and account.get('cognito_username'): deleted.append(account['cognito_username'])
+            except self.client.exceptions.ConditionalCheckFailedException:
+                if permanent: raise CloudError('ACCOUNT_STATE_CHANGED',503) from None
+        return deleted
+
+    def delete_event(self,event_id):
+        self.client.delete_item(TableName=self.events_table,Key=self._encode({'event_id':event_id}))
+
     def disable_account(self, user_id):
         # Keep the tombstone and purchase ownership even if Cognito removal needs a retry.
         self.client.update_item(TableName=self.accounts_table, Key=self._encode({"user_id": user_id}),
@@ -70,7 +126,7 @@ class DynamoRepository:
             raise CloudError("RECONCILIATION_CONFLICT", 409) from None
 
     def record_event(self, event_id, chain_id, now):
-        record = {"event_id": event_id, "chain_id": chain_id, "state": "pending", "received_at": now}
+        record = {"event_id": event_id, "chain_id": chain_id, "state": "pending", "received_at": now, "delete_after": now + 90 * 86400}
         try:
             self.client.put_item(TableName=self.events_table, Item=self._encode(record),
                                  ConditionExpression="attribute_not_exists(event_id)")

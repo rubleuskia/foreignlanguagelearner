@@ -17,9 +17,20 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
+import { CloudFoundationStack } from "./cloud-stack";
+
+export interface AlignmentStackProps extends cdk.StackProps {
+  readonly paidFoundation?: CloudFoundationStack;
+  readonly cloudCode?: lambda.Code;
+  readonly benchmarkReport?: {
+    workerImageDigest: string;
+    languages: Record<string, { qualityAccepted: boolean; runtimeSeconds: number; peakMemoryMiB: number; costUsd: number }>;
+    maxJobCostUsd: number;
+  };
+}
 
 export class AlignmentStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: AlignmentStackProps) {
     super(scope, id, props);
     if (props?.env?.region && props.env.region !== "eu-central-1") {
       throw new Error("Alignment public test must be synthesized for eu-central-1");
@@ -29,6 +40,21 @@ export class AlignmentStack extends cdk.Stack {
     if (!workerRepositoryName || !workerImageDigest?.match(/^sha256:[0-9a-f]{64}$/)) {
       throw new Error("Supply -c workerRepositoryName=<ECR repository> -c workerImageDigest=sha256:<digest>");
     }
+
+    const paid = props?.paidFoundation;
+    if (paid) {
+      const report = props?.benchmarkReport;
+      if (!props?.cloudCode || report?.workerImageDigest !== workerImageDigest || !report ||
+          !Number.isFinite(report.maxJobCostUsd) || report.maxJobCostUsd <= 0 ||
+          ["en", "fr", "es", "de", "it", "pl"].some(language => {
+            const metric = report.languages?.[language];
+            return !metric || metric.qualityAccepted !== true || !Number.isFinite(metric.runtimeSeconds) ||
+              metric.runtimeSeconds <= 0 || metric.runtimeSeconds > 13500 || !Number.isFinite(metric.peakMemoryMiB) ||
+              metric.peakMemoryMiB <= 0 || metric.peakMemoryMiB > 8192 || !Number.isFinite(metric.costUsd) ||
+              metric.costUsd < 0 || metric.costUsd > report.maxJobCostUsd;
+          })) throw new Error("Paid alignment requires an image-matched, reviewed six-language benchmark report");
+    }
+    const backendTag = paid ? "alignment-account-v2" : "alignment-v1";
 
     const bucket = new s3.Bucket(this, "TemporaryBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -101,7 +127,7 @@ export class AlignmentStack extends cdk.Stack {
       executionRole,
       taskRole,
     });
-    cdk.Tags.of(taskDefinition).add("Backend", "alignment-v1");
+    cdk.Tags.of(taskDefinition).add("Backend", backendTag);
     const workerRepository = ecr.Repository.fromRepositoryName(this, "WorkerRepository", workerRepositoryName);
     const container = taskDefinition.addContainer("Worker", {
       image: ecs.ContainerImage.fromEcrRepository(workerRepository, workerImageDigest),
@@ -115,19 +141,20 @@ export class AlignmentStack extends cdk.Stack {
       stopTimeout: cdk.Duration.seconds(120),
     });
 
-    const lambdaCode = lambda.Code.fromAsset(path.join(__dirname, "../../../backend"), {
+    const lambdaCode = props?.cloudCode ?? lambda.Code.fromAsset(path.join(__dirname, "../../../backend"), {
       exclude: ["**/__pycache__/**", "**/test_*.py"],
     });
     const commonEnvironment = {
+      ...(paid ? { ...paid.common, PAID_ALIGNMENT: "true" } : {}),
       ALIGNMENT_TABLE: table.tableName,
       ALIGNMENT_BUCKET: bucket.bucketName,
       ECS_CLUSTER_ARN: cluster.clusterArn,
-      BACKEND_TAG: "alignment-v1",
-      ACCEPT_NEW_JOBS: "true",
+      BACKEND_TAG: backendTag,
+      ACCEPT_NEW_JOBS: paid ? paid.common.ACCEPT_ALIGNMENTS : "true",
     };
     const finalizer = new lambda.Function(this, "Finalizer", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "alignment.finalizer.handler",
+      handler: paid ? "backend.alignment.finalizer.handler" : "alignment.finalizer.handler",
       code: lambdaCode,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
@@ -167,7 +194,7 @@ export class AlignmentStack extends cdk.Stack {
           },
           PropagateTags: "TASK_DEFINITION",
           Tags: [
-            { Key: "Backend", Value: "alignment-v1" },
+            { Key: "Backend", Value: backendTag },
             { Key: "JobId", "Value.$": "$.job_id" },
           ],
         },
@@ -215,7 +242,7 @@ export class AlignmentStack extends cdk.Stack {
         includeExecutionData: false,
       },
     });
-    cdk.Tags.of(stateMachine).add("Backend", "alignment-v1");
+    cdk.Tags.of(stateMachine).add("Backend", backendTag);
     stateMachine.addToRolePolicy(new iam.PolicyStatement({
       actions: ["ecs:RunTask"],
       resources: [taskDefinition.taskDefinitionArn],
@@ -223,7 +250,7 @@ export class AlignmentStack extends cdk.Stack {
     stateMachine.addToRolePolicy(new iam.PolicyStatement({
       actions: ["ecs:StopTask", "ecs:DescribeTasks"],
       resources: ["*"],
-      conditions: { StringEquals: { "aws:ResourceTag/Backend": "alignment-v1" } },
+      conditions: { StringEquals: { "aws:ResourceTag/Backend": backendTag } },
     }));
     stateMachine.addToRolePolicy(new iam.PolicyStatement({
       actions: ["iam:PassRole"],
@@ -240,12 +267,13 @@ export class AlignmentStack extends cdk.Stack {
 
     const apiHandler = new lambda.Function(this, "ApiHandler", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "alignment.api.handler",
+      handler: paid ? "backend.paid_alignment.api.handler" : "alignment.api.handler",
       code: lambdaCode,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
       environment: { ...commonEnvironment, STATE_MACHINE_ARN: version.attrArn },
     });
+    if (paid) apiHandler.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [paid.pool.userPoolArn] }));
     bucket.grantReadWrite(apiHandler);
     table.grantReadWriteData(apiHandler);
     apiHandler.addToRolePolicy(new iam.PolicyStatement({
@@ -260,15 +288,15 @@ export class AlignmentStack extends cdk.Stack {
     apiHandler.addToRolePolicy(new iam.PolicyStatement({
       actions: ["ecs:StopTask"],
       resources: ["*"],
-      conditions: { StringEquals: { "aws:ResourceTag/Backend": "alignment-v1" } },
+      conditions: { StringEquals: { "aws:ResourceTag/Backend": backendTag } },
     }));
 
-    const httpApi = new apigwv2.HttpApi(this, "HttpApi", {
+    const httpApi = paid?.api ?? new apigwv2.HttpApi(this, "HttpApi", {
       createDefaultStage: true,
       corsPreflight: undefined,
     });
-    const defaultStage = httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
-    defaultStage.defaultRouteSettings = { throttlingBurstLimit: 20, throttlingRateLimit: 10 };
+    const defaultStage = !paid && httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
+    if (defaultStage) defaultStage.defaultRouteSettings = { throttlingBurstLimit: 20, throttlingRateLimit: 10 };
     const integration = new integrations.HttpLambdaIntegration("ApiIntegration", apiHandler);
     const routes: [apigwv2.HttpMethod, string][] = [
       [apigwv2.HttpMethod.POST, "/v1/alignments"],
@@ -282,12 +310,15 @@ export class AlignmentStack extends cdk.Stack {
       [apigwv2.HttpMethod.POST, "/v1/alignments/{id}/cancel"],
     ];
     for (const [method, routePath] of routes) {
-      httpApi.addRoutes({ path: routePath, methods: [method], integration });
+      if (paid) {
+        new apigwv2.HttpRoute(this, `${method}${routePath}`, { httpApi, routeKey: apigwv2.HttpRouteKey.with(routePath.replace("/v1/", "/v2/"), method),
+          authorizer: paid.authorizer, authorizationScopes: [paid.scopeName], integration });
+      } else { httpApi.addRoutes({ path: routePath, methods: [method], integration }); }
     }
 
     const reconciler = new lambda.Function(this, "Reconciler", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "alignment.reconciler.handler",
+      handler: paid ? "backend.alignment.reconciler.handler" : "alignment.reconciler.handler",
       code: lambdaCode,
       timeout: cdk.Duration.minutes(2),
       memorySize: 512,
@@ -306,6 +337,12 @@ export class AlignmentStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
       targets: [new targets.LambdaFunction(reconciler)],
     });
+
+    if (paid) {
+      for (const target of [apiHandler, finalizer, reconciler]) {
+        paid.accounts.grantReadData(target); paid.subscriptions.grantReadData(target); paid.usage.grantReadWriteData(target);
+      }
+    }
 
     for (const [name, fn] of [["Api", apiHandler], ["Finalizer", finalizer], ["Reconciler", reconciler]] as const) {
       new cloudwatch.Alarm(this, `${name}Errors`, {
