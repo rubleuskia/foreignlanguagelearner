@@ -1,5 +1,14 @@
 # Project changelog
 
+## 2026-11-01 — Paid cloud account and subscription foundation (undeployed)
+
+- Add independent dev/prod Cognito + Sign in with Apple and billing infrastructure, account-issued StoreKit tokens, subscription sync/status and account tombstones. Keep personal-key translation as a separate existing mode.
+- Verify Apple signatures through the official SDK, reconcile live subscription state, bind purchase chains atomically to one account, and handle expiry, grace and revocation. Persist verified notification metadata before acknowledgment, with stream retries, dead letters and scheduled reconciliation.
+- Add backend and CDK acceptance tests, CI installation, a hash-locked Linux Lambda build and an operator runbook. No deployment, iOS subscription UI, inference or approved tariff/quota is included; compute entitlements remain disabled.
+- Validation: 44 backend tests, 26 local-aligner regression tests, dev/prod CDK assertions, hash-locked Linux x86_64 asset build and development CLI synthesis pass. Real Apple sandbox and AWS runtime acceptance remain outstanding.
+- DECISIONS.md records the adopted server boundaries and development freshness settings. PROJECT.md adds the undeployed foundation to the repository map; shipped local/BYOK workflows remain unchanged.
+
+
 ## 2026-10-31 — Compact reader controls
 
 - Add a saved Text layout choice in ⋯: Book pages or Vertical scrolling. Both readers preserve the current document offset when switching; bottom Follow remains available in either layout.

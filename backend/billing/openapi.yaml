@@ -1,0 +1,131 @@
+openapi: 3.0.3
+info:
+  title: Foreign Language Learner account and Apple billing foundation
+  version: 1.0.0
+  description: Undeployed server foundation. Compute features remain disabled pending usage policy.
+security:
+  - session: []
+paths:
+  /v1/me:
+    get:
+      summary: Obtain the signed-in account's stable StoreKit association token
+      responses:
+        '200':
+          description: Account token (not authentication)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, app_account_token]
+                properties:
+                  schema_version: {type: integer, enum: [1]}
+                  app_account_token: {type: string, format: uuid}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Block cloud access, remove Cognito identity and retain minimal purchase ownership
+      description: Does not cancel App Store billing. Apple consent revocation remains a launch gate.
+      responses:
+        '200':
+          description: Account removed; use manage_subscription_url to manage Apple billing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: {type: boolean, enum: [true]}
+                  subscription_cancelled: {type: boolean, enum: [false]}
+                  manage_subscription_url: {type: string, format: uri}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/me/entitlements:
+    get:
+      summary: Read owner-only subscription state with expiry and freshness checks
+      responses:
+        '200': {$ref: '#/components/responses/Entitlement'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/billing/apple/sync:
+    post:
+      summary: Verify purchase or restore and reconcile current Apple state
+      description: Retry temporary errors and reconciliation conflicts with backoff. Never repurchase to resolve a sync outage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signed_transaction]
+              properties:
+                signed_transaction: {type: string, minLength: 1, maxLength: 60000}
+      responses:
+        '200': {$ref: '#/components/responses/Entitlement'}
+        '409':
+          description: Foreign/missing account binding, unsupported ownership or retryable reconciliation conflict; inspect error.code
+        default: {$ref: '#/components/responses/Error'}
+  /v1/webhooks/apple:
+    post:
+      security: []
+      summary: Verify Apple V2 notification and durably save minimal inbox metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signedPayload]
+              properties:
+                signedPayload: {type: string, minLength: 1, maxLength: 60000}
+      responses:
+        '200':
+          description: Verified notification persisted (including duplicate UUID) for asynchronous processing
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    session:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito access token from the intended issuer/client, with paid-cloud/access and aws.cognito.signin.user.admin scopes; live session required
+  responses:
+    Error:
+      description: Stable public error code; no SDK exception, receipt or credentials
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                type: object
+                required: [code]
+                properties:
+                  code: {type: string}
+    Entitlement:
+      description: Verified subscription projection; does not itself authorize paid compute
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [schema_version, subscription_access, access_expires_at, subscriptions, features, allowance, policy_version]
+            properties:
+              schema_version: {type: integer, enum: [1]}
+              subscription_access: {type: string, enum: [active, inactive, reconciliation_required]}
+              access_expires_at: {type: integer, format: int64, nullable: true}
+              subscriptions:
+                type: array
+                maxItems: 20
+                items:
+                  type: object
+                  properties:
+                    product_id: {type: string}
+                    status: {type: string, enum: [subscribed, expired, billing_retry, grace_period, revoked]}
+                    access_expires_at: {type: integer, format: int64}
+                    verified_at: {type: integer, format: int64}
+              features:
+                type: object
+                properties:
+                  context_analysis: {type: boolean, enum: [false]}
+                  word_explanation: {type: boolean, enum: [false]}
+                  alignment: {type: boolean, enum: [false]}
+              allowance: {type: object, nullable: true, description: Always null until a usage policy is configured}
+              policy_version: {type: string, enum: [billing-foundation-v1]}

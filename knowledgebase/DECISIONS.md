@@ -419,3 +419,30 @@ Transcript reading/parsing in the book reader and construction of legacy reader 
 Playback category changes and audio-session activation/deactivation run on one shared actor, away from the UI executor, because synchronous media-server calls can stall. Controllers publish play intent immediately and wait for activation before allowing seeks or rate changes to start audio. Pause, close and file replacement invalidate the activation generation; late success or failure cannot restart playback or alter a newer presentation. Now Playing ownership follows play intent immediately, so system Pause also cancels a pending start; closing another controller must not deactivate the current owner.
 
 Periodic time, end and seek callbacks enqueue UI-executor tasks before accessing controller/player state. They retain item/seek generation checks, allowing end-of-track handlers to replace items after leaving AVFoundation callbacks. Closing an unopened player does not deactivate the shared session. Translation and dictionary saving remain independent of audio preparation and playback.
+
+
+## 2026-11-01 — Independent paid-cloud foundation and verified subscription projection
+
+Adopt Cognito with Sign in with Apple for recoverable cloud identity, while retaining personal-key
+translation as an explicit separate mode. Native login and StoreKit UI are not yet implemented.
+Cognito authorization-code flow is configured for a public native client; the native implementation
+must use PKCE S256. API routes require scoped access tokens and live Cognito subject/session checks.
+Deleted-account tombstones block new cloud work and concurrent projection writes. Retain minimal
+purchase ownership after deletion; deletion does not cancel Apple subscriptions. Apple authorization
+revocation and retention/support policies remain launch prerequisites.
+
+Keep cloud foundation and billing deployable without the gated alignment image via a separate CDK
+entry point in the existing infrastructure package. Separate account, subscription and event tables
+from temporary alignment content. A server-created UUID binds StoreKit purchases; a subscription
+chain has one owner. Missing/foreign bindings and Family Sharing fail closed pending explicit recovery
+policy. Use Apple's official SDK with reviewed packaged roots and online checks. Always reconcile
+current App Store Server API status on purchase sync/events; never derive current access from a
+historical signed transaction or notification arrival order. Save ownership and projection with an
+account-state condition and subscription revision in one transaction.
+
+Persist verified minimal notification metadata before acknowledgment; dispatch from the DynamoDB
+stream with bounded retries/dead letters, and repair through paginated scheduled SQS tasks. No raw
+signed payloads or content in logs/storage. For initial development, reconcile after 30 minutes and
+mark unexpired projections stale after 60 minutes. Expiry is checked on every read/admission. These
+freshness defaults do not approve a subscription tariff, allowance, reset or production retention
+policy. All compute features remain disabled until durable usage policy/admission is implemented.

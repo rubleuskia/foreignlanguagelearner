@@ -1,8 +1,21 @@
 # Paid cloud backend: subscriptions, translations and alignment
 
-**Status:** Proposed implementation plan; no implementation, deployment or tariff approval.  
-**Updated:** 2026-10-30.  
+**Status:** Implementation started: account foundation and server billing slice; no deployment or tariff approval.
+**Updated:** 2026-11-01.
 **Scope:** Extend the existing AWS alignment architecture with account identity, Apple subscription verification, service-operated AI translation and durable usage limits.
+
+## Implementation progress (2026-11-01)
+
+The first server slice is implemented in [backend/billing](../backend/billing/README.md) and the
+independent `bin/cloud.ts` CDK entry point: Cognito + Apple login configuration, account tokens and
+tombstones, live Apple purchase reconciliation, account-bound entitlement projection, durable verified
+event inbox/stream, scheduled repair and infrastructure/contract tests. It is undeployed. Sign in with
+Apple and a separate BYOK mode are confirmed implementation choices; native login/StoreKit UI is pending.
+
+This does **not** complete phases 1–3: real sandbox acceptance, Apple configuration, consent revocation
+and production retention/support policy remain outstanding. Compute features return disabled and no
+allowance is invented. Translation admission/reservations/provider work, iOS adapters, TestFlight and
+paid alignment remain later steps. See the billing README for exact implemented contracts and gates.
 
 ## 1. Existing system and document map
 
@@ -15,7 +28,7 @@
 
 The repository describes an **undeployed public-test alignment backend**: API Gateway HTTP API → Python Lambda → DynamoDB and Step Functions Standard → CPU Fargate worker, with private temporary S3 storage. Its bearer token authorizes exactly one job; it does not identify an account. Global admission counters bound test usage. Deployment still requires measured quality, duration, memory and cost headroom.
 
-The shipped app calls OpenAI directly with the user's Keychain API key. ContextAnalysisService creates OpenAIContextAnalysisProvider; WordExplanationService creates OpenAIWordExplanationProvider. Ordinary Apple Translation is a separate on-device workflow. No subscription or shared translation service is implied by this plan.
+The shipped app calls OpenAI directly with the user's Keychain API key. ContextAnalysisService creates OpenAIContextAnalysisProvider; WordExplanationService creates OpenAIWordExplanationProvider. Ordinary Apple Translation is a separate on-device workflow. The new undeployed billing foundation does not enable subscriptions in the shipped app or a shared translation service.
 
 Some older paragraphs in the alignment documents still say Polish-only; the newer multilingual contract and current validators support en/fr/es/de/it/pl. Use the current contract when implementing this plan. Historical review findings must be revalidated rather than treated as current defects.
 
@@ -176,7 +189,7 @@ Required acceptance cases:
 
 Roll out behind independent feature flags. Stop new admissions during an incident while preserving purchase synchronization, webhook processing, already accepted work and result retrieval where safe. Retain compatible schema versions and avoid destructive migrations during rollback.
 
-Each implementation PR updates CHANGELOG.md and DECISIONS.md, and PROJECT.md when shipped workflows/boundaries actually change. This planning document does not mark any phase complete.
+Each implementation PR updates CHANGELOG.md and DECISIONS.md, and PROJECT.md when shipped workflows/boundaries actually change. The implementation-progress section records server work without marking any release phase complete.
 
 ## 9. Decisions still required
 

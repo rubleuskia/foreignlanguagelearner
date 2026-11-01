@@ -65,7 +65,8 @@ The shipped app has no project-operated backend endpoint or analytics. Media, sa
 - `Tests/` — unit and UI tests.
 - `tools/subtitle-aligner/` — local TXT + audio alignment utility.
 - `backend/alignment/` — cloud alignment domain logic, Lambda handlers and OpenAPI contract.
-- `infra/alignment/` — AWS CDK stack and infrastructure assertions for the undeployed test backend.
+- `backend/cloud/` and `backend/billing/` — undeployed recoverable cloud identity and Apple subscription verification/projection; compute features remain disabled.
+- `infra/alignment/` — independent CDK entry points/assertions for gated alignment and undeployed account/billing foundation.
 - `docs/` — detailed operational and feature documentation.
 - `project.yml` — XcodeGen source of truth.
 - `.github/workflows/` and `fastlane/` — CI and release automation.
