@@ -8,7 +8,7 @@ startup. The loopback-only service is for a trusted local OS user; do not expose
 ## Connect AWS
 
 An AWS login email is **not** the account ID. Copy the 12-digit ID from the AWS console account menu.
-In **Настройка**, enter it and a local AWS SDK profile name. Frankfurt (`eu-central-1`) is the region
+In **Настройка**, enter it and a local AWS SDK profile name. Stockholm (`eu-north-1`) is the region
 supported by the current stacks. For IAM Identity Center, configure/login outside the panel:
 
 ```sh
@@ -34,6 +34,8 @@ reviewed Apple DER root directory/fingerprints, and absolute path to the reviewe
 Optional alignment needs the immutable worker image and `alignment_benchmark_file` with real reviewed
 measurements. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
 approve budgets/benefits or automatically turn admissions on. Unknown/credential fields are rejected.
+Configure account-level budget notifications separately before enabling paid work; the Stockholm
+regional templates omit the unsupported `AWS::Budgets::Budget` resource. No budget is provisioned by the panel.
 
 ## Release tags
 

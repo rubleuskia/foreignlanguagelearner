@@ -2,7 +2,7 @@
 
 **Status:** Required before deployment; no cloud release limit has been validated yet.
 
-**Region:** `eu-central-1`
+**Region:** `eu-north-1`
 
 **Candidate task:** Linux/x86_64 Fargate, 2 vCPU, 8 GiB memory, 20 GiB ephemeral storage
 
@@ -34,7 +34,7 @@ audio, checksum mismatch, task timeout, SIGTERM, and forced OOM. Confirm that ea
 active counter once, never starts a second inference attempt, and exposes no raw text in CloudWatch
 or Step Functions history.
 
-For the selected profile, copy the current Frankfurt rates and calculation date from AWS pricing.
+For the selected profile, copy the current Stockholm rates and calculation date from AWS pricing.
 Calculate each job as:
 
 ```text

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
 import { AlignmentStack } from "../lib/alignment-stack";
+import { DEPLOYMENT_REGION } from "../lib/region";
 
 const app = new cdk.App();
-const targetRegion = app.node.tryGetContext("region") ?? process.env.CDK_DEFAULT_REGION ?? "eu-central-1";
+const targetRegion = app.node.tryGetContext("region") ?? process.env.CDK_DEFAULT_REGION ?? DEPLOYMENT_REGION;
 new AlignmentStack(app, "ForeignLanguageLearnerAlignmentDev", {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,

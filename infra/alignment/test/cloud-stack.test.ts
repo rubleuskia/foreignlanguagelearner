@@ -11,25 +11,34 @@ import { CloudFoundationStack, CloudBillingStack } from "../lib/cloud-stack";
 
 const asset = fs.mkdtempSync(path.join(os.tmpdir(), "fll-cloud-stack-"));
 fs.writeFileSync(path.join(asset, "index.py"), "def handler(event, context): pass\n");
+assert.throws(() => new CloudFoundationStack(new cdk.App(), "WrongRegion", {
+  env: { account: "111111111111", region: "eu-central-1" }, stage: "dev",
+  code: lambda.Code.fromAsset(asset), appleClientId: "app.login", appleTeamId: "TEAMID", appleKeyId: "KEYID",
+  appleSignInSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:login-AbCdEf",
+  callbackUrl: "fll://auth", domainPrefix: "wrong-region-test",
+}), /explicit eu-north-1/);
 for (const stage of ["dev", "prod"] as const) {
   const app = new cdk.App();
   const code = () => lambda.Code.fromAsset(asset);
-  const env = { account: "111111111111", region: "eu-central-1" };
+  const env = { account: "111111111111", region: "eu-north-1" };
   const foundation = new CloudFoundationStack(app, `Foundation-${stage}`, {
     env, stage, code: code(), appleClientId: "app.login", appleTeamId: "TEAMID", appleKeyId: "KEYID",
-    appleSignInSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:apple-login-AbCdEf",
+    appleSignInSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:apple-login-AbCdEf",
     callbackUrl: "fll://auth", domainPrefix: `fll-test-${stage}`,
   });
   const billing = new CloudBillingStack(app, `Billing-${stage}`, {
-    env, code: code(), foundation, appleApiSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:apple-api-AbCdEf",
+    env, code: code(), foundation, appleApiSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:apple-api-AbCdEf",
     bundleId: "com.rubleuskia.foreignlanguagelearner", appAppleId: "123456789", products: ["monthly"],
   });
   const translation = new CloudTranslationStack(app, `Translation-${stage}`, {
     env, code: code(), foundation,
-    openaiSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:provider-AbCdEf",
+    openaiSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:provider-AbCdEf",
   });
   // Synthesize the entire assembly to detect cross-stack dependency cycles too.
   app.synth();
+  for (const stack of [foundation, billing, translation]) {
+    assert.equal(stack.environment, "aws://111111111111/eu-north-1");
+  }
   const base = Template.fromStack(foundation);
   const bill = Template.fromStack(billing);
   base.resourceCountIs("AWS::Cognito::UserPool", 1);
@@ -92,28 +101,29 @@ for (const stage of ["dev", "prod"] as const) {
 }
 const paidApp = new cdk.App({ context: { workerRepositoryName: "alignment-worker", workerImageDigest: `sha256:${"a".repeat(64)}` } });
 const paidFoundation = new CloudFoundationStack(paidApp, "PaidFoundation", {
-  env: { account: "111111111111", region: "eu-central-1" }, stage: "dev", code: lambda.Code.fromAsset(asset),
+  env: { account: "111111111111", region: "eu-north-1" }, stage: "dev", code: lambda.Code.fromAsset(asset),
   appleClientId: "app", appleTeamId: "team", appleKeyId: "key", domainPrefix: "paid-test", callbackUrl: "fll://auth",
-  appleSignInSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:login-AbCdEf",
+  appleSignInSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:login-AbCdEf",
 });
 assert.throws(() => new AlignmentStack(paidApp, "NoBenchmark", {
-  env: { region: "eu-central-1" }, paidFoundation, cloudCode: lambda.Code.fromAsset(asset),
+  env: { region: "eu-north-1" }, paidFoundation, cloudCode: lambda.Code.fromAsset(asset),
 }), /benchmark/);
 // Independent app: a failed construct must not be synthesized. This is synthetic test data only.
 const measuredApp = new cdk.App({ context: { workerRepositoryName: "alignment-worker", workerImageDigest: `sha256:${"a".repeat(64)}` } });
 const measuredFoundation = new CloudFoundationStack(measuredApp, "MeasuredFoundation", {
-  env: { account: "111111111111", region: "eu-central-1" }, stage: "dev", code: lambda.Code.fromAsset(asset),
+  env: { account: "111111111111", region: "eu-north-1" }, stage: "dev", code: lambda.Code.fromAsset(asset),
   appleClientId: "app", appleTeamId: "team", appleKeyId: "key", domainPrefix: "measured-test", callbackUrl: "fll://auth",
-  appleSignInSecretArn: "arn:aws:secretsmanager:eu-central-1:111111111111:secret:login-AbCdEf",
+  appleSignInSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:login-AbCdEf",
 });
 const paid = new AlignmentStack(measuredApp, "PaidAlignment", {
-  env: { account: "111111111111", region: "eu-central-1" }, paidFoundation: measuredFoundation,
+  env: { account: "111111111111", region: "eu-north-1" }, paidFoundation: measuredFoundation,
   cloudCode: lambda.Code.fromAsset(asset), benchmarkReport: { workerImageDigest: `sha256:${"a".repeat(64)}`,
     maxJobCostUsd: 1, languages: Object.fromEntries(["en","fr","es","de","it","pl"].map(l =>
       [l, { qualityAccepted: true, runtimeSeconds: 100, peakMemoryMiB: 1024, costUsd: 0.1 }])) },
 });
 measuredApp.synth();
 const paidTemplate = Template.fromStack(paid);
+paidTemplate.resourceCountIs("AWS::Budgets::Budget", 0);
 paidTemplate.resourceCountIs("AWS::ApiGatewayV2::Api", 0);
 paidTemplate.resourceCountIs("AWS::ApiGatewayV2::Route", 9);
 for (const resource of Object.values(paidTemplate.toJSON().Resources) as any[]) {

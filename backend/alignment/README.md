@@ -10,7 +10,7 @@ The canonical create request, stored job and pinned worker input retain language
 This directory implements the public-test control plane described in
 [`docs/AWS_ALIGNMENT_BACKEND_ARCHITECTURE.md`](../../docs/AWS_ALIGNMENT_BACKEND_ARCHITECTURE.md).
 It is not deployed by this repository. Deployment requires an explicitly selected development
-account in `eu-central-1`, a prebuilt worker image referenced by immutable digest, and recorded
+account in `eu-north-1`, a prebuilt worker image referenced by immutable digest, and recorded
 benchmark results for the selected profile.
 
 ## Components
@@ -48,9 +48,11 @@ then synthesize with:
 
 ```sh
 npx cdk synth -c workerRepositoryName=alignment-worker \
-  -c workerImageDigest=sha256:DIGEST -c monthlyBudgetUsd=50
+  -c workerImageDigest=sha256:DIGEST
 ```
 
 `ACCEPT_NEW_JOBS` is an operator kill switch on create, signed-upload renewal, and start. Set it to
 `false` in the API Lambda configuration to halt new cost. It does not cancel work already running.
-Budget alarms notify; they are not spending cutoffs.
+Configure approved account-level AWS Budgets alerts separately before enabling work; Stockholm does
+not support the `AWS::Budgets::Budget` CloudFormation resource. The regional stack does not create it.
+Budget alarms notify; they are not spending cutoffs. Regional admission caps and operational alarms remain.

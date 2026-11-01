@@ -3,17 +3,21 @@ import * as cdk from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { AlignmentStack } from "../lib/alignment-stack";
 
+assert.throws(() => new AlignmentStack(new cdk.App(), "WrongRegion", {
+  env: { region: "eu-central-1" },
+}), /eu-north-1/);
+
 const app = new cdk.App({
   context: {
     workerRepositoryName: "alignment-worker",
     workerImageDigest: `sha256:${"a".repeat(64)}`,
-    monthlyBudgetUsd: 50,
   },
 });
-const stack = new AlignmentStack(app, "Test", { env: { region: "eu-central-1" } });
+const stack = new AlignmentStack(app, "Test", { env: { region: "eu-north-1" } });
 const template = Template.fromStack(stack);
 
 template.resourceCountIs("AWS::EC2::NatGateway", 0);
+template.resourceCountIs("AWS::Budgets::Budget", 0);
 template.resourceCountIs("AWS::StepFunctions::StateMachineVersion", 1);
 template.resourceCountIs("AWS::ApiGatewayV2::Route", 9);
 template.hasResourceProperties("AWS::S3::Bucket", {

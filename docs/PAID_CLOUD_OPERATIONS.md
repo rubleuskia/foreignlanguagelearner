@@ -105,6 +105,12 @@ ownership, Family Sharing and merging two app accounts are deliberately not auto
 
 ## Retention, deletion and operations
 
+Deployment target is Stockholm (`eu-north-1`). Before enabling paid work, configure approved
+account-level AWS Budgets notifications separately through the billing administrator. AWS rejected
+`AWS::Budgets::Budget` during read-only template validation in Stockholm, so regional stacks omit
+that unsupported resource. No budget was created or removed by this region change. Other alarms,
+admission limits, quotas and kill switches remain in place.
+
 - Temporary translation input is removed transactionally at terminal settlement. Results are readable
   for 24 hours from successful completion; input has a 10-minute pending deadline and claimed work a
   120-second deadline. A watchdog closes abandoned work without resubmission.

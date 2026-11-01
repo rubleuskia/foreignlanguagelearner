@@ -112,7 +112,7 @@ function confirm(title,description,expected,action) {
 function deploy(plan) {confirm('Развернуть '+plan.tag+'?', 'Изменится prod в аккаунте '+plan.account_id+'. Проверьте изменения, особенно права IAM, замену и удаление ресурсов. Используется подготовленная сборка и зафиксированная конфигурация. Откат к старому тегу не восстанавливает данные.',plan.account_id+'/'+plan.tag,value=>start('/api/deploy',{plan_id:plan.id,confirm:value}));}
 $('inference-tests').onclick=()=>confirm('Запустить сквозной тест?', 'Будут созданы до двух новых запросов к платной модели для тестового подписчика. Повтор того же ключа должен вернуть тот же результат. Прерванная операция не запускается повторно автоматически.','2',value=>start('/api/tests',{mode:'inference',confirm:value}));
 function fillConfig(c) {
-  c=c || {account_id:'',profile:'fll-prod',region:'eu-central-1',context:{acceptTranslations:'false',paidAlignment:'false'}};
+  c=c || {account_id:'',profile:'fll-prod',region:'eu-north-1',context:{acceptTranslations:'false',paidAlignment:'false'}};
   $('account-id').value=c.account_id;$('profile').value=c.profile;$('access-token-file').value=c.access_token_file || '';
   const extra={...c};delete extra.account_id;delete extra.profile;delete extra.region;delete extra.access_token_file;
   $('deploy-config').value=JSON.stringify(extra,null,2);

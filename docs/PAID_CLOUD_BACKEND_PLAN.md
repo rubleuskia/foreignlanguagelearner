@@ -39,7 +39,7 @@ Some older paragraphs in the alignment documents still say Polish-only; the newe
 
 ## 2. Proposed architecture and release boundary
 
-Keep AWS in eu-central-1, Python server modules and TypeScript CDK. Split infrastructure into independently deployable foundation, billing, translation and alignment components. The existing stack requires a worker image digest at construction: billing and translation must no longer depend on that image or on alignment benchmark completion.
+Keep AWS in eu-north-1, Python server modules and TypeScript CDK. Split infrastructure into independently deployable foundation, billing, translation and alignment components. The existing stack requires a worker image digest at construction: billing and translation must no longer depend on that image or on alignment benchmark completion.
 
 ```mermaid
 flowchart TD

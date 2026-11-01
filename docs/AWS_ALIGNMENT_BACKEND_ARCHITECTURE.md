@@ -38,7 +38,7 @@ The existing app has no accounts or backend. Cloud alignment must be an explicit
 The following specifies the public test release. Authentication and broader production hardening are deferred to the general [future improvements backlog](FUTURE_IMPROVEMENTS.md). Resource/profile values remain development choices subject to measurement:
 
 - No Cognito, account creation, sign-in or shared application secret. The client generates a fresh 32-byte cryptographically random job access token per create operation, encoded as base64url without padding. Store it in Keychain. The server stores only SHA-256 of the token. All subsequent requests require that capability; it is authorization for one job, not verified user identity.
-- Region `eu-central-1`; CPU-only Linux/x86_64 Fargate. Initial benchmark candidate: 2 vCPU, 8 GiB, 20 GiB ephemeral storage, `base/guided`.
+- Region `eu-north-1`; CPU-only Linux/x86_64 Fargate. Initial benchmark candidate: 2 vCPU, 8 GiB, 20 GiB ephemeral storage, `base/guided`.
 - Development admission limits: audio at most 1,000,000,000 bytes and 3,600 seconds; TXT at most 10,000,000 bytes; generated SRT and VTT each strictly less than 10,000,000 bytes. These are separate limits.
 - Two active processing jobs globally, at most 10 accepted starts per UTC day. At most 20 new jobs per UTC day and 20 outstanding upload sessions globally. Use atomic DynamoDB counters, not approximate scans. Return 429 with Retry-After (60 seconds for concurrent capacity, seconds until UTC reset for daily caps). There is no inference queue. Tokens/IP addresses are not trustworthy per-person quotas; do not describe them as such.
 - Upload session lasts 24 hours; individual signed URLs last 15 minutes. Results/diagnostics are accessible for 24 hours after terminal completion. Normal input cleanup starts at terminal completion. Orphan-object lifecycle fallback: 3 days; physical deletion may occur later.
@@ -188,9 +188,9 @@ Private S3 bucket, Block Public Access, bucket-owner-enforced ownership, TLS-onl
 
 Use a dedicated VPC with public subnet, public IPv4 assigned to Fargate, no inbound security-group rules, outbound HTTPS and required DNS; no listener in worker. This avoids a permanently charged NAT Gateway. Restrict S3 access via a gateway endpoint policy where configured. Do not silently replace this with paid interface endpoints or NAT. Public IPv4, ECR storage/pulls, logs and scheduled Lambda calls still cost money when inference is idle.
 
-Provision infrastructure once, not per job. Use **AWS CDK in TypeScript** under `infra/alignment/` and Python Lambda handlers under `backend/alignment/`. Pin dependencies, use immutable image digests and state-machine versions, and include budgets/alarms. No credentials or AWS account IDs hardcoded in committed source.
+Provision infrastructure once, not per job. Use **AWS CDK in TypeScript** under `infra/alignment/` and Python Lambda handlers under `backend/alignment/`. Pin dependencies and use immutable image digests/state-machine versions. Regional stacks include operational alarms; configure account-level AWS Budgets alerts separately before launch because Stockholm rejects `AWS::Budgets::Budget` in CloudFormation. No credentials or AWS account IDs hardcoded in committed source.
 
-Do not retain the previous US-region illustrative dollar totals as Frankfurt pricing. Before release, record target-region rates and measured task runtime in `docs/ALIGNMENT_BENCHMARKS.md`:
+Do not retain the previous US-region illustrative dollar totals as Stockholm pricing. Before release, record target-region rates and measured task runtime in `docs/ALIGNMENT_BENCHMARKS.md`:
 
 ```text
 job compute = billed task hours * (vCPUs * regional CPU rate + GiB * regional RAM rate)

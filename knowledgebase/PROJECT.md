@@ -3,7 +3,7 @@
 ## Local cloud operations
 
 `bash scripts/cloud-control.sh` opens a local-only production control panel at 127.0.0.1:8767. It uses
-named AWS profiles to inspect prod stacks/releases/alarms, prepare exact verified-main CI tags, manually
+named AWS profiles in `eu-north-1` (Stockholm) to inspect prod stacks/releases/alarms, prepare exact verified-main CI tags, manually
 deploy or redeploy older tags and run opt-in API suites. No AWS credentials enter the browser, no
 deployment occurs automatically and code rollback never restores databases. Main push CI success
 creates immutable backend release tags through a separate workflow. Without configured AWS identity

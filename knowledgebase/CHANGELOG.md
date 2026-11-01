@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-11-01 — Stockholm cloud deployment region
+
+- Switch cloud foundation/billing/translation and alignment assemblies, local dashboard, regional endpoint/secret validation and setup examples to `eu-north-1` (Stockholm), matching the operator's AWS profile. Reject the previous Frankfurt target and cross-region secret/API inputs before deployment.
+- Update alignment benchmark/cost instructions for Stockholm; measured quality, runtime and regional pricing approval remain pending. No resources are deployed or moved by changing this target.
+- Read-only AWS template validation confirms `AWS::Budgets::Budget` is unsupported in Stockholm. Omit that resource from regional alignment templates and require separately configured account-level budget alerts in the launch runbook; admission caps/quotas/operational alarms remain intact.
+- Validation: 20 control-panel tests, CDK type/dev/prod/alignment assertions, full prod CLI synthesis, three live AWS ValidateTemplate checks, and live dashboard reads in Stockholm pass. All prod stacks report NOT_DEPLOYED; no bootstrap, deployment or paid API request was run.
+- DECISIONS.md records the superseding region choice; PROJECT.md reflects the operator workflow. Local profile/dashboard configuration is updated separately and remains outside Git.
+
 ## 2026-11-01 — Local AWS production control panel
 
 - Add a loopback Russian-language dashboard for real prod stack/release/CloudWatch status, CI tags, reviewed deployment plans, manual deploy/rollback and local history. AWS profiles stay on the computer; startup does not deploy infrastructure.
