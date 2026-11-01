@@ -20,6 +20,7 @@ REQUIRED_CONTEXT = {
     'appleApiSecretArn', 'callbackUrl', 'loginDomainPrefix', 'appleProducts', 'appAppleId',
 }
 REPOSITORY = 'rubleuskia/foreignlanguagelearner'
+REGION = 'eu-north-1'
 
 
 def atomic_json(path, value):
@@ -38,8 +39,8 @@ def validate(value):
         raise ControlError('Неизвестные поля настройки. Секретные ключи здесь не поддерживаются.')
     if not isinstance(value.get('account_id'), str) or not re.fullmatch(r'\d{12}', value['account_id']):
         raise ControlError('Нужен 12-значный AWS account ID, не адрес электронной почты.')
-    if value.get('region') != 'eu-central-1':
-        raise ControlError('Текущие облачные стеки поддерживают регион eu-central-1 (Франкфурт).')
+    if value.get('region') != REGION:
+        raise ControlError('Текущие облачные стеки поддерживают регион eu-north-1 (Стокгольм).')
     if not isinstance(value.get('profile'), str) or not re.fullmatch(r'[\w.@+-]{1,100}', value['profile']):
         raise ControlError('Укажите имя локального AWS-профиля.')
     context = value.get('context', {})
@@ -48,7 +49,7 @@ def validate(value):
         raise ControlError('Допускаются только перечисленные публичные параметры CDK и ARN секретов.')
     for key in ['appleSignInSecretArn', 'appleApiSecretArn', 'openaiSecretArn']:
         if key in context and not re.fullmatch(
-                rf"arn:aws:secretsmanager:eu-central-1:{value['account_id']}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{{6}}", context[key]):
+                rf"arn:aws:secretsmanager:{REGION}:{value['account_id']}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{{6}}", context[key]):
             raise ControlError(f'{key}: нужен полный ARN секрета в выбранном AWS-аккаунте, не его содержимое.')
     for key in ['acceptTranslations', 'paidAlignment']:
         if key in context and context[key] not in {'true', 'false'}: raise ControlError(f'{key}: ожидается true или false.')

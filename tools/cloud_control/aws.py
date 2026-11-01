@@ -2,7 +2,7 @@ import datetime
 import json
 import threading
 import time
-from .config import ALL_STACKS, ControlError, digest
+from .config import ALL_STACKS, REGION, ControlError, digest
 
 
 def clean_error(error):
@@ -77,6 +77,6 @@ def api_url(snapshot):
     parsed = urlparse(base or '')
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
             or parsed.query or parsed.fragment or parsed.path not in {'', '/'}
-            or not parsed.hostname.endswith('.execute-api.eu-central-1.amazonaws.com')):
+            or not parsed.hostname.endswith(f'.execute-api.{REGION}.amazonaws.com')):
         raise ControlError('В prod-стеке нет ожидаемого HTTPS API Gateway endpoint.')
     return base.rstrip('/')

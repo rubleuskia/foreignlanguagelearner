@@ -17,6 +17,7 @@ import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as secrets from "aws-cdk-lib/aws-secretsmanager";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
+import { DEPLOYMENT_REGION } from "./region";
 
 export interface CloudProps extends cdk.StackProps {
   readonly stage: "dev" | "prod";
@@ -47,7 +48,7 @@ export class CloudFoundationStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: CloudProps) {
     super(scope, id, props);
-    if (props.env?.region !== "eu-central-1") throw new Error("Cloud requires explicit eu-central-1 region");
+    if (props.env?.region !== DEPLOYMENT_REGION) throw new Error(`Cloud requires explicit ${DEPLOYMENT_REGION} region`);
     const table = (name: string, key: string) => new db.Table(this, name, {
       partitionKey: { name: key, type: db.AttributeType.STRING },
       billingMode: db.BillingMode.PAY_PER_REQUEST,

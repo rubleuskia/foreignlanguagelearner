@@ -22,9 +22,9 @@ from .server import Application, Handler
 ROOT = Path(__file__).resolve().parents[2]
 SHA = 'a' * 40
 TAG = 'backend-123-' + SHA[:12]
-CONFIG = {'account_id':'123456789012', 'region':'eu-central-1', 'profile':'fll-prod', 'context':{}}
+CONFIG = {'account_id':'123456789012', 'region':'eu-north-1', 'profile':'fll-prod', 'context':{}}
 SNAPSHOT = [{'name':'ForeignLanguageLearnerCloudFoundation-prod', 'status':'UPDATE_COMPLETE',
-    'outputs':{'ApiUrl':'https://test.execute-api.eu-central-1.amazonaws.com'}, 'tags':{}}]
+    'outputs':{'ApiUrl':'https://test.execute-api.eu-north-1.amazonaws.com'}, 'tags':{}}]
 
 
 class ControlTests(unittest.TestCase):
@@ -41,7 +41,9 @@ class ControlTests(unittest.TestCase):
 
     def test_config_refuses_email_unknown_secret_fields_wrong_region_and_secret_contents(self):
         for value in [{**CONFIG,'account_id':'sweexxik@gmail.com'}, {**CONFIG,'secret_access_key':'secret'},
-                      {**CONFIG,'region':'us-east-1'}, {**CONFIG,'context':{'openaiSecretArn':'sk-example'}}]:
+                      {**CONFIG,'region':'us-east-1'}, {**CONFIG,'region':'eu-central-1'},
+                      {**CONFIG,'context':{'openaiSecretArn':'arn:aws:secretsmanager:eu-central-1:123456789012:secret:provider-AbCdEf'}},
+                      {**CONFIG,'context':{'openaiSecretArn':'sk-example'}}]:
             with self.subTest(value=value), self.assertRaises(ControlError): validate(value)
         self.assertEqual(self.config.path.stat().st_mode & 0o777, 0o600)
 
@@ -55,8 +57,9 @@ class ControlTests(unittest.TestCase):
     def test_busy_failed_stack_and_non_aws_endpoint_are_blocked(self):
         for status in ['UPDATE_IN_PROGRESS','ROLLBACK_FAILED','DELETE_COMPLETE']:
             with self.assertRaises(ControlError): deployable([{**SNAPSHOT[0],'status':status}])
-        for url in ['http://localhost/','https://evil.example','https://x.execute-api.eu-central-1.amazonaws.com@evil.example',
-                    'https://x.execute-api.eu-central-1.amazonaws.com?token=value']:
+        for url in ['http://localhost/','https://evil.example','https://x.execute-api.eu-north-1.amazonaws.com@evil.example',
+                    'https://x.execute-api.eu-north-1.amazonaws.com?token=value',
+                    'https://x.execute-api.eu-central-1.amazonaws.com']:
             with self.assertRaises(ControlError): api_url([{**SNAPSHOT[0],'outputs':{'ApiUrl':url}}])
 
     def test_failed_or_foreign_ci_cannot_authorize_tag(self):
@@ -203,9 +206,9 @@ class ControlTests(unittest.TestCase):
     def test_prepare_freezes_inputs_and_checks_assembly_environment_and_routes(self):
         from .config import expected_stacks
         config={**CONFIG,'context':{'appleClientId':'client','appleTeamId':'team','appleSignInKeyId':'key',
-            'appleSignInSecretArn':'arn:aws:secretsmanager:eu-central-1:123456789012:secret:login-AbCdEf',
-            'appleApiSecretArn':'arn:aws:secretsmanager:eu-central-1:123456789012:secret:store-AbCdEf',
-            'openaiSecretArn':'arn:aws:secretsmanager:eu-central-1:123456789012:secret:provider-AbCdEf',
+            'appleSignInSecretArn':'arn:aws:secretsmanager:eu-north-1:123456789012:secret:login-AbCdEf',
+            'appleApiSecretArn':'arn:aws:secretsmanager:eu-north-1:123456789012:secret:store-AbCdEf',
+            'openaiSecretArn':'arn:aws:secretsmanager:eu-north-1:123456789012:secret:provider-AbCdEf',
             'callbackUrl':'fll://auth','loginDomainPrefix':'test-prod','appleProducts':'test','appAppleId':'123'}}
         roots=Path(self.tmp.name)/'input-roots';roots.mkdir();(roots/'root.cer').write_bytes(b'root-fixture')
         policy=Path(self.tmp.name)/'input-policy.json';policy.write_text('{"version":"fixture"}')
@@ -231,7 +234,7 @@ class ControlTests(unittest.TestCase):
                         {'RouteKey':'GET /v1/me','AuthorizationType':'NONE' if mode[0]=='public' else 'JWT'}}}}
                     (assembly/file).write_text(json.dumps(template))
                     artifacts[name]={'type':'aws:cloudformation:stack',
-                        'environment':'aws://999999999999/eu-central-1' if mode[0]=='foreign' else 'aws://123456789012/eu-central-1',
+                        'environment':'aws://999999999999/eu-north-1' if mode[0]=='foreign' else 'aws://123456789012/eu-north-1',
                         'properties':{'stackName':name,'templateFile':file}}
                 (assembly/'manifest.json').write_text(json.dumps({'artifacts':artifacts}))
         jobs.execute=Mock(side_effect=execute)

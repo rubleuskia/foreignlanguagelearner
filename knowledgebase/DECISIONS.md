@@ -1,9 +1,27 @@
 # Architectural and product decisions
 
+## Stockholm deployment target (2026-11-01)
+
+The operator confirms `eu-north-1` (Stockholm) as the target for this account; this supersedes the
+earlier Frankfurt assumption in the original plan. CLI reads succeed in Stockholm while Frankfurt
+CloudFormation reads receive an organization-policy deny. This does not establish all deployment
+permissions; continue permission/bootstrap/secret acceptance in the selected region.
+
+Use a shared CDK region constant and matching dashboard guards for assemblies, Secrets Manager ARNs
+and regional API Gateway endpoints. Reject other regions rather than silently mixing resources.
+Region changes affect future assemblies; they never migrate existing data/resources. Review fresh
+Stockholm ECR/secret/bootstrap configuration and regional alignment cost/runtime evidence before launch.
+
+Stockholm CloudFormation rejects `AWS::Budgets::Budget` (confirmed by read-only ValidateTemplate).
+Keep account-level budget notifications as a separate billing-administrator prerequisite instead of
+placing an unsupported global billing resource in regional stacks. Do not silently create a second
+region's stack or change organization policies. Existing regional caps, quotas and operational alarms
+remain; no budget/resource is created, removed or migrated by this code change.
+
 ## Local AWS release control (2026-11-01)
 
 Use a loopback-only Python/vanilla-web operator panel with existing named AWS SDK profiles, not a
-public cloud admin API or credentials in the browser. Verify STS account, explicit Frankfurt prod
+public cloud admin API or credentials in the browser. Verify STS account, explicit Stockholm prod
 environment and exact verified-main CI tags. A separate workflow_run tagger runs only after successful
 main push CI, keeping its write permission outside the reusable read-only CI/publishing workflow.
 

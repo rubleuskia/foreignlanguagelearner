@@ -2,7 +2,6 @@ import * as path from "node:path";
 import * as cdk from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
-import * as budgets from "aws-cdk-lib/aws-budgets";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
@@ -18,6 +17,7 @@ import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
 import { CloudFoundationStack } from "./cloud-stack";
+import { DEPLOYMENT_REGION } from "./region";
 
 export interface AlignmentStackProps extends cdk.StackProps {
   readonly paidFoundation?: CloudFoundationStack;
@@ -32,8 +32,8 @@ export interface AlignmentStackProps extends cdk.StackProps {
 export class AlignmentStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: AlignmentStackProps) {
     super(scope, id, props);
-    if (props?.env?.region && props.env.region !== "eu-central-1") {
-      throw new Error("Alignment public test must be synthesized for eu-central-1");
+    if (props?.env?.region && props.env.region !== DEPLOYMENT_REGION) {
+      throw new Error("Alignment public test must be synthesized for eu-north-1");
     }
     const workerRepositoryName = this.node.tryGetContext("workerRepositoryName") as string | undefined;
     const workerImageDigest = this.node.tryGetContext("workerImageDigest") as string | undefined;
@@ -351,14 +351,8 @@ export class AlignmentStack extends cdk.Stack {
         evaluationPeriods: 1,
       });
     }
-    new budgets.CfnBudget(this, "DevelopmentBudget", {
-      budget: {
-        budgetName: "foreign-language-learner-alignment-dev",
-        budgetType: "COST",
-        timeUnit: "MONTHLY",
-        budgetLimit: { amount: Number(this.node.tryGetContext("monthlyBudgetUsd") ?? 50), unit: "USD" },
-      },
-    });
+    // AWS::Budgets::Budget is unavailable in Stockholm. Account-level budget alerts
+    // are a separate operator prerequisite; regional admission caps remain enforced.
 
     new cdk.CfnOutput(this, "ApiUrl", { value: httpApi.url ?? "" });
     new cdk.CfnOutput(this, "BucketName", { value: bucket.bucketName });
