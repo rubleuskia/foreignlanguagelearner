@@ -1,5 +1,15 @@
 # Foreign Language Learner
 
+## Local cloud operations
+
+`bash scripts/cloud-control.sh` opens a local-only production control panel at 127.0.0.1:8767. It uses
+named AWS profiles to inspect prod stacks/releases/alarms, prepare exact verified-main CI tags, manually
+deploy or redeploy older tags and run opt-in API suites. No AWS credentials enter the browser, no
+deployment occurs automatically and code rollback never restores databases. Main push CI success
+creates immutable backend release tags through a separate workflow. Without configured AWS identity
+and test token the panel reports unavailable/incomplete status rather than simulating a healthy server.
+Implementation: `tools/cloud_control/`; setup, approval and acceptance boundaries: `docs/CLOUD_CONTROL.md`.
+
 ## Standalone listening practice
 
 Practice also includes an independent listening exercise: up to ten random audio-backed dictionary phrases in the active language, audio plus five target-language translations, and immediate feedback. Existing cloud configuration generates the choices from the phrase and language pair alone. This exercise does not track progress or affect vocabulary levels and regular training sessions.

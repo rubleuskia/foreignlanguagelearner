@@ -1,5 +1,28 @@
 # Architectural and product decisions
 
+## Local AWS release control (2026-11-01)
+
+Use a loopback-only Python/vanilla-web operator panel with existing named AWS SDK profiles, not a
+public cloud admin API or credentials in the browser. Verify STS account, explicit Frankfurt prod
+environment and exact verified-main CI tags. A separate workflow_run tagger runs only after successful
+main push CI, keeping its write permission outside the reusable read-only CI/publishing workflow.
+
+Prepare an immutable local cloud assembly from tagged source plus copied reviewed operator files;
+review its diff, then manually confirm its account/tag before deploying that same assembly. Plans are
+single-use, expire after one hour and bind configuration, files and current CloudFormation baseline.
+Record release/commit/operation in stack tags. Serialize local operations, block observed remote
+updates and surviving interrupted child processes; this is not a distributed deployment lock.
+
+Rollback means another reviewed deployment of an older verified code tag with current environment
+configuration. It never restores tables, reverses transactions or guarantees old/new schema compatibility.
+Do not automate rollback on smoke failure: multi-stack updates can be partial and data recovery is a
+separate coordinated runbook action. Do not bootstrap or delete AWS stacks from this panel.
+
+Separate infrastructure/alarms from actual API coverage. Smoke probes never submit valid inference;
+missing authenticated fixtures mean incomplete coverage. Explicitly confirmed inference tests persist
+keys before POST, recover lost replies by key and replay only known success. No automatic paid probes,
+production CI probes, user creation or purchase lifecycle tests are introduced.
+
 ## Compact reading controls (2026-10-31)
 
 The independent reader.text-layout preference selects pages (default) or vertical scrolling in both readers. Expose it in the ⋯ menu beside highlighting. A shared layout owner retains source-character offsets across presentation changes and forwards normal progress persistence; audio following continues to resolve the active cue. Vertical mode reuses the original selectable transcript and follow behavior, with a stable bottom Follow slot.

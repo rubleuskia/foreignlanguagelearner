@@ -37,6 +37,7 @@ jobs:
         run: |
           PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
+          python -m unittest tools.cloud_control.test_control -v
           python -m compileall -q backend tools/subtitle-aligner/worker
       - name: CDK type and infrastructure assertions
         working-directory: infra/alignment

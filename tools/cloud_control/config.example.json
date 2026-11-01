@@ -1,0 +1,22 @@
+{
+  "account_id": "123456789012",
+  "region": "eu-central-1",
+  "profile": "fll-prod",
+  "context": {
+    "appleClientId": "REPLACE_APPLE_SERVICES_ID",
+    "appleTeamId": "REPLACE_TEAM_ID",
+    "appleSignInKeyId": "REPLACE_KEY_ID",
+    "appleSignInSecretArn": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:REPLACE-login-AbCdEf",
+    "appleApiSecretArn": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:REPLACE-store-AbCdEf",
+    "openaiSecretArn": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:REPLACE-provider-AbCdEf",
+    "callbackUrl": "fll://auth",
+    "loginDomainPrefix": "REPLACE_UNIQUE_PROD_PREFIX",
+    "appleProducts": "REPLACE_APPROVED_PRODUCT_ID",
+    "appAppleId": "123456789",
+    "acceptTranslations": "false",
+    "paidAlignment": "false"
+  },
+  "apple_roots": "/absolute/path/to/reviewed-apple-roots",
+  "root_sha256": ["REPLACE_WITH_REVIEWED_64_HEX_DER_SHA256"],
+  "policy_file": "/absolute/path/to/reviewed-prod-policy.json"
+}

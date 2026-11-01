@@ -1,6 +1,8 @@
 # Account-backed cloud operations (undeployed)
 
 This implements the code and offline validation for the [paid cloud plan](PAID_CLOUD_BACKEND_PLAN.md).
+The [local control panel](CLOUD_CONTROL.md) adds production status, verified-tag prepare/deploy/rollback
+and opt-in real API probes. It starts with no AWS configuration and never deploys automatically.
 No AWS deployment, Apple product creation, TestFlight upload, production purchase, paid inference or
 alignment benchmark approval is performed. Normal app builds have no cloud endpoint. Local reading,
 import, saved dictionaries, Apple Translation and the explicit personal-key mode remain available.
