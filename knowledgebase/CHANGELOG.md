@@ -54,6 +54,9 @@
 ## 2026-10-31 — Model choice and configurable reasoning
 
 Settings adds GPT-6.1 Terra and GPT-6.1 Sol, and uses full names for GPT-5 mini, GPT-5 nano and GPT-6 Luna. A reasoning-effort picker offers only levels supported by the selected model. The setting applies to contextual translations, word explanations, listening distractors and API-key checks. Explanation caches separate reasoning settings, and portable library backups include the optional preference while accepting older backups. Requests with reasoning get larger bounded output budgets and timeouts. Architectural decisions are recorded in DECISIONS; project purpose and workflow boundaries are unchanged.
+## 2026-10-31 — Dictionary-grounded listening answers
+
+Listening uses the saved dictionary translation verbatim as its correct answer and only samples entries with a translation and audio. The model generates only distractors, guided by the saved answer. The prompt analyzes the entire phrase, picks its two hardest independent meaning-bearing elements, and combines two incorrect meanings for each into four 2×2 variants; single-word/indivisible expressions use four single-element variants. Decisions and the project workflow were updated; levels and progress tracking remain unchanged.
 
 
 ## 2026-10-30 — Standalone listening practice
