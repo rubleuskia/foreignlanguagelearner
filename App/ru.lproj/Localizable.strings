@@ -713,3 +713,5 @@
 "Subscriptions provide contextual translations and word explanations. Your local library and personal API key remain separate. Payment and automatic renewal are handled by Apple until you cancel in subscription settings. Allowance resets at the start of each UTC month, including annual plans, and includes requests currently processing." = "Подписка даёт контекстные переводы и объяснения слов. Локальная библиотека и личный API-ключ остаются отдельными. Apple принимает оплату и автоматически продлевает подписку до её отмены в настройках подписок. Лимит обновляется в начале каждого месяца по UTC, в том числе для годовых планов, и учитывает запросы в обработке.";
 
 "Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support." = "Не удалось проверить вход в облачный аккаунт. Войдите заново с тем же Apple-аккаунтом или обратитесь в поддержку.";
+
+"No dictionary phrases with available audio and a saved translation." = "В словаре нет фраз с доступным аудио и сохранённым переводом.";
