@@ -32,6 +32,8 @@ The project also contains a standalone local subtitle-aligner utility. It extrac
 
 ## Current scope
 
+Book pages support selecting a phrase across page boundaries: long press, drag either selection handle to a horizontal edge and hold to turn pages. Translation, dictionary capture, copying and phrase audio use the resulting whole-chapter selection.
+
 The ⋯ menu offers a saved choice between book pages and vertical scrolling in both readers, retaining the reading position when switching.
 
 Reading controls automatically choose synchronized track text or full text. The ⋯ menu contains the saved New words highlighting setting; the reading canvas omits vocabulary statistics and the player omits the completion percentage to preserve text space.

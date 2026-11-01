@@ -20,6 +20,10 @@ struct StableBookPager: UIViewControllerRepresentable {
     let makePage: (Int) -> TranscriptTextView
     let onManualStart: () -> Void
     let onSelection: (Int) -> Void
+    var selectionDocument: TranscriptDocument? = nil
+    var pageRanges: [NSRange] = []
+    var selectionDisplayText = ""
+    var onTextSelection: ((TranscriptSelectionAction, NSRange) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -32,6 +36,11 @@ struct StableBookPager: UIViewControllerRepresentable {
         controller.delegate = context.coordinator
         context.coordinator.controller = controller
         context.coordinator.showInitialPage()
+        if selectionDocument != nil {
+            let selection = BookSelectionController(host: context.coordinator, view: controller.view)
+            context.coordinator.selectionController = selection
+            for page in context.coordinator.cached.values { selection.configure(page) }
+        }
         return controller
     }
 
@@ -45,6 +54,7 @@ struct StableBookPager: UIViewControllerRepresentable {
         controller.delegate = nil
         controller.dataSource = nil
         coordinator.controller = nil
+        coordinator.selectionController?.invalidate()
     }
 
     final class Page: UIViewController {
@@ -78,6 +88,7 @@ struct StableBookPager: UIViewControllerRepresentable {
         private(set) var visible = 0
         private(set) var transitioning = false
         private var interactive = false
+        var selectionController: BookSelectionController?
 
         init(_ parent: StableBookPager) { self.parent = parent }
 
@@ -86,6 +97,7 @@ struct StableBookPager: UIViewControllerRepresentable {
             if let page = cached[index] { return page }
             let page = Page(index: index, revision: parent.revision, content: parent.makePage(index))
             cached[index] = page
+            selectionController?.configure(page)
             return page
         }
 
@@ -97,7 +109,8 @@ struct StableBookPager: UIViewControllerRepresentable {
         }
 
         func update() {
-            guard !transitioning, let controller else { return }
+            guard !transitioning, selectionController?.isDragging != true, let controller else { return }
+            if parent.revision.following { selectionController?.clear() }
             refreshContent()
             guard parent.selection != visible, let target = page(parent.selection) else { return }
             transitioning = true
@@ -108,8 +121,23 @@ struct StableBookPager: UIViewControllerRepresentable {
                     self.visible = target.index
                     self.transitioning = false
                     self.prepareNeighbors()
+                    self.selectionController?.refresh()
                     // Coalesce audio jumps received during the animation to the latest target.
                     self.update()
+                }
+        }
+
+        func turnForSelection(to index: Int, completion: @escaping () -> Void) {
+            guard !transitioning, index != visible, let controller, let target = page(index) else { return }
+            transitioning = true
+            controller.setViewControllers([target], direction: index > visible ? .forward : .reverse,
+                animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] _ in
+                    guard let self else { return }
+                    self.visible = index
+                    self.transitioning = false
+                    self.parent.onSelection(index)
+                    self.prepareNeighbors()
+                    completion()
                 }
         }
 
@@ -157,6 +185,7 @@ struct StableBookPager: UIViewControllerRepresentable {
             parent.onSelection(visible)
             prepareNeighbors()
             refreshContent()
+            selectionController?.refresh()
         }
     }
 }

@@ -29,6 +29,13 @@
 - DECISIONS.md records the adopted server boundaries and development freshness settings. PROJECT.md adds the undeployed foundation to the repository map; shipped local/BYOK workflows remain unchanged.
 
 
+## 2026-11-01 — Selection across book pages
+
+- Add a chapter-wide selection overlay to book pages. Long press a word, then drag either handle to the left/right edge and hold briefly to continue selecting on adjacent pages, in either direction.
+- Preserve one source-character range across transitions, highlight its visible portion, and offer translation, dictionary saving and copying from a compact selection toolbar. Dictionary context and audio resolve against the entire original chapter, including every selected cue.
+- Selection pauses audio and suspends following; following again or leaving the reader clears selection. Vertical layout keeps its native selection. Handle adjustments are available to VoiceOver.
+- DECISIONS.md records global selection ownership and edge transitions; PROJECT.md includes the cross-page selection workflow.
+
 ## 2026-10-31 — Compact reader controls
 
 - Add a saved Text layout choice in ⋯: Book pages or Vertical scrolling. Both readers preserve the current document offset when switching; bottom Follow remains available in either layout.
