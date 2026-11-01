@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-11-01 — Exhaustive iOS CI shards
+
+- Replace the monolithic timed-out iOS job with one portable test build, one unit shard, four UI shards on separate runners, and an independent device Release build. Keep the required `Build and test` aggregate and require every job for successful main tagging.
+- Discover compiled XCTest identifiers, assign every method exactly once, bind the artifact to commit/Xcode/architecture, preserve file permissions with tar, and reject empty/incomplete result counts. Bound individual test duration and save per-shard diagnostics without automatic retries or omitted tests.
+- Update UI scenarios for the longer settings form, Book actions/New words and library completion counts, preserving cancellation and completion coverage after removal of older reader controls.
+- Record CI/artifact/tagging decisions in DECISIONS.md and the supported operator workflow in PROJECT.md. See docs/IOS_CI.md for reproduction and diagnostics; no deployment or manual release tag is performed.
+
 ## 2026-11-01 — Stockholm cloud deployment region
 
 - Switch cloud foundation/billing/translation and alignment assemblies, local dashboard, regional endpoint/secret validation and setup examples to `eu-north-1` (Stockholm), matching the operator's AWS profile. Reject the previous Frankfurt target and cross-region secret/API inputs before deployment.

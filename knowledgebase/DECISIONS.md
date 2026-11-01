@@ -1,5 +1,19 @@
 # Architectural and product decisions
 
+## Build-once XCTest sharding (2026-11-01)
+
+The full sequential iOS suite exceeded the 30-minute CI job limit and stale reader/settings assertions
+also failed. Split actual discovered XCTest methods across independent machines instead of merely
+increasing the monolithic timeout or weakening release gates. Build host-architecture test products
+once; freeze exhaustive unit/UI assignments and bind them to commit, Xcode build and architecture.
+Preserve executable/symlink metadata in a tar artifact and use test-without-building. Unit runs in one
+shard, UI methods round-robin over four; device Release builds independently.
+
+Retain the old `Build and test` required-check name as an always-evaluated aggregate that fails on any
+failed/skipped/cancelled prerequisite. Tagging still waits for complete main CI success. Per-test time
+limits, exact result counts and per-shard xcresults make hangs/coverage gaps visible; do not retry or
+quarantine failures automatically. Keep local `scripts/test.sh` and add the portable CI helper/runbook.
+
 ## Stockholm deployment target (2026-11-01)
 
 The operator confirms `eu-north-1` (Stockholm) as the target for this account; this supersedes the
