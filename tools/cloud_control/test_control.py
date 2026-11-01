@@ -178,6 +178,8 @@ class ControlTests(unittest.TestCase):
                 return 202,value,1
             if '/by-key/' in path:
                 item=submitted.get(path.rsplit('/',1)[-1]);return (200,item,1) if item else (404,{},1)
+            if path.startswith('/v1/requests/'):
+                return 200,submitted[path.rsplit('/',1)[-1]],1
             raise AssertionError(path)
         report=run(config,SNAPSHOT,'inference',call=call,checkpoint=lambda r:records.append(copy.deepcopy(r)))
         self.assertEqual(report['state'],'passed');self.assertEqual(report['coverage'],'inference')

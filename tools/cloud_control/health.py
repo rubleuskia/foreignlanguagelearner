@@ -119,10 +119,14 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
                     if code != 200: raise ControlError('Polling failed')
                     item['state'] = value['state']; save()
                 if value['state'] != 'succeeded': raise ControlError('No successful result')
+                code, value, _ = call(base, '/v1/requests/' + item['request_id'], token=token)
+                if code != 200 or value.get('request_id') != item['request_id'] or value.get('state') != 'succeeded':
+                    raise ControlError('Durable result retrieval failed')
                 validate_output(kind, value['result'], payload)
                 # Same POST/key must recover the same success without reserving/invoking again.
                 code, again, _ = call(base, path, 'POST', payload, token, item['key'])
-                if code != 202 or again.get('request_id') != item['request_id'] or again.get('state') != 'succeeded':
+                if (code != 202 or again.get('request_id') != item['request_id'] or again.get('state') != 'succeeded'
+                        or again.get('result') != value['result']):
                     raise ControlError('Idempotency failed')
                 report['cases'].append({'name': f'{kind}: результат, схема и повтор ключа', 'state': 'passed'})
             except Exception:

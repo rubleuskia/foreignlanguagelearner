@@ -245,8 +245,16 @@ class Jobs:
             '--outputs-file', str(self.directory / (key + '.outputs.json')),
             '--tags', f"ControlReleaseTag={plan['tag']}", '--tags', f"ControlRevision={plan['sha']}",
             '--tags', f'ControlOperation={key}'], cwd=infra, env=self.environment(config), timeout=3600)
-        after = aws.snapshot()
-        self.update(key, deployed=True, after=after)
-        report = health.run(config, after, checkpoint=lambda r: self.update(key, report=r))
-        self.update(key, state='passed' if report['state'] == 'passed' else 'warning',
-                    warning=None if report['state'] == 'passed' else 'Версия развёрнута, но проверки неполны или не прошли. См. отчёт.')
+        self.update(key, deployed=True)
+        try:
+            after = aws.snapshot()
+            self.update(key, after=after)
+            report = health.run(config, after, checkpoint=lambda r: self.update(key, report=r))
+            marked = all(s['tags'].get('ControlRevision') == plan['sha'] and s['tags'].get('ControlReleaseTag') == plan['tag']
+                         for s in after if s['name'] in expected_stacks(config))
+            passed = report['state'] == 'passed' and marked
+            self.update(key, state='passed' if passed else 'warning', warning=None if passed else
+                'CDK завершил деплой, но проверки неполны/не прошли или метки версии ещё не подтверждены. Проверьте AWS и отчёт.')
+        except Exception as error:
+            detail = str(error) if isinstance(error, ControlError) else clean_error(error)
+            self.update(key, state='warning', warning='CDK завершил деплой. Итоговые проверки недоступны: ' + detail)

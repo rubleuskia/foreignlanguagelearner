@@ -6,7 +6,7 @@
 - Tag successful main push CI runs as immutable annotated `backend-<CI run number>-<short SHA>` releases through a separate post-CI workflow. Failed/PR/publishing runs cannot tag; no automatic deployment follows.
 - Build exact tagged source into a single-use assembly; enforce account/region, successful main CI, baseline/file/config freshness, serialized operations and explicit target confirmation. Rollback deploys an old code tag with reviewed current configuration, without restoring data.
 - Add real production smoke/authenticated/opt-in inference suites. Missing tokens are skipped coverage; UUIDs persist before submission and lost responses recover without automatic retries. No live AWS deployment, prod probe or paid call was performed during implementation.
-- Validation: 20 isolated control-panel tests, JavaScript/Python/shell checks and browser QA pass; no AWS deployment or paid probes were run.
+- Validation: 20 isolated control-panel tests, JavaScript/Python/shell checks and browser QA pass. After merging current main, 272 iOS unit tests and two selection/audio UI scenarios pass. No AWS deployment or paid probes were run.
 - DECISIONS.md records local control/deployment/tag choices; PROJECT.md adds the operator workflow. Setup and acceptance limits are in docs/CLOUD_CONTROL.md.
 
 ## 2026-11-01 — Complete undeployed paid-cloud workflows
