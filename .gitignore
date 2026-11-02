@@ -87,3 +87,6 @@ App/Configuration/CloudConfiguration.plist
 
 # Local AWS control panel configuration, prepared releases, logs and credentials
 .cloud-control/
+
+# Local terminal session recordings
+/typescript

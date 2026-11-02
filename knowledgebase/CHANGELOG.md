@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-11-02 — AWS Agent Toolkit setup
+
+- Add AWS new-experience guidance for Codex, Claude Code, Cursor and Gemini CLI while preserving existing project instructions. The selected project Region is `eu-north-1`; local toolkit connections use the `default` CLI profile and the toolkit service in `us-east-1`.
+- Point Claude/Gemini/Cursor to the existing AGENTS.md contribution rules; keep AWS-specific blocks consistent. Ignore the local `typescript` terminal recording without publishing or deleting it.
+- This configures development tools only; no application resources are deployed. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md are unchanged.
+
 ## 2026-11-02 — Hosted XCTest capacity and timing fixes
 
 - Split all 59 PR-only UI methods into eight 7–8-case groups instead of four 14–15-case groups, with a 25-minute per-job budget for boot, Xcode launch, tests and diagnostics. The previous hosted ui-3 run was cancelled while its last scenario was still executing; no case is omitted or retried automatically.
