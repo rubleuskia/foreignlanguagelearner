@@ -12,6 +12,10 @@ no test methods. Do not retry actual tests or ignore unknown errors/disabled cas
 diagnostics and invalidate stale plans so failed discovery cannot reuse old coverage. Keep explicitly
 selected user simulators intact and retain the full CI gate for verified tags.
 
+For progress-persistence UI scenarios, use the exact +10-second transport action before asserting
+a saved timestamp. XCTest normalized slider drags are approximate (hosted evidence: 11.182 seconds
+after a 0.5 drag); that approximation must not be mistaken for a persistence failure.
+
 ## Build-once XCTest sharding (2026-11-01)
 
 The full sequential iOS suite exceeded the 30-minute CI job limit and stale reader/settings assertions

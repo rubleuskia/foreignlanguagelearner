@@ -94,15 +94,18 @@ final class ReadingVocabularyFlowTests: XCTestCase {
     }
 
     @MainActor private func verifyBackAndReopenPreservesProgress(legacy: Bool) {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture"]
         if legacy { app.launchArguments.append("--legacy-reader-fixture") }
         app.launch()
         let story = app.staticTexts["Reading vocabulary story"].firstMatch
         XCTAssertTrue(story.waitForExistence(timeout: 10)); openReader(app)
-        let slider = app.sliders.firstMatch
-        XCTAssertTrue(slider.waitForExistence(timeout: 10))
-        slider.adjust(toNormalizedSliderPosition: 0.5)
+        // A normalized slider drag is approximate and can land either side of ten seconds.
+        // Use the exact transport action so this test measures persistence, not drag precision.
+        let forward = app.buttons["Forward 10 seconds"]
+        XCTAssertTrue(forward.waitForExistence(timeout: 10))
+        forward.tap()
         XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(story.waitForExistence(timeout: 5)); openReader(app)
