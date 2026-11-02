@@ -11,6 +11,19 @@ concurrency:
   group: ios-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    name: Select UI coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_ui: ${{ steps.scope.outputs.run_ui }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check iOS inputs in the PR merge-base diff
+        id: scope
+        run: python3 scripts/ci_changes.py
   alignment-backend:
     name: Cloud backend contracts
     runs-on: ubuntu-24.04
@@ -47,6 +60,7 @@ jobs:
         run: npm ci && npm test
   ios-build:
     name: Build iOS test products
+    needs: changes
     runs-on: macos-26-intel
     timeout-minutes: 25
     outputs:
@@ -62,7 +76,7 @@ jobs:
       - name: Boot isolated simulators and enumerate all tests
         id: plan
         env:
-          RUN_UI_TESTS: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+          RUN_UI_TESTS: ${{ needs.changes.outputs.run_ui }}
         run: |
           if [[ "$RUN_UI_TESTS" == "true" ]]; then
             python3 scripts/ci_ios.py plan
@@ -151,7 +165,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   test:
-    # Require every event-selected shard: PRs to main include UI; other events include only unit.
+    # Require every selected shard; only PRs into main touching iOS inputs include UI.
     name: Build and test
     if: always()
     needs: [ios-build, ios-tests, ios-release]

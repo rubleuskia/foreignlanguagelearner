@@ -5,20 +5,32 @@ then built device Release. Run 41345712143 reached its limit while still executi
 Release never started. Logs also exposed stale settings/reader assertions, so increasing the
 deadline alone would not produce a successful release.
 
-UI tests run **only on `pull_request` events whose base branch is `main`**. Pushes to `main`
+UI tests run **only on `pull_request` events whose base branch is `main` and whose diff touches iOS inputs**. Pushes to `main`
 (including merges that produce release tags), manual runs and reusable publishing runs keep backend
 contracts, all unit tests and device Release compilation, without UI discovery or execution.
 
 | Event | Unit tests | UI tests | Device Release / backend |
 | --- | --- | --- | --- |
-| PR into `main` | All | All eight shards | Required |
+| PR into `main`, iOS inputs changed | All | All eight shards | Required |
+| PR into `main`, docs/backend/tooling only | All | Not scheduled | Required |
 | Push/merge into `main` | All | Not scheduled | Required |
 | Other PR, manual or reusable run | All | Not scheduled | Required |
 
+`Select UI coverage` reads the PR event's base/head commit SHAs and compares head against their
+Git merge base. iOS inputs are `App/`, `Tests/UI/`, `.swiftpm/`, the app's Xcode project/workspace,
+`project.yml`, `Package.swift`, `Package.resolved` and `scripts/bootstrap.sh`. These cover app code,
+resources, localizations, build/dependency configuration and UI scenarios. Documentation, backend,
+infrastructure, agent rules, CI tooling and unit-only changes do not select UI. Renames consider both
+removed and added paths, including moving a file out of App. A missing/invalid diff fails CI instead
+of silently omitting UI. Full Git history avoids file-list pagination limits and handles fork PRs.
+
 The `CI` workflow has independent jobs:
 
+- **Select UI coverage** computes the event/path decision before the test plan. Failure blocks the
+  producer and therefore the aggregate; it cannot become a successful skip.
+
 - **Build iOS test products** builds the host architecture once, enumerates actual XCTest methods
-  and packages Products plus a frozen test plan. Outside PRs into main, `plan --unit-only`
+  and packages Products plus a frozen test plan. When UI is not selected, `plan --unit-only`
   enumerates only the unit bundle; test products still compile together. Its 25-minute bound covers compilation/enumeration.
 - **iOS tests (unit/ui-1…ui-8)** restore that artifact and use `test-without-building` on separate
   macOS machines. All unit cases run in one shard; sorted UI methods are distributed round-robin
@@ -29,7 +41,7 @@ The `CI` workflow has independent jobs:
   fail the gate. UI shards are absent from the main matrix, not accepted as failed/skipped prerequisites.
 - Backend checks remain independent and required for overall workflow success.
 
-Tagging still requires complete successful **main push CI**, including backend, unit and Release jobs. UI is checked on PRs into main and is not repeated
+Tagging still requires complete successful **main push CI**, including backend, unit and Release jobs. UI is checked on iOS-changing PRs into main and is not repeated
 after merge. There is no manual tag bypass or backend-only success path. Total wall time also depends on available runners;
 this change does not promise a tag within ten minutes. Historical successful monolithic runs were
 already around 23–25 minutes before the latest tests were added.

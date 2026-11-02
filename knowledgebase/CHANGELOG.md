@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-11-02 — UI tests only for iOS-changing PRs
+
+- Select UI discovery/execution only for PRs into main whose merge-base diff changes App code/resources, UI scenarios, project/dependency inputs or the iOS bootstrap. Documentation, backend, agent setup, CI tooling and unit-only PRs keep unit/backend/Release checks without scheduling UI groups; this includes the Toolkit PR.
+- Resolve scope from full Git history with both sides of renames. Invalid/missing history blocks CI instead of producing a false successful UI omission. Preserve the strict aggregate and verified-main tag gate.
+- Validation: 23 CI-helper/scope tests and workflow lint pass, including real Git merge-base and rename cases. DECISIONS.md and PROJECT.md record the changed coverage policy; CI/operator runbooks are updated. No deployment or manual tag.
+
 ## 2026-11-02 — AWS Agent Toolkit setup
 
 - Add AWS new-experience guidance for Codex, Claude Code, Cursor and Gemini CLI while preserving existing project instructions. The selected project Region is `eu-north-1`; local toolkit connections use the `default` CLI profile and the toolkit service in `us-east-1`.
