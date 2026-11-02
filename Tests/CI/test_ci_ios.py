@@ -1,11 +1,13 @@
 from contextlib import nullcontext
 import json
+import plistlib
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 from scripts.ci_ios import (DiscoveryBootstrapError, discover_target, make_plan,
-                            plan_tests, prepared_simulator, target_enumeration, validate_shard, xctestrun, UI_TARGET)
+                            plan_tests, prepared_simulator, target_enumeration, validate_compiled_targets,
+                            validate_shard, xctestrun, UI_TARGET)
 
 
 def enumeration(unit=5, ui=59):
@@ -58,6 +60,19 @@ class TestPlanning(unittest.TestCase):
             (root/'two.xctestrun').touch()
             with self.assertRaises(ValueError):xctestrun(root)
 
+    def test_target_filter_cannot_hide_a_new_compiled_test_bundle(self):
+        targets=[{'BlueprintName':name,'TestBundlePath':'fixture.xctest'} for name in
+                 ['ForeignLanguageLearnerTests','ForeignLanguageLearnerUITests']]
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'fixture.xctestrun'
+            for version in [1,2]:
+                def write(items):
+                    value={t['BlueprintName']:t for t in items} if version==1 else {'TestConfigurations':[{'TestTargets':items}]}
+                    path.write_bytes(plistlib.dumps(value))
+                write(targets);validate_compiled_targets(path)
+                write(targets+[{'BlueprintName':'NewTests','TestBundlePath':'new.xctest'}])
+                with self.assertRaises(ValueError):validate_compiled_targets(path)
+
 
 class DiscoveryTests(unittest.TestCase):
     bootstrap = 'Runner encountered an error. Early unexpected exit. Underlying Error: Lost connection to testmanagerd'
@@ -95,6 +110,7 @@ class DiscoveryTests(unittest.TestCase):
             root=Path(folder);(root/'build').mkdir()
             plan=root/'build/test-shards.json';plan.write_text('{"stale":true}')
             with patch('scripts.ci_ios.ROOT',root),patch('scripts.ci_ios.xctestrun',return_value=Path('fixture')), \
+                 patch('scripts.ci_ios.validate_compiled_targets'), \
                  patch('scripts.ci_ios.discover_target',side_effect=ValueError('discovery failed')):
                 with self.assertRaises(ValueError):plan_tests(root)
             self.assertFalse(plan.exists())

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import json
 import os
 import platform
+import plistlib
 from pathlib import Path
 import re
 import subprocess
@@ -60,6 +61,17 @@ def xctestrun(products):
     if len(files) != 1:
         raise ValueError('Expected one .xctestrun; use a clean build directory after changing Xcode')
     return files[0]
+
+
+def validate_compiled_targets(run_file):
+    value = plistlib.loads(run_file.read_bytes())
+    if 'TestConfigurations' in value:
+        targets = [t for c in value['TestConfigurations'] for t in c.get('TestTargets', [])]
+    else:
+        targets = [t for t in value.values() if isinstance(t, dict) and 'TestBundlePath' in t]
+    names = {t.get('BlueprintName') for t in targets}
+    if names != {UNIT_TARGET, UI_TARGET}:
+        raise ValueError('Update CI for the compiled test targets: ' + repr(names))
 
 
 def simulator_template():
@@ -168,6 +180,7 @@ def plan_tests(derived):
     (ROOT / 'build/test-shards.json').unlink(missing_ok=True)
     (ROOT / 'build/test-enumeration.json').unlink(missing_ok=True)
     run_file = xctestrun(derived / 'Build/Products')
+    validate_compiled_targets(run_file)
     enumeration = {'errors': [], 'values': []}
     for target in [UI_TARGET, UNIT_TARGET]:
         enumeration['values'].extend(discover_target(run_file, target, ROOT / 'build')['values'])
