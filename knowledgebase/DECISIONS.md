@@ -1,5 +1,60 @@
 # Architectural and product decisions
 
+## Document-picker regression scope (2026-11-02)
+
+Identify the system file dialog's cancellation action through the navigation bar containing Cancel
+and More, distinguishing it from covered import forms without depending on a Browse-only internal
+container identifier. Hosted snapshots show Recents and Browse use different container hierarchies.
+Exercise both tabs explicitly in the media/subtitle regression and retain opening, cancellation and
+return-to-form assertions. This changes no CI event policy or application import behavior.
+
+## UI tests before merge, unit/Release checks after merge (2026-11-02)
+
+At the operator's request, UI tests run only for pull requests targeting main. This supersedes the
+previous requirement to rerun the UI suite in main push CI before creating a release tag. Main push,
+manual and reusable workflows still require backend contracts, all unit tests and device Release.
+
+Select the matrix during planning: PRs into main discover unit/UI bundles and assign every method;
+other events use explicit unit-only discovery and produce only the unit shard. Do not boot the UI
+runner merely to enumerate cases on main. The same strict aggregate requires every selected job to
+succeed, preserving failure/cancellation handling and the existing successful-main-push tag guard.
+The UI test products may still compile with the shared build. No manual tags or automatic deployments.
+
+## Isolated simulator discovery (2026-11-02)
+
+Observed on GitHub: Xcode's enumeration command exited zero after testmanagerd lost the UI runner,
+returning unit methods and a UI target placeholder. Reject partial discovery regardless of exit code.
+Boot a fresh owned simulator to readiness for each separately enumerated target and execution shard.
+Allow up to 600 seconds for first-boot system migration, separately from XCTest discovery. A readiness
+timeout fails directly, since a new device repeats migration. Retry only an XCTest discovery
+infrastructure bootstrap loss/timeout after readiness once on a fresh device; this phase runs
+no test methods. Do not retry actual tests or ignore unknown errors/disabled cases. Preserve per-attempt
+diagnostics and invalidate stale plans so failed discovery cannot reuse old coverage. Keep explicitly
+selected user simulators intact and retain the full CI gate for verified tags.
+
+For progress-persistence UI scenarios, use the exact +10-second transport action before asserting
+a saved timestamp. XCTest normalized slider drags are approximate (hosted evidence: 11.182 seconds
+after a 0.5 drag); that approximation must not be mistaken for a persistence failure.
+
+Legacy media/transcript import uses one form-level fileImporter with explicit selected file kind,
+matching the main book importer, rather than competing presentation modifiers on child buttons.
+The UI regression opens and cancels both choices in one form. Observe asynchronous UI state after
+deleting dictionary entries before asserting disappearance, empty-section text and updated totals.
+
+## Build-once XCTest sharding (2026-11-01)
+
+The full sequential iOS suite exceeded the 30-minute CI job limit and stale reader/settings assertions
+also failed. Split actual discovered XCTest methods across independent machines instead of merely
+increasing the monolithic timeout or weakening release gates. Build host-architecture test products
+once; freeze exhaustive unit/UI assignments and bind them to commit, Xcode build and architecture.
+Preserve executable/symlink metadata in a tar artifact and use test-without-building. Unit runs in one
+shard, UI methods round-robin over four; device Release builds independently.
+
+Retain the old `Build and test` required-check name as an always-evaluated aggregate that fails on any
+failed/skipped/cancelled prerequisite. Tagging still waits for complete main CI success. Per-test time
+limits, exact result counts and per-shard xcresults make hangs/coverage gaps visible; do not retry or
+quarantine failures automatically. Keep local `scripts/test.sh` and add the portable CI helper/runbook.
+
 ## Stockholm deployment target (2026-11-01)
 
 The operator confirms `eu-north-1` (Stockholm) as the target for this account; this supersedes the

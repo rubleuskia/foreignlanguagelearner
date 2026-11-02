@@ -3,13 +3,14 @@ import SwiftData
 import UniformTypeIdentifiers
 
 struct ImportItemView: View {
+    private enum FileChoice { case media, transcript }
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var media: URL?
     @State private var transcript: URL?
-    @State private var pickingMedia = false
-    @State private var pickingTranscript = false
+    @State private var fileChoice: FileChoice = .media
+    @State private var pickingFile = false
     @State private var importing = false
     @State private var errorMessage: String?
     @State private var splitIntoParts = false
@@ -26,18 +27,16 @@ struct ImportItemView: View {
         NavigationStack {
             Form {
                 Section("Media") {
-                    Button(media?.lastPathComponent ?? AppLanguage.text("Choose audio or video")) { pickingMedia = true }
+                    Button(media?.lastPathComponent ?? AppLanguage.text("Choose audio or video")) {
+                        fileChoice = .media; pickingFile = true
+                    }
                         .accessibilityIdentifier("import.media")
-                        .fileImporter(isPresented: $pickingMedia, allowedContentTypes: [.audio, .movie]) { result in
-                            switch result { case .success(let url): media = url; case .failure(let error): errorMessage = error.localizedDescription }
-                        }
                 }
                 Section {
-                    Button(transcript?.lastPathComponent ?? AppLanguage.text("Choose transcript")) { pickingTranscript = true }
+                    Button(transcript?.lastPathComponent ?? AppLanguage.text("Choose transcript")) {
+                        fileChoice = .transcript; pickingFile = true
+                    }
                         .accessibilityIdentifier("import.transcript")
-                        .fileImporter(isPresented: $pickingTranscript, allowedContentTypes: [.plainText, UTType(filenameExtension: "srt") ?? .data, UTType(filenameExtension: "vtt") ?? .data]) { result in
-                            switch result { case .success(let url): transcript = url; case .failure(let error): errorMessage = error.localizedDescription }
-                        }
                 } header: { Text("Transcript") } footer: {
                     Text("SRT and WebVTT support synchronized scrolling. Plain UTF-8 text supports reading and phrase selection.")
                 }
@@ -62,6 +61,15 @@ struct ImportItemView: View {
                 if let errorMessage { Text(AppLanguage.text(errorMessage)).foregroundStyle(.red) }
             }
             .nativeForm()
+            .fileImporter(isPresented: $pickingFile, allowedContentTypes: fileChoice == .media
+                ? [.audio, .movie]
+                : [.plainText, UTType(filenameExtension: "srt") ?? .data, UTType(filenameExtension: "vtt") ?? .data]) { result in
+                switch result {
+                case .success(let url):
+                    if fileChoice == .media { media = url } else { transcript = url }
+                case .failure(let error): errorMessage = error.localizedDescription
+                }
+            }
             .navigationTitle("Add material")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(importing) }

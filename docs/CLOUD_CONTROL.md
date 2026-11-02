@@ -40,7 +40,8 @@ regional templates omit the unsupported `AWS::Budgets::Budget` resource. No budg
 ## Release tags
 
 The separate `Tag verified main` workflow runs after full `CI` success for a **push to this repository's
-main**, including backend and iOS tests. PR/fork/failed/cancelled/reusable publishing runs cannot tag.
+main**, including backend contracts, all iOS unit tests and device Release compilation. UI tests run
+only on PRs into main and are not repeated for the post-merge tag. PR/fork/failed/cancelled/reusable publishing runs cannot tag.
 The annotated immutable name is `backend-<CI run number>-<12-char SHA>`. It records the exact tested
 main commit even when another merge arrives. Re-running accepts the identical tag and refuses to move
 one. No deployment follows tagging. The first tag appears after this change merges and main CI passes.
@@ -49,6 +50,8 @@ one. No deployment follows tagging. The first tag appears after this change merg
 each recheck annotation, SHA suffix, ancestry in current origin/main and successful matching push-CI
 head/run number via GitHub. A local branch, PR success or unverified tag cannot select production code.
 Older revisions without these verified tags are not selectable.
+The iOS checks use a shared test build, an exhaustive unit shard and four UI shards only on PRs into main; see [IOS_CI.md](IOS_CI.md).
+Tag latency depends on complete CI and runner availability, not a fixed ten-minute timer.
 
 ## Prepare, deploy, roll back
 

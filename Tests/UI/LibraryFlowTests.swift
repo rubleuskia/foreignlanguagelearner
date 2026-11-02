@@ -53,7 +53,9 @@ final class LibraryFlowTests: XCTestCase {
         app.launch()
         app.buttons["library.settings"].tap()
         XCTAssertFalse(app.textFields["settings.cooldown.level.1"].exists)
-        XCTAssertTrue(app.secureTextFields["OpenAI API key"].exists)
+        let key = app.secureTextFields["OpenAI API key"]
+        for _ in 0..<6 where !key.exists { app.swipeUp() }
+        XCTAssertTrue(key.waitForExistence(timeout: 5))
         app.navigationBars["Settings"].buttons.firstMatch.tap()
         app.tabBars.buttons["Practice"].tap()
         app.buttons["practice.settings"].tap()
@@ -84,17 +86,29 @@ final class LibraryFlowTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
+        app.launch()
+        app.buttons["library.upload"].tap()
+        app.buttons["Audio or video with SRT / VTT subtitles"].tap()
         // Opening media first catches the competing-fileImporter regression.
-        for identifier in ["import.media", "import.transcript"] {
-            app.launch()
-            app.buttons["library.upload"].tap()
-            app.buttons["Audio or video with SRT / VTT subtitles"].tap()
+        for (identifier, tab) in [("import.media", "Recents"), ("import.transcript", "Browse")] {
             let button = app.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
             button.tap()
             XCTAssertTrue(app.buttons["Browse"].firstMatch.waitForExistence(timeout: 20),
                           "The document picker should open for \(identifier)")
-            app.terminate()
+            // Exercise both layouts: Recents has no "Browse View (Picker)" container.
+            app.buttons[tab].firstMatch.tap()
+            // Covered forms also have Cancel; only the document bar has Cancel and More.
+            let documentBar = app.navigationBars.containing(.button, identifier: "Cancel")
+                .containing(.button, identifier: "More").firstMatch
+            XCTAssertTrue(documentBar.waitForExistence(timeout: 5))
+            let cancel = documentBar.buttons["Cancel"].firstMatch
+            XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+            cancel.tap()
+            let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)
+            XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 10), .completed)
         }
     }
 
@@ -264,9 +278,10 @@ final class LibraryFlowTests: XCTestCase {
         }
         learnt.swipeLeft()
         app.buttons["Delete"].tap()
-        XCTAssertFalse(learnt.exists)
+        let deleted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: learnt)
+        XCTAssertEqual(XCTWaiter.wait(for: [deleted], timeout: 10), .completed)
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].exists)
-        XCTAssertTrue(app.staticTexts["No learnt phrases yet"].exists)
+        XCTAssertTrue(app.staticTexts["No learnt phrases yet"].waitForExistence(timeout: 5))
         app.swipeDown()
         XCTAssertEqual(app.staticTexts["dictionary.stats.level.4"].label.components(separatedBy: " ").first, "0")
     }

@@ -38,35 +38,133 @@ jobs:
           PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
           python -m unittest tools.cloud_control.test_control -v
+          python -m unittest discover -s Tests/CI -p 'test_*.py' -v
           python -m compileall -q backend tools/subtitle-aligner/worker tools/cloud_control
           node --check tools/cloud_control/web/app.js
           bash -n scripts/cloud-control.sh scripts/tag-verified-main.sh
       - name: CDK type and infrastructure assertions
         working-directory: infra/alignment
         run: npm ci && npm test
-  test:
-    name: Build and test
+  ios-build:
+    name: Build iOS test products
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 25
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
       - name: Install project generator
         run: brew install xcodegen
-      - name: Unit and UI tests
-        run: bash scripts/test.sh
+      - name: Compile XCTest products once
+        run: python3 scripts/ci_ios.py compile
+      - name: Boot isolated simulators and enumerate all tests
+        id: plan
+        env:
+          RUN_UI_TESTS: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        run: |
+          if [[ "$RUN_UI_TESTS" == "true" ]]; then
+            python3 scripts/ci_ios.py plan
+          else
+            python3 scripts/ci_ios.py plan --unit-only
+          fi
+      - name: Archive portable test products
+        run: python3 scripts/ci_ios.py pack
+      - name: Share portable test products
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-products
+          path: build/ios-test-products.tar.gz
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+      - name: Save frozen test plan
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-plan-${{ github.run_attempt }}
+          path: |
+            build/test-enumeration*.json
+            build/test-shards.json
+            build/Enumeration-*.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+  ios-tests:
+    name: iOS tests (${{ matrix.shard }})
+    needs: ios-build
+    runs-on: macos-26
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.ios-build.outputs.matrix) }}
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: ios-test-products
+          path: build
+      - name: Restore products with executable permissions
+        run: mkdir -p build/ci-testing && tar -xzf build/ios-test-products.tar.gz -C build/ci-testing
+      - name: Run frozen test shard without rebuilding
+        env:
+          TEST_SHARD: ${{ matrix.shard }}
+        run: python3 scripts/ci_ios.py run --shard "$TEST_SHARD"
+      - name: Save shard diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            build/*.xcresult
+            build/summary-*.json
+            build/ci-testing/test-shards.json
+          if-no-files-found: ignore
+          retention-days: 14
+  ios-release:
+    name: Compile iOS device Release
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate project
+        run: bash scripts/bootstrap.sh
       - name: Compile Release for devices
         run: >-
           xcodebuild build -project ForeignLanguageLearner.xcodeproj
           -scheme ForeignLanguageLearner -configuration Release
           -destination 'generic/platform=iOS'
           -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO
-      - name: Save test reports
+      - name: Save build diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results
-          path: build/*.xcresult
+          name: release-build-logs-${{ github.run_attempt }}
+          path: build/DerivedData/Logs/Build
           if-no-files-found: ignore
           retention-days: 14
+  test:
+    # Require every event-selected shard: PRs to main include UI; other events include only unit.
+    name: Build and test
+    if: always()
+    needs: [ios-build, ios-tests, ios-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Require every iOS build and shard to pass
+        env:
+          CI_JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['CI_JOB_RESULTS'])
+          for name, value in results.items():
+              print(name, value['result'])
+          assert all(v['result'] == 'success' for v in results.values()), 'An iOS build or test shard did not pass'
+          PY

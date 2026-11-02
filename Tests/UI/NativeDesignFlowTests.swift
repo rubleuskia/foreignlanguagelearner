@@ -43,11 +43,13 @@ final class NativeDesignFlowTests: XCTestCase {
         XCTAssertFalse(app.tabBars.buttons["Dictionary"].isHittable)
         XCTAssertTrue(app.buttons["Play"].exists)
         capture(app, "Editorial — Reader")
-        app.buttons["Reading vocabulary"].tap()
-        XCTAssertTrue(app.switches["reader.new-words"].waitForExistence(timeout: 5))
         app.buttons["reader.choose-chapter"].tap()
         XCTAssertTrue(app.buttons["reader.chapter.one"].waitForExistence(timeout: 5))
         capture(app, "Native Glass — Chapters")
+        app.buttons["Done"].tap()
+        app.buttons["book.resources"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["reader.new-words"].firstMatch.waitForExistence(timeout: 5))
+        capture(app, "Editorial — Reading options")
     }
 
     @MainActor func testPracticeAtAccessibilityTextSize() {

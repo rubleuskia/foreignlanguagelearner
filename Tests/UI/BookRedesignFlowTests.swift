@@ -107,10 +107,18 @@ final class BookRedesignFlowTests: XCTestCase {
         let transcript = app.textViews["reader.transcript"]
         XCTAssertTrue(transcript.waitForExistence(timeout: 10))
         let font = app.buttons["reader.text-size"]
-        font.tap()
-        app.buttons["Default text size"].tap()
-        font.tap()
-        app.buttons["Larger text"].tap()
+        func chooseFont(_ title: String) {
+            font.tap()
+            let action = app.buttons[title]
+            XCTAssertTrue(action.waitForExistence(timeout: 5))
+            action.tap()
+            let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: action)
+            XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        }
+        chooseFont("Default text size")
+        chooseFont("Larger text")
+        let enlarged = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "112%"), object: font)
+        XCTAssertEqual(XCTWaiter.wait(for: [enlarged], timeout: 5), .completed)
         XCTAssertEqual(font.value as? String, "112%")
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(font.waitForExistence(timeout: 5))
@@ -128,8 +136,7 @@ final class BookRedesignFlowTests: XCTestCase {
         app.buttons[fromDetails ? "book.continue" : "library.continue"].tap()
         XCTAssertTrue(font.waitForExistence(timeout: 5))
         XCTAssertEqual(font.value as? String, "112%")
-        font.tap()
-        app.buttons["Default text size"].tap()
+        chooseFont("Default text size")
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

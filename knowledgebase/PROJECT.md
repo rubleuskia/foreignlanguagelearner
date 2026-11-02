@@ -1,5 +1,14 @@
 # Foreign Language Learner
 
+## iOS CI and verified releases
+
+CI builds test products once, runs all discovered unit tests, and compiles device Release independently.
+Only PRs into main additionally run four exhaustive UI shards on separate macOS runners. Push/merge
+CI for release tagging omits UI discovery/execution while requiring backend, unit and Release checks. The existing `Build and test` aggregate and
+full-workflow success remain required for verified main release tags. Test products are bound to
+source/Xcode/architecture; per-shard reports expose failures and incomplete coverage. Local reproduction:
+`scripts/ci_ios.py`; execution/diagnostics: `docs/IOS_CI.md`.
+
 ## Local cloud operations
 
 `bash scripts/cloud-control.sh` opens a local-only production control panel at 127.0.0.1:8767. It uses

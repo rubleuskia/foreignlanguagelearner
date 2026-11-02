@@ -1,5 +1,36 @@
 # Project changelog
 
+## 2026-11-02 — Document-picker UI coverage across tabs
+
+- Fix the remaining hosted ui-3 failure: the file dialog opened in Recents, which does not expose the Browse-only internal container expected by the test. Identify the document navigation bar by its Cancel/More actions and explicitly exercise both Recents and Browse while opening/cancelling media and subtitle selection.
+- Validation: the targeted iOS regression passes locally with explicit Recents/Browse navigation and both open/cancel/return paths.
+- Preserve both picker checks and all event-selected CI coverage. The PR-only UI policy and main unit/backend/Release tagging gate remain unchanged; no project overview change or deployment is involved. DECISIONS.md records the test-selection contract.
+
+## 2026-11-02 — UI coverage on PRs into main only
+
+- Run all UI methods only for pull requests targeting main. Post-merge main CI, manual runs and reusable publishing runs discover/run all unit tests without launching UI discovery or scheduling UI shards.
+- Keep backend contracts and device Release compilation required for successful main CI and automatic verified tags. The aggregate requires every event-selected shard to pass; failures/cancellations cannot become successful skips.
+- Validation: 17 CI-helper regression tests and workflow lint pass; real local XCTest unit-only discovery produces exactly one shard containing all 273 unit tests, without UI discovery.
+- Add explicit unit-only planning/discovery coverage and update IOS_CI/CLOUD_CONTROL runbooks. DECISIONS.md records this release policy; PROJECT.md reflects the revised supported workflow. No deployment or manual tag accompanies this change.
+
+## 2026-11-02 — Reliable XCTest discovery bootstrap
+
+- Fix the failed build-once CI discovery: Xcode returned success after the UI runner lost testmanagerd, leaving only unit methods plus a UI-bundle placeholder. Keep rejecting this partial coverage.
+- Prewarm isolated fresh simulators, enumerate unit/UI bundles separately, and allow one bounded retry only for discovery bootstrap loss/timeout. Actual test methods still execute once; unknown discovery errors remain fatal. User-selected simulators are never deleted.
+- Separate compile/discovery/archive workflow steps and retain both discovery manifests and xcresults. Invalidate stale plans on failed discovery; require matching revision/toolchain before packaging.
+- Give hosted first-boot system migration a separate 600-second readiness budget: observed 180-second failures were still inside CoreLocation migration. Do not restart migration on a new device after a readiness timeout; retain retries only for XCTest discovery after readiness.
+- Make the back/reopen progress scenario seek with the exact +10-second transport action. Hosted XCTest dragged the slider to 11.182 seconds and correctly restored that position, so the hard-coded 0:10 slider expectation was flaky; preserve exact resume/reset assertions for both readers.
+- Use one stable file-import presenter for legacy media/subtitle selection and exercise opening/cancelling both choices in the same form. Hosted failure snapshots showed the form still visible without a picker. Wait for dictionary row disappearance and the empty section after deletion; the recording showed successful deletion before the stale immediate existence assertion failed.
+- Check the complete compiled test-target catalogue before target-specific filtering, so adding a new target cannot silently omit its tests from CI.
+- DECISIONS.md records the bootstrap contract; the existing PROJECT.md CI workflow/boundaries remain unchanged.
+
+## 2026-11-01 — Exhaustive iOS CI shards
+
+- Replace the monolithic timed-out iOS job with one portable test build, one unit shard, four UI shards on separate runners, and an independent device Release build. Keep the required `Build and test` aggregate and require every job for successful main tagging.
+- Discover compiled XCTest identifiers, assign every method exactly once, bind the artifact to commit/Xcode/architecture, preserve file permissions with tar, and reject empty/incomplete result counts. Bound individual test duration and save per-shard diagnostics without automatic retries or omitted tests.
+- Update UI scenarios for the longer settings form, Book actions/New words and library completion counts, preserving cancellation and completion coverage after removal of older reader controls.
+- Record CI/artifact/tagging decisions in DECISIONS.md and the supported operator workflow in PROJECT.md. See docs/IOS_CI.md for reproduction and diagnostics; no deployment or manual release tag is performed.
+
 ## 2026-11-01 — Stockholm cloud deployment region
 
 - Switch cloud foundation/billing/translation and alignment assemblies, local dashboard, regional endpoint/secret validation and setup examples to `eu-north-1` (Stockholm), matching the operator's AWS profile. Reject the previous Frankfurt target and cross-region secret/API inputs before deployment.
