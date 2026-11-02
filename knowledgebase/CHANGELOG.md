@@ -1,5 +1,13 @@
 # Project changelog
 
+## 2026-11-02 — Hosted XCTest capacity and timing fixes
+
+- Split all 59 PR-only UI methods into eight 7–8-case groups instead of four 14–15-case groups, with a 25-minute per-job budget for boot, Xcode launch, tests and diagnostics. The previous hosted ui-3 run was cancelled while its last scenario was still executing; no case is omitted or retried automatically.
+- Use matching standard macos-26-intel producer/consumer runners with 14 GB RAM for XCTest, retaining an independent device Release build. This provides resource headroom for the observed first-app launch timeout; hosted validation remains necessary and no claim of a proven memory-exhaustion cause is made.
+- Extend the screen-awake audio fixture from two to sixty seconds so natural completion cannot race intermediate pause/interruption assertions; preserve explicit near-end completion and close checks with bounded state waits. Wait for the actual chapter row before selecting it in both book and legacy reader regressions.
+- Validation: 17 CI-helper regression tests and workflow lint pass; the screen-awake integration and both book/legacy chapter-progress UI scenarios pass locally. Clean x86_64 XCTest build-for-testing succeeds; hosted execution on the new runner remains pending.
+- DECISIONS.md records the capacity/timing contract; PROJECT.md and CI/operator runbooks reflect eight PR-only UI groups. Main still requires backend, all unit tests and Release without UI discovery/execution. No deployment or manual tag.
+
 ## 2026-11-02 — Document-picker UI coverage across tabs
 
 - Fix the remaining hosted ui-3 failure: the file dialog opened in Recents, which does not expose the Browse-only internal container expected by the test. Identify the document navigation bar by its Cancel/More actions and explicitly exercise both Recents and Browse while opening/cancelling media and subtitle selection.

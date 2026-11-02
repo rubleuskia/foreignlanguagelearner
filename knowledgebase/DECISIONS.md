@@ -1,5 +1,21 @@
 # Architectural and product decisions
 
+## Hosted XCTest resource and fixture budgets (2026-11-02)
+
+Four UI groups still exhausted their 20-minute hosted job limit after cold simulator/Xcode startup;
+one first AUT launch also timed out. Split the exhaustive PR UI assignment into eight 7–8-case groups
+and budget 25 minutes per execution job, including startup and diagnostics. Standard Intel macOS
+runners provide 14 GB RAM versus the previous standard arm64 runner's 7 GB; use matching Intel
+producer/consumers with Xcode 26.6 and retain artifact architecture checks. This is resource headroom,
+not a demonstrated memory-exhaustion diagnosis or guaranteed wall-time improvement. Limited runner
+concurrency may queue groups in waves. Preserve failures and prohibit automatic actual-test retries.
+
+The screen-awake integration fixture must outlast intermediate state assertions on slow simulators;
+use sixty seconds and seek explicitly to its final 50 ms to test natural completion. Wait for chapter
+rows after opening the picker before tapping. Neither change relaxes playback/reset assertions or
+changes application behavior. UI remains PR-to-main only; main/backend/unit/Release tagging policy
+supersedes older all-UI-on-main documentation.
+
 ## Document-picker regression scope (2026-11-02)
 
 Identify the system file dialog's cancellation action through the navigation bar containing Cancel

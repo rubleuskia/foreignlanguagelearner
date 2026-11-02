@@ -50,7 +50,7 @@ one. No deployment follows tagging. The first tag appears after this change merg
 each recheck annotation, SHA suffix, ancestry in current origin/main and successful matching push-CI
 head/run number via GitHub. A local branch, PR success or unverified tag cannot select production code.
 Older revisions without these verified tags are not selectable.
-The iOS checks use a shared test build, an exhaustive unit shard and four UI shards only on PRs into main; see [IOS_CI.md](IOS_CI.md).
+The iOS checks use a shared test build, an exhaustive unit shard and eight UI shards only on PRs into main; see [IOS_CI.md](IOS_CI.md).
 Tag latency depends on complete CI and runner availability, not a fixed ten-minute timer.
 
 ## Prepare, deploy, roll back

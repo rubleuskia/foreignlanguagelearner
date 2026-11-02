@@ -32,7 +32,7 @@ class TestPlanning(unittest.TestCase):
         self.assertEqual(set(assigned),expected);self.assertEqual(len(assigned),len(expected))
         self.assertEqual(len(plan['shards']['unit']),5)
         lengths=[len(v) for k,v in plan['shards'].items() if k.startswith('ui-')]
-        self.assertEqual(sorted(lengths),[14,15,15,15])
+        self.assertEqual(sorted(lengths),[7,7,7,7,7,8,8,8])
         self.assertTrue(all(t.startswith('ForeignLanguageLearnerUITests/') for k,v in plan['shards'].items() if k!='unit' for t in v))
 
     def test_discovery_order_does_not_change_the_frozen_assignment(self):
@@ -53,7 +53,7 @@ class TestPlanning(unittest.TestCase):
 
     def test_foreign_commit_xcode_architecture_empty_and_duplicate_shards_are_rejected(self):
         plan=make_plan(enumeration(),'commit','Xcode')
-        self.assertEqual(len(validate_shard(plan,'ui-1','commit','Xcode')),15)
+        self.assertEqual(len(validate_shard(plan,'ui-1','commit','Xcode')),8)
         for modified in [{**plan,'revision':'other'},{**plan,'xcode_version':'Other Xcode'},
                          {**plan,'architecture':'different'},{**plan,'shards':{'ui-1':[]}},
                          {**plan,'shards':{'ui-1':['same','same']}}]:

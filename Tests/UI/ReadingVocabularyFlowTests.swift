@@ -111,11 +111,14 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertTrue(story.waitForExistence(timeout: 5)); openReader(app)
         XCTAssertTrue(app.staticTexts["0:10"].waitForExistence(timeout: 5), "Back must preserve the saved chapter position")
         app.buttons["reader.choose-chapter"].tap()
+        let chapter: XCUIElement
         if legacy {
-            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "reader.chapter.")).firstMatch.tap()
+            chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "reader.chapter.")).firstMatch
         } else {
-            app.buttons["reader.chapter.one"].tap()
+            chapter = app.buttons["reader.chapter.one"]
         }
+        XCTAssertTrue(chapter.waitForExistence(timeout: 10), "Chapter list must finish opening before selection")
+        chapter.tap()
         XCTAssertTrue(app.staticTexts["0:00"].waitForExistence(timeout: 5), "Explicit selection still restarts the chapter")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(story.waitForExistence(timeout: 5)); openReader(app)
