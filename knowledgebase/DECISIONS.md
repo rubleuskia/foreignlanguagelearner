@@ -1,5 +1,15 @@
 # Architectural and product decisions
 
+## Isolated simulator discovery (2026-11-02)
+
+Observed on GitHub: Xcode's enumeration command exited zero after testmanagerd lost the UI runner,
+returning unit methods and a UI target placeholder. Reject partial discovery regardless of exit code.
+Boot a fresh owned simulator to readiness for each separately enumerated target and execution shard.
+Retry only a discovery infrastructure bootstrap loss/timeout once on a fresh device; this phase runs
+no test methods. Do not retry actual tests or ignore unknown errors/disabled cases. Preserve per-attempt
+diagnostics and invalidate stale plans so failed discovery cannot reuse old coverage. Keep explicitly
+selected user simulators intact and retain the full CI gate for verified tags.
+
 ## Build-once XCTest sharding (2026-11-01)
 
 The full sequential iOS suite exceeded the 30-minute CI job limit and stale reader/settings assertions

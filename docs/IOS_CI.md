@@ -35,6 +35,17 @@ symlinks that ordinary artifact file uploads cannot preserve. A stable product a
 re-running only failed jobs while reusing the successful build from the same workflow; a producer
 re-run overwrites that artifact. Shard diagnostic artifact names include the attempt number.
 
+Each discovery target and test shard receives its own fresh simulator, with explicit `bootstatus -b`
+readiness before Xcode starts. Unit and UI discovery are separate invocations to avoid cross-bundle
+testmanagerd bootstrap interference. A user-specified SIMULATOR_ID is prewarmed but never erased/deleted.
+Owned CI devices are cleaned up afterward. Compile, discovery and packaging have separate workflow steps.
+
+Xcode can exit successfully with a partial manifest after losing testmanagerd. Such a manifest is
+rejected, including placeholder bundle identifiers. Only discovery bootstrap loss/timeout gets one
+bounded attempt on another fresh device; **actual test methods are never retried automatically**.
+Unknown discovery failures/disabled selected tests fail immediately. Both attempt manifests and
+enumeration xcresults are retained, and failed discovery invalidates the old frozen plan.
+
 Each test has an enabled default 180-second allowance and a 240-second maximum. There are no automatic
 retries or silently quarantined UI failures. Each shard writes an xcresult and JSON summary; the helper
 checks that the reported test count matches the planned methods, rejecting a successful empty/partial

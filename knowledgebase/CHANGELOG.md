@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-11-02 — Reliable XCTest discovery bootstrap
+
+- Fix the failed build-once CI discovery: Xcode returned success after the UI runner lost testmanagerd, leaving only unit methods plus a UI-bundle placeholder. Keep rejecting this partial coverage.
+- Prewarm isolated fresh simulators, enumerate unit/UI bundles separately, and allow one bounded retry only for discovery bootstrap loss/timeout. Actual test methods still execute once; unknown discovery errors remain fatal. User-selected simulators are never deleted.
+- Separate compile/discovery/archive workflow steps and retain both discovery manifests and xcresults. Invalidate stale plans on failed discovery; require matching revision/toolchain before packaging.
+- DECISIONS.md records the bootstrap contract; the existing PROJECT.md CI workflow/boundaries remain unchanged.
+
 ## 2026-11-01 — Exhaustive iOS CI shards
 
 - Replace the monolithic timed-out iOS job with one portable test build, one unit shard, four UI shards on separate runners, and an independent device Release build. Keep the required `Build and test` aggregate and require every job for successful main tagging.

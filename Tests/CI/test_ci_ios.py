@@ -1,9 +1,11 @@
-import copy
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import tempfile
 import unittest
-from scripts.ci_ios import make_plan, validate_shard, xctestrun
+from unittest.mock import patch
+from scripts.ci_ios import (DiscoveryBootstrapError, discover_target, make_plan,
+                            plan_tests, prepared_simulator, target_enumeration, validate_shard, xctestrun, UI_TARGET)
 
 
 def enumeration(unit=5, ui=59):
@@ -55,6 +57,94 @@ class TestPlanning(unittest.TestCase):
             (root/'one.xctestrun').touch();self.assertEqual(xctestrun(root).name,'one.xctestrun')
             (root/'two.xctestrun').touch()
             with self.assertRaises(ValueError):xctestrun(root)
+
+
+class DiscoveryTests(unittest.TestCase):
+    bootstrap = 'Runner encountered an error. Early unexpected exit. Underlying Error: Lost connection to testmanagerd'
+
+    def ui(self):
+        source=enumeration(unit=0)
+        source['values'][0]['disabledTests']=[{'identifier':'ForeignLanguageLearnerTests/UnitTests/testCase0()'}]
+        return source
+
+    def partial(self):
+        return {'errors':[self.bootstrap], 'values':[{'disabledTests':[], 'enabledTests':[
+            {'identifier':'ForeignLanguageLearnerTests/UnitTests/testCase0()'}, {'identifier':UI_TARGET}]}]}
+
+    def discover(self, responses):
+        calls=[]
+        def invoke(argv,**kwargs):
+            self.assertIn('-enumerate-tests',argv)
+            self.assertIn('-only-testing:'+UI_TARGET,argv)
+            path=Path(argv[argv.index('-test-enumeration-output-path')+1])
+            payload=responses[min(len(calls),len(responses)-1)]
+            calls.append(list(argv));path.write_text(json.dumps(payload))
+        with tempfile.TemporaryDirectory() as folder, \
+             patch('scripts.ci_ios.prepared_simulator', side_effect=[nullcontext('fresh-1'),nullcontext('fresh-2')]) as simulators, \
+             patch('scripts.ci_ios.command',side_effect=invoke):
+            try: result=discover_target(Path('fixture.xctestrun'),UI_TARGET,Path(folder))
+            except Exception as error:return None,error,calls,simulators.call_count
+        return result,None,calls,simulators.call_count
+
+    def test_partial_success_exit_manifest_cannot_become_a_release_plan(self):
+        with self.assertRaises(ValueError):make_plan(self.partial(),'commit','Xcode')
+        with self.assertRaises(DiscoveryBootstrapError):target_enumeration(self.partial(),UI_TARGET)
+
+    def test_failed_discovery_cannot_leave_a_previous_plan_available_for_packaging(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'build').mkdir()
+            plan=root/'build/test-shards.json';plan.write_text('{"stale":true}')
+            with patch('scripts.ci_ios.ROOT',root),patch('scripts.ci_ios.xctestrun',return_value=Path('fixture')), \
+                 patch('scripts.ci_ios.discover_target',side_effect=ValueError('discovery failed')):
+                with self.assertRaises(ValueError):plan_tests(root)
+            self.assertFalse(plan.exists())
+
+    def test_discovery_bootstrap_only_is_retried_once_on_a_fresh_device(self):
+        result,error,calls,count=self.discover([self.partial(),self.ui()])
+        self.assertIsNone(error);self.assertEqual(len(result['values'][0]['enabledTests']),59)
+        self.assertEqual(count,2);self.assertEqual(len(calls),2)
+        self.assertIn('platform=iOS Simulator,id=fresh-1',calls[0])
+        self.assertIn('platform=iOS Simulator,id=fresh-2',calls[1])
+
+    def test_repeat_bootstrap_failure_still_blocks_all_test_shards(self):
+        result,error,calls,count=self.discover([self.partial()])
+        self.assertIsNone(result);self.assertIsInstance(error,DiscoveryBootstrapError)
+        self.assertEqual(count,2);self.assertEqual(len(calls),2)
+
+    def test_non_bootstrap_errors_and_disabled_selected_methods_are_not_retried(self):
+        disabled=self.ui();disabled['values'][0]['disabledTests'].append({'identifier':UI_TARGET+'/ReaderTests/testCase0()'})
+        for response in [{'errors':['Invalid test configuration'],'values':[]},disabled,
+                         {'errors':[],'values':[{'enabledTests':[{'identifier':UI_TARGET}]}]}]:
+            result,error,calls,count=self.discover([response])
+            self.assertIsNone(result);self.assertIsInstance(error,ValueError)
+            self.assertEqual(len(calls),1);self.assertEqual(count,1)
+
+    def test_target_filter_only_excludes_other_bundle_discovered_separately(self):
+        ui=target_enumeration(self.ui(),UI_TARGET)
+        unit=enumeration(ui=0)
+        combined={'errors':[],'values':unit['values']+ui['values']}
+        plan=make_plan(combined,'commit','Xcode')
+        self.assertEqual(sum(len(t) for t in plan['shards'].values()),64)
+
+    def test_requested_device_is_prewarmed_and_never_deleted(self):
+        template={'udid':'requested','state':'Booted','name':'iPhone','deviceTypeIdentifier':'type'}
+        with patch.dict('os.environ',{'SIMULATOR_ID':'requested'}), \
+             patch('scripts.ci_ios.simulator_template',return_value=('runtime',template)), \
+             patch('scripts.ci_ios.command') as invoke, patch('scripts.ci_ios.subprocess.run') as cleanup:
+            with prepared_simulator('test') as sid:self.assertEqual(sid,'requested')
+            invoke.assert_called_once_with(['xcrun','simctl','bootstatus','requested','-b'],timeout=180)
+            cleanup.assert_not_called()
+
+    def test_owned_device_is_created_booted_ready_then_cleaned_up(self):
+        template={'udid':'template','state':'Booted','name':'iPhone','deviceTypeIdentifier':'type'}
+        with patch.dict('os.environ',{},clear=True), \
+             patch('scripts.ci_ios.simulator_template',return_value=('runtime',template)), \
+             patch('scripts.ci_ios.command',return_value='owned') as invoke, \
+             patch('scripts.ci_ios.subprocess.run') as cleanup:
+            with prepared_simulator('test') as sid:
+                self.assertEqual(sid,'owned')
+                self.assertEqual([c.args[0][2] for c in invoke.call_args_list],['create','boot','bootstatus'])
+            self.assertEqual([c.args[0][2] for c in cleanup.call_args_list],['shutdown','delete'])
 
 
 if __name__=='__main__':unittest.main()

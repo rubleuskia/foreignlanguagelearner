@@ -50,16 +50,20 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 25
     outputs:
-      matrix: ${{ steps.build.outputs.matrix }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
       - name: Install project generator
         run: brew install xcodegen
-      - name: Build once and enumerate every XCTest
-        id: build
-        run: python3 scripts/ci_ios.py build
+      - name: Compile XCTest products once
+        run: python3 scripts/ci_ios.py compile
+      - name: Boot isolated simulators and enumerate all tests
+        id: plan
+        run: python3 scripts/ci_ios.py plan
+      - name: Archive portable test products
+        run: python3 scripts/ci_ios.py pack
       - name: Share portable test products
         uses: actions/upload-artifact@v7
         with:
@@ -74,8 +78,9 @@ jobs:
         with:
           name: ios-test-plan-${{ github.run_attempt }}
           path: |
-            build/test-enumeration.json
+            build/test-enumeration*.json
             build/test-shards.json
+            build/Enumeration-*.xcresult
           if-no-files-found: ignore
           retention-days: 7
   ios-tests:
