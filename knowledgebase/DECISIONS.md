@@ -16,6 +16,11 @@ For progress-persistence UI scenarios, use the exact +10-second transport action
 a saved timestamp. XCTest normalized slider drags are approximate (hosted evidence: 11.182 seconds
 after a 0.5 drag); that approximation must not be mistaken for a persistence failure.
 
+Legacy media/transcript import uses one form-level fileImporter with explicit selected file kind,
+matching the main book importer, rather than competing presentation modifiers on child buttons.
+The UI regression opens and cancels both choices in one form. Observe asynchronous UI state after
+deleting dictionary entries before asserting disappearance, empty-section text and updated totals.
+
 ## Build-once XCTest sharding (2026-11-01)
 
 The full sequential iOS suite exceeded the 30-minute CI job limit and stale reader/settings assertions
