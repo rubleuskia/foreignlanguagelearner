@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 import json
 import plistlib
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -122,6 +123,13 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn('platform=iOS Simulator,id=fresh-1',calls[0])
         self.assertIn('platform=iOS Simulator,id=fresh-2',calls[1])
 
+    def test_simulator_preparation_timeout_is_not_restarted_from_scratch(self):
+        with tempfile.TemporaryDirectory() as folder, \
+             patch('scripts.ci_ios.prepared_simulator',side_effect=subprocess.TimeoutExpired('bootstatus',600)) as prepare:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                discover_target(Path('fixture.xctestrun'),UI_TARGET,Path(folder))
+            self.assertEqual(prepare.call_count,1)
+
     def test_repeat_bootstrap_failure_still_blocks_all_test_shards(self):
         result,error,calls,count=self.discover([self.partial()])
         self.assertIsNone(result);self.assertIsInstance(error,DiscoveryBootstrapError)
@@ -148,7 +156,7 @@ class DiscoveryTests(unittest.TestCase):
              patch('scripts.ci_ios.simulator_template',return_value=('runtime',template)), \
              patch('scripts.ci_ios.command') as invoke, patch('scripts.ci_ios.subprocess.run') as cleanup:
             with prepared_simulator('test') as sid:self.assertEqual(sid,'requested')
-            invoke.assert_called_once_with(['xcrun','simctl','bootstatus','requested','-b'],timeout=180)
+            invoke.assert_called_once_with(['xcrun','simctl','bootstatus','requested','-b'],timeout=600)
             cleanup.assert_not_called()
 
     def test_owned_device_is_created_booted_ready_then_cleaned_up(self):

@@ -5,6 +5,7 @@
 - Fix the failed build-once CI discovery: Xcode returned success after the UI runner lost testmanagerd, leaving only unit methods plus a UI-bundle placeholder. Keep rejecting this partial coverage.
 - Prewarm isolated fresh simulators, enumerate unit/UI bundles separately, and allow one bounded retry only for discovery bootstrap loss/timeout. Actual test methods still execute once; unknown discovery errors remain fatal. User-selected simulators are never deleted.
 - Separate compile/discovery/archive workflow steps and retain both discovery manifests and xcresults. Invalidate stale plans on failed discovery; require matching revision/toolchain before packaging.
+- Give hosted first-boot system migration a separate 600-second readiness budget: observed 180-second failures were still inside CoreLocation migration. Do not restart migration on a new device after a readiness timeout; retain retries only for XCTest discovery after readiness.
 - Check the complete compiled test-target catalogue before target-specific filtering, so adding a new target cannot silently omit its tests from CI.
 - DECISIONS.md records the bootstrap contract; the existing PROJECT.md CI workflow/boundaries remain unchanged.
 

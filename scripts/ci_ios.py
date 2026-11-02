@@ -101,7 +101,8 @@ def prepared_simulator(label):
         if owned or template['state'] == 'Shutdown':
             command(['xcrun', 'simctl', 'boot', sid], timeout=60)
         # An available UUID is not a ready simulator. Wait for first boot before testmanagerd starts.
-        command(['xcrun', 'simctl', 'bootstatus', sid, '-b'], timeout=180)
+        # Hosted first-boot migrations exceed three minutes; restarting repeats that work.
+        command(['xcrun', 'simctl', 'bootstatus', sid, '-b'], timeout=600)
         yield sid
     finally:
         if owned:
@@ -152,13 +153,15 @@ def discover_target(run_file, target, directory):
                         '-test-enumeration-output-path', output], timeout=240)
                 except subprocess.CalledProcessError as error:
                     failed = error
+                except subprocess.TimeoutExpired as error:
+                    raise DiscoveryBootstrapError('XCTest discovery timed out: ' + str(error)) from error
                 if not output.exists():
                     if failed: raise failed
                     raise ValueError('Xcode did not write the discovery manifest for ' + target)
                 result = target_enumeration(json.loads(output.read_text()), target)
                 if failed: raise failed
                 return result
-        except (DiscoveryBootstrapError, subprocess.TimeoutExpired) as error:
+        except DiscoveryBootstrapError as error:
             # Discovery runs no test methods. Retry only its infrastructure bootstrap on a fresh device.
             print(f'Discovery bootstrap failed for {target}, attempt {attempt}: {error}', flush=True)
             if attempt == 2: raise
