@@ -47,7 +47,7 @@ jobs:
         run: npm ci && npm test
   ios-build:
     name: Build iOS test products
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 25
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -93,8 +93,9 @@ jobs:
   ios-tests:
     name: iOS tests (${{ matrix.shard }})
     needs: ios-build
-    runs-on: macos-26
-    timeout-minutes: 20
+    # Standard Intel runners provide 14 GB RAM for XCTest (arm64 standard has 7 GB).
+    runs-on: macos-26-intel
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.ios-build.outputs.matrix) }}

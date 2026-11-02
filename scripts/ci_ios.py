@@ -16,7 +16,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 UNIT_TARGET = 'ForeignLanguageLearnerTests'
 UI_TARGET = 'ForeignLanguageLearnerUITests'
-UI_SHARDS = 4
+UI_SHARDS = 8
 
 
 def command(argv, *, capture=False, timeout=None):

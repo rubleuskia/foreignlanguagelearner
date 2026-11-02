@@ -12,7 +12,9 @@ final class ReadingVocabularyTests: XCTestCase {
     @MainActor func testPlaybackKeepsScreenAwakeAndReleasesOnPauseInterruptionAndClose() async throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "idle-timer-\(UUID()).wav")
         let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
-        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16000))
+        // Playback must not finish while a slow simulator checks pause/interruption state.
+        let duration = 60.0
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(8000 * duration)))
         buffer.frameLength = buffer.frameCapacity
         do {
             let audio = try AVAudioFile(forWriting: url, settings: format.settings)
@@ -22,7 +24,8 @@ final class ReadingVocabularyTests: XCTestCase {
         let playback = PlaybackController()
         defer { playback.close() }
         func waitForAwake(_ awake: Bool, line: UInt = #line) async throws {
-            for _ in 0..<150 {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while ContinuousClock.now < deadline {
                 if UIApplication.shared.isIdleTimerDisabled == awake { return }
                 try await Task.sleep(for: .milliseconds(20))
             }
@@ -40,8 +43,9 @@ final class ReadingVocabularyTests: XCTestCase {
         try await waitForAwake(false)
         playback.play()
         try await waitForAwake(true)
-        playback.seek(to: 1.95)
-        for _ in 0..<150 {
+        playback.seek(to: duration - 0.05)
+        let endDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while ContinuousClock.now < endDeadline {
             if !playback.wantsToPlay { break }
             try await Task.sleep(for: .milliseconds(20))
         }

@@ -11,7 +11,7 @@ contracts, all unit tests and device Release compilation, without UI discovery o
 
 | Event | Unit tests | UI tests | Device Release / backend |
 | --- | --- | --- | --- |
-| PR into `main` | All | All four shards | Required |
+| PR into `main` | All | All eight shards | Required |
 | Push/merge into `main` | All | Not scheduled | Required |
 | Other PR, manual or reusable run | All | Not scheduled | Required |
 
@@ -20,9 +20,9 @@ The `CI` workflow has independent jobs:
 - **Build iOS test products** builds the host architecture once, enumerates actual XCTest methods
   and packages Products plus a frozen test plan. Outside PRs into main, `plan --unit-only`
   enumerates only the unit bundle; test products still compile together. Its 25-minute bound covers compilation/enumeration.
-- **iOS tests (unit/ui-1…ui-4)** restore that artifact and use `test-without-building` on separate
+- **iOS tests (unit/ui-1…ui-8)** restore that artifact and use `test-without-building` on separate
   macOS machines. All unit cases run in one shard; sorted UI methods are distributed round-robin
-  across four shards, spreading the expensive library/reader classes. Each job has a 20-minute bound.
+  across eight shards, spreading the expensive library/reader classes. Each job has a 25-minute bound, including boot, Xcode launch and diagnostic upload.
 - **Compile iOS device Release** runs independently, with a 25-minute bound.
 - **Build and test** preserves the existing required-check name. It succeeds only if the build,
   every event-selected matrix shard and Release succeeded; skipped/cancelled/failed dependencies
@@ -34,11 +34,18 @@ after merge. There is no manual tag bypass or backend-only success path. Total w
 this change does not promise a tag within ten minutes. Historical successful monolithic runs were
 already around 23–25 minutes before the latest tests were added.
 
+XCTest producer/consumers use the standard `macos-26-intel` image (4 CPU, 14 GB RAM), with
+matching Xcode 26.6 and x86_64 products. Device Release remains independent on `macos-26`.
+The former four 14–15-case UI groups exhausted the 20-minute job budget on hosted runners;
+eight 7–8-case groups leave more room for boot and Xcode startup. Queued groups may execute in
+waves when GitHub runner concurrency is limited; this is not a fixed wall-time guarantee.
+No failed test or app launch is automatically retried.
+
 ## Coverage and artifact integrity
 
 `scripts/ci_ios.py` uses Xcode's flat JSON enumeration, not a hand-maintained test allowlist. It rejects
 enumeration errors, disabled/duplicate methods, new unhandled targets and empty shards. Every enabled method in the event-selected targets is assigned exactly once. The current discovery has 273 unit methods and 59 UI methods
-(15/15/15/14); new methods are assigned automatically.
+(8/8/8/7/7/7/7/7); new methods are assigned automatically.
 
 The plan binds source revision, Xcode build and architecture. A consumer rejects products from a
 different checkout/toolchain/architecture. An archive preserves executable permissions and framework
