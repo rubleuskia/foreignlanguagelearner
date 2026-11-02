@@ -18,6 +18,13 @@ def enumeration(unit=5, ui=59):
 
 
 class TestPlanning(unittest.TestCase):
+    def test_unit_only_plan_preserves_every_unit_method_and_has_no_ui_shards(self):
+        plan=make_plan(enumeration(ui=0),'commit','Xcode',include_ui=False)
+        self.assertEqual(set(plan['shards']),{'unit'})
+        self.assertEqual(len(plan['shards']['unit']),5)
+        for source in [enumeration(),enumeration(unit=0,ui=0)]:
+            with self.assertRaises(ValueError):make_plan(source,'commit','Xcode',include_ui=False)
+
     def test_all_discovered_methods_run_once_and_ui_work_is_balanced(self):
         source=enumeration();plan=make_plan(source,'commit','Xcode')
         assigned=[t for values in plan['shards'].values() for t in values]
@@ -76,6 +83,17 @@ class TestPlanning(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_unit_only_discovery_never_launches_the_ui_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'build').mkdir()
+            with patch('scripts.ci_ios.ROOT',root),patch('scripts.ci_ios.xctestrun',return_value=Path('fixture')), \
+                 patch('scripts.ci_ios.validate_compiled_targets'), \
+                 patch('scripts.ci_ios.discover_target',return_value=enumeration(ui=0)) as discover, \
+                 patch('scripts.ci_ios.command',return_value='fixture'),patch.dict('os.environ',{},clear=True):
+                plan_tests(root,include_ui=False)
+            discover.assert_called_once_with(Path('fixture'),'ForeignLanguageLearnerTests',root/'build')
+            self.assertEqual(set(json.loads((root/'build/test-shards.json').read_text())['shards']),{'unit'})
+
     bootstrap = 'Runner encountered an error. Early unexpected exit. Underlying Error: Lost connection to testmanagerd'
 
     def ui(self):

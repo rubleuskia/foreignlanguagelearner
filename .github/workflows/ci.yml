@@ -61,7 +61,14 @@ jobs:
         run: python3 scripts/ci_ios.py compile
       - name: Boot isolated simulators and enumerate all tests
         id: plan
-        run: python3 scripts/ci_ios.py plan
+        env:
+          RUN_UI_TESTS: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        run: |
+          if [[ "$RUN_UI_TESTS" == "true" ]]; then
+            python3 scripts/ci_ios.py plan
+          else
+            python3 scripts/ci_ios.py plan --unit-only
+          fi
       - name: Archive portable test products
         run: python3 scripts/ci_ios.py pack
       - name: Share portable test products
@@ -143,7 +150,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   test:
-    # Preserve the existing required-check name and fail if any prerequisite is skipped/cancelled.
+    # Require every event-selected shard: PRs to main include UI; other events include only unit.
     name: Build and test
     if: always()
     needs: [ios-build, ios-tests, ios-release]

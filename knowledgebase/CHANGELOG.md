@@ -1,5 +1,12 @@
 # Project changelog
 
+## 2026-11-02 — UI coverage on PRs into main only
+
+- Run all UI methods only for pull requests targeting main. Post-merge main CI, manual runs and reusable publishing runs discover/run all unit tests without launching UI discovery or scheduling UI shards.
+- Keep backend contracts and device Release compilation required for successful main CI and automatic verified tags. The aggregate requires every event-selected shard to pass; failures/cancellations cannot become successful skips.
+- Validation: 17 CI-helper regression tests and workflow lint pass; real local XCTest unit-only discovery produces exactly one shard containing all 273 unit tests, without UI discovery.
+- Add explicit unit-only planning/discovery coverage and update IOS_CI/CLOUD_CONTROL runbooks. DECISIONS.md records this release policy; PROJECT.md reflects the revised supported workflow. No deployment or manual tag accompanies this change.
+
 ## 2026-11-02 — Reliable XCTest discovery bootstrap
 
 - Fix the failed build-once CI discovery: Xcode returned success after the UI runner lost testmanagerd, leaving only unit methods plus a UI-bundle placeholder. Keep rejecting this partial coverage.

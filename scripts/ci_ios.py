@@ -26,7 +26,7 @@ def command(argv, *, capture=False, timeout=None):
     return result.stdout.strip() if capture else None
 
 
-def make_plan(enumeration, revision, xcode_version):
+def make_plan(enumeration, revision, xcode_version, *, include_ui=True):
     if enumeration.get('errors') or not enumeration.get('values'):
         raise ValueError('Xcode could not enumerate the complete test suite: ' +
                          json.dumps(enumeration.get('errors', []), ensure_ascii=False))
@@ -41,14 +41,16 @@ def make_plan(enumeration, revision, xcode_version):
             identifiers.append(identifier)
     if len(identifiers) != len(set(identifiers)):
         raise ValueError('Duplicate test identifiers/configurations require explicit handling')
-    if {t.split('/')[0] for t in identifiers} != {UNIT_TARGET, UI_TARGET}:
-        raise ValueError('Expected nonempty unit/UI targets; update CI for new targets')
+    expected_targets = {UNIT_TARGET, UI_TARGET} if include_ui else {UNIT_TARGET}
+    if {t.split('/')[0] for t in identifiers} != expected_targets:
+        raise ValueError('Expected nonempty selected targets; update CI for new targets')
     ui = sorted(t for t in identifiers if t.startswith(UI_TARGET + '/'))
-    if len(ui) < UI_SHARDS:
+    if include_ui and len(ui) < UI_SHARDS:
         raise ValueError('Not enough UI tests for nonempty shards')
     shards = {'unit': sorted(t for t in identifiers if t.startswith(UNIT_TARGET + '/'))}
     # Round-robin by method spreads the expensive library/reader classes across machines.
-    shards.update({f'ui-{n+1}': ui[n::UI_SHARDS] for n in range(UI_SHARDS)})
+    if include_ui:
+        shards.update({f'ui-{n+1}': ui[n::UI_SHARDS] for n in range(UI_SHARDS)})
     assigned = [t for tests in shards.values() for t in tests]
     if len(assigned) != len(identifiers) or set(assigned) != set(identifiers):
         raise ValueError('CI plan must cover every discovered test exactly once')
@@ -179,17 +181,17 @@ def compile_products(derived):
              'CODE_SIGNING_ALLOWED=NO'])
 
 
-def plan_tests(derived):
+def plan_tests(derived, *, include_ui=True):
     (ROOT / 'build/test-shards.json').unlink(missing_ok=True)
     (ROOT / 'build/test-enumeration.json').unlink(missing_ok=True)
     run_file = xctestrun(derived / 'Build/Products')
     validate_compiled_targets(run_file)
     enumeration = {'errors': [], 'values': []}
-    for target in [UI_TARGET, UNIT_TARGET]:
+    for target in ([UI_TARGET, UNIT_TARGET] if include_ui else [UNIT_TARGET]):
         enumeration['values'].extend(discover_target(run_file, target, ROOT / 'build')['values'])
     (ROOT / 'build/test-enumeration.json').write_text(json.dumps(enumeration, indent=2) + '\n')
     plan = make_plan(enumeration, command(['git', 'rev-parse', 'HEAD'], capture=True),
-                     command(['xcodebuild', '-version'], capture=True))
+                     command(['xcodebuild', '-version'], capture=True), include_ui=include_ui)
     plan_file = ROOT / 'build/test-shards.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     matrix = {'include': [{'shard': name} for name in plan['shards']]}
@@ -253,11 +255,12 @@ def main():
     parser.add_argument('--derived-data', type=Path, default=ROOT / 'build/DerivedData')
     parser.add_argument('--bundle', type=Path, default=ROOT / 'build/ci-testing')
     parser.add_argument('--shard')
+    parser.add_argument('--unit-only', action='store_true', help='Discover and plan unit tests without launching UI discovery')
     args = parser.parse_args()
     (ROOT / 'build').mkdir(exist_ok=True)
     try:
         if args.action in {'compile', 'build'}: compile_products(args.derived_data.resolve())
-        if args.action in {'plan', 'build'}: plan_tests(args.derived_data.resolve())
+        if args.action in {'plan', 'build'}: plan_tests(args.derived_data.resolve(), include_ui=not args.unit_only)
         if args.action in {'pack', 'build'}: package_products(args.derived_data.resolve())
         if args.action == 'run': run_shard(args.bundle.resolve(), args.shard)
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:

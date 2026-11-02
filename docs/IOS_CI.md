@@ -5,28 +5,39 @@ then built device Release. Run 41345712143 reached its limit while still executi
 Release never started. Logs also exposed stale settings/reader assertions, so increasing the
 deadline alone would not produce a successful release.
 
-The `CI` workflow now has independent jobs:
+UI tests run **only on `pull_request` events whose base branch is `main`**. Pushes to `main`
+(including merges that produce release tags), manual runs and reusable publishing runs keep backend
+contracts, all unit tests and device Release compilation, without UI discovery or execution.
+
+| Event | Unit tests | UI tests | Device Release / backend |
+| --- | --- | --- | --- |
+| PR into `main` | All | All four shards | Required |
+| Push/merge into `main` | All | Not scheduled | Required |
+| Other PR, manual or reusable run | All | Not scheduled | Required |
+
+The `CI` workflow has independent jobs:
 
 - **Build iOS test products** builds the host architecture once, enumerates actual XCTest methods
-  and packages Products plus a frozen test plan. Its 25-minute bound covers compilation/enumeration.
+  and packages Products plus a frozen test plan. Outside PRs into main, `plan --unit-only`
+  enumerates only the unit bundle; test products still compile together. Its 25-minute bound covers compilation/enumeration.
 - **iOS tests (unit/ui-1…ui-4)** restore that artifact and use `test-without-building` on separate
   macOS machines. All unit cases run in one shard; sorted UI methods are distributed round-robin
   across four shards, spreading the expensive library/reader classes. Each job has a 20-minute bound.
 - **Compile iOS device Release** runs independently, with a 25-minute bound.
 - **Build and test** preserves the existing required-check name. It succeeds only if the build,
-  every matrix shard and Release succeeded; skipped/cancelled/failed dependencies fail the gate.
+  every event-selected matrix shard and Release succeeded; skipped/cancelled/failed dependencies
+  fail the gate. UI shards are absent from the main matrix, not accepted as failed/skipped prerequisites.
 - Backend checks remain independent and required for overall workflow success.
 
-Tagging still requires complete successful **main push CI**, including all these jobs. There is no
-manual tag bypass or backend-only success path. Total wall time also depends on available runners;
+Tagging still requires complete successful **main push CI**, including backend, unit and Release jobs. UI is checked on PRs into main and is not repeated
+after merge. There is no manual tag bypass or backend-only success path. Total wall time also depends on available runners;
 this change does not promise a tag within ten minutes. Historical successful monolithic runs were
 already around 23–25 minutes before the latest tests were added.
 
 ## Coverage and artifact integrity
 
 `scripts/ci_ios.py` uses Xcode's flat JSON enumeration, not a hand-maintained test allowlist. It rejects
-enumeration errors, disabled/duplicate methods, new unhandled targets and empty shards. Every enabled
-method is assigned exactly once. The current discovery has 273 unit methods and 59 UI methods
+enumeration errors, disabled/duplicate methods, new unhandled targets and empty shards. Every enabled method in the event-selected targets is assigned exactly once. The current discovery has 273 unit methods and 59 UI methods
 (15/15/15/14); new methods are assigned automatically.
 
 The plan binds source revision, Xcode build and architecture. A consumer rejects products from a

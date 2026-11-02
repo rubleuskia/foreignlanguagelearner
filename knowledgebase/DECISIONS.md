@@ -1,5 +1,17 @@
 # Architectural and product decisions
 
+## UI tests before merge, unit/Release checks after merge (2026-11-02)
+
+At the operator's request, UI tests run only for pull requests targeting main. This supersedes the
+previous requirement to rerun the UI suite in main push CI before creating a release tag. Main push,
+manual and reusable workflows still require backend contracts, all unit tests and device Release.
+
+Select the matrix during planning: PRs into main discover unit/UI bundles and assign every method;
+other events use explicit unit-only discovery and produce only the unit shard. Do not boot the UI
+runner merely to enumerate cases on main. The same strict aggregate requires every selected job to
+succeed, preserving failure/cancellation handling and the existing successful-main-push tag guard.
+The UI test products may still compile with the shared build. No manual tags or automatic deployments.
+
 ## Isolated simulator discovery (2026-11-02)
 
 Observed on GitHub: Xcode's enumeration command exited zero after testmanagerd lost the UI runner,
