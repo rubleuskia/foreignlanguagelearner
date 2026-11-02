@@ -45,7 +45,8 @@ only on PRs into main that change iOS inputs (app/resources/project/dependencies
 not documentation/backend-only PRs, and are not repeated for the post-merge tag. PR/fork/failed/cancelled/reusable publishing runs cannot tag.
 The annotated immutable name is `backend-<CI run number>-<12-char SHA>`. It records the exact tested
 main commit even when another merge arrives. Re-running accepts the identical tag and refuses to move
-one. No deployment follows tagging. The first tag appears after this change merges and main CI passes.
+one. Main push CI is grouped per event/commit and survives newer merges; only superseded PR checks
+are automatically cancelled. No deployment follows tagging. The first tag appears after this change merges and main CI passes.
 
 **Получить теги** fetches main/release tags without forcing existing tag changes. Prepare and deploy
 each recheck annotation, SHA suffix, ancestry in current origin/main and successful matching push-CI

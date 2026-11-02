@@ -53,6 +53,13 @@ eight 7–8-case groups leave more room for boot and Xcode startup. Queued group
 waves when GitHub runner concurrency is limited; this is not a fixed wall-time guarantee.
 No failed test or app launch is automatically retried.
 
+## Release concurrency
+
+PR updates cancel obsolete checks for the same PR. Push verification is grouped by workflow, event
+and commit SHA with automatic cancellation disabled, so another main merge cannot cancel the active
+run or replace a pending run for an older SHA. Manual runs use a separate event group. Runner capacity
+may still queue jobs; verified tags are created only after each corresponding successful main push CI.
+
 ## Coverage and artifact integrity
 
 `scripts/ci_ios.py` uses Xcode's flat JSON enumeration, not a hand-maintained test allowlist. It rejects

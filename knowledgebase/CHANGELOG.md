@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-11-02 — Preserve main CI for verified tags
+
+- Give each non-PR CI revision an event/SHA-scoped concurrency group; only updated PR checks cancel their predecessors. A new main merge can no longer cancel the previous commit's in-progress or pending release-verification CI.
+- Diagnosis: the main push for 8daf14b was cancelled, followed by a skipped tag workflow; the newer 3b28773 CI was still running. Tag creation correctly requires full successful push CI, has explicit contents:write, and no repository tag rulesets were reported. Preserve the success gate and immutable/idempotent tag script; do not manually create tags.
+- Validation: workflow lint and diff checks pass. DECISIONS.md records release concurrency; PROJECT.md and CI/operator runbooks describe the per-commit verification workflow. Live tag creation remains pending successful main CI.
+
 ## 2026-11-02 — UI tests only for iOS-changing PRs
 
 - Select UI discovery/execution only for PRs into main whose merge-base diff changes App code/resources, UI scenarios, project/dependency inputs or the iOS bootstrap. Documentation, backend, agent setup, CI tooling and unit-only PRs keep unit/backend/Release checks without scheduling UI groups; this includes the Toolkit PR.

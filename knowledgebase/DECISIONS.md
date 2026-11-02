@@ -1,5 +1,14 @@
 # Architectural and product decisions
 
+## Commit-scoped release CI concurrency (2026-11-02)
+
+Main push CI must survive subsequent merges so each verified revision can receive its immutable tag.
+Use event/SHA-scoped groups for non-PR runs and cancel-in-progress only for PR updates, which retain
+a ref-scoped group. Include the event in the key so manual runs cannot displace push verification.
+Distinct main SHAs never share a group, avoiding both active cancellation and pending-run replacement.
+Runner capacity may queue jobs; a tag still requires full successful push CI. Failed/cancelled runs
+remain untagged; preserve the existing idempotent tag script and no automatic deployment behavior.
+
 ## Path-scoped UI coverage (2026-11-02)
 
 The operator narrows PR-only UI coverage to PRs targeting main that actually change iOS inputs.
