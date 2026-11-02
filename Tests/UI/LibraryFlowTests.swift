@@ -90,7 +90,7 @@ final class LibraryFlowTests: XCTestCase {
         app.buttons["library.upload"].tap()
         app.buttons["Audio or video with SRT / VTT subtitles"].tap()
         // Opening media first catches the competing-fileImporter regression.
-        for identifier in ["import.media", "import.transcript"] {
+        for (identifier, tab) in [("import.media", "Recents"), ("import.transcript", "Browse")] {
             let button = app.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)
@@ -98,10 +98,13 @@ final class LibraryFlowTests: XCTestCase {
             button.tap()
             XCTAssertTrue(app.buttons["Browse"].firstMatch.waitForExistence(timeout: 20),
                           "The document picker should open for \(identifier)")
-            // Covered import forms also have Cancel buttons; scope to the remote browser.
-            let browser = app.otherElements["Browse View (Picker)"].firstMatch
-            XCTAssertTrue(browser.waitForExistence(timeout: 5))
-            let cancel = browser.buttons["Cancel"].firstMatch
+            // Exercise both layouts: Recents has no "Browse View (Picker)" container.
+            app.buttons[tab].firstMatch.tap()
+            // Covered forms also have Cancel; only the document bar has Cancel and More.
+            let documentBar = app.navigationBars.containing(.button, identifier: "Cancel")
+                .containing(.button, identifier: "More").firstMatch
+            XCTAssertTrue(documentBar.waitForExistence(timeout: 5))
+            let cancel = documentBar.buttons["Cancel"].firstMatch
             XCTAssertTrue(cancel.waitForExistence(timeout: 5))
             cancel.tap()
             let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)

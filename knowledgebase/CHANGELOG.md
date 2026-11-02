@@ -1,5 +1,11 @@
 # Project changelog
 
+## 2026-11-02 — Document-picker UI coverage across tabs
+
+- Fix the remaining hosted ui-3 failure: the file dialog opened in Recents, which does not expose the Browse-only internal container expected by the test. Identify the document navigation bar by its Cancel/More actions and explicitly exercise both Recents and Browse while opening/cancelling media and subtitle selection.
+- Validation: the targeted iOS regression passes locally with explicit Recents/Browse navigation and both open/cancel/return paths.
+- Preserve both picker checks and all event-selected CI coverage. The PR-only UI policy and main unit/backend/Release tagging gate remain unchanged; no project overview change or deployment is involved. DECISIONS.md records the test-selection contract.
+
 ## 2026-11-02 — UI coverage on PRs into main only
 
 - Run all UI methods only for pull requests targeting main. Post-merge main CI, manual runs and reusable publishing runs discover/run all unit tests without launching UI discovery or scheduling UI shards.

@@ -1,5 +1,13 @@
 # Architectural and product decisions
 
+## Document-picker regression scope (2026-11-02)
+
+Identify the system file dialog's cancellation action through the navigation bar containing Cancel
+and More, distinguishing it from covered import forms without depending on a Browse-only internal
+container identifier. Hosted snapshots show Recents and Browse use different container hierarchies.
+Exercise both tabs explicitly in the media/subtitle regression and retain opening, cancellation and
+return-to-form assertions. This changes no CI event policy or application import behavior.
+
 ## UI tests before merge, unit/Release checks after merge (2026-11-02)
 
 At the operator's request, UI tests run only for pull requests targeting main. This supersedes the
