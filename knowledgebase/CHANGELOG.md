@@ -4,7 +4,7 @@
 
 - Restore matching macos-26 arm64 producer/consumer runners. In main CI 41528072926 the Intel simulator reached ready state, but both unit-discovery attempts exceeded 240 seconds; PR #77 UI discovery also timed out before its producer job was cancelled. More memory did not establish a working Intel path.
 - Preserve all event/path-selected coverage, eight UI groups, 25-minute execution budgets, artifact integrity and the full successful-main tag gate. No actual test is retried or skipped to bypass the failure.
-- Validation: workflow lint and diff checks pass; earlier full local arm64 execution passed all 273 unit tests. Hosted ARM revalidation remains pending. DECISIONS.md supersedes the Intel capacity trial, PROJECT.md and the CI runbook reflect restored architecture. No deployment or manual tag.
+- Validation: workflow lint and diff checks pass; earlier full local arm64 execution passed all 273 unit tests. Hosted ARM CI 41532537900 passed backend contracts, all 273 unit tests, device Release and the strict aggregate; UI was intentionally not selected for the CI-only diff. DECISIONS.md supersedes the Intel capacity trial, PROJECT.md and the CI runbook reflect restored architecture. No deployment or manual tag.
 
 ## 2026-11-02 — Preserve main CI for verified tags
 
