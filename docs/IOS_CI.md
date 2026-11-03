@@ -46,8 +46,11 @@ after merge. There is no manual tag bypass or backend-only success path. Total w
 this change does not promise a tag within ten minutes. Historical successful monolithic runs were
 already around 23–25 minutes before the latest tests were added.
 
-XCTest producer/consumers use the standard `macos-26-intel` image (4 CPU, 14 GB RAM), with
-matching Xcode 26.6 and x86_64 products. Device Release remains independent on `macos-26`.
+XCTest producer/consumers use the standard `macos-26` arm64 image with matching Xcode 26.6
+and architecture-bound products. The Intel trial booted successfully but exceeded the 240-second
+discovery deadline twice for unit tests, and UI discovery also timed out; additional memory did not
+produce a successful hosted discovery. Restore the previously working arm64 execution architecture.
+Device Release remains independent on `macos-26`.
 The former four 14–15-case UI groups exhausted the 20-minute job budget on hosted runners;
 eight 7–8-case groups leave more room for boot and Xcode startup. Queued groups may execute in
 waves when GitHub runner concurrency is limited; this is not a fixed wall-time guarantee.

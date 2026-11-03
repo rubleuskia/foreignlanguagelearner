@@ -1,5 +1,14 @@
 # Architectural and product decisions
 
+## Restore arm64 after unsuccessful Intel trial (2026-11-02)
+
+The higher-memory Intel runner booted its simulator but failed both 240-second unit-discovery
+attempts on main; UI discovery on PR #77 also timed out and the producer exhausted its job budget.
+Restore the previously working standard macos-26 arm64 producer/consumer architecture. This
+supersedes the earlier Intel-headroom decision, without claiming a proven low-level simulator cause.
+Retain eight smaller UI groups, the 25-minute execution budget, strict coverage checks and the new
+path-scoped UI policy. Failed main discovery must still block verified tags.
+
 ## Commit-scoped release CI concurrency (2026-11-02)
 
 Main push CI must survive subsequent merges so each verified revision can receive its immutable tag.

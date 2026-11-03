@@ -62,7 +62,7 @@ jobs:
   ios-build:
     name: Build iOS test products
     needs: changes
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 25
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -108,8 +108,7 @@ jobs:
   ios-tests:
     name: iOS tests (${{ matrix.shard }})
     needs: ios-build
-    # Standard Intel runners provide 14 GB RAM for XCTest (arm64 standard has 7 GB).
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 25
     strategy:
       fail-fast: false
