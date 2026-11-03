@@ -1,5 +1,28 @@
 # Architectural and product decisions
 
+## Commit-scoped release CI concurrency (2026-11-02)
+
+Main push CI must survive subsequent merges so each verified revision can receive its immutable tag.
+Use event/SHA-scoped groups for non-PR runs and cancel-in-progress only for PR updates, which retain
+a ref-scoped group. Include the event in the key so manual runs cannot displace push verification.
+Distinct main SHAs never share a group, avoiding both active cancellation and pending-run replacement.
+Runner capacity may queue jobs; a tag still requires full successful push CI. Failed/cancelled runs
+remain untagged; preserve the existing idempotent tag script and no automatic deployment behavior.
+
+## Path-scoped UI coverage (2026-11-02)
+
+The operator narrows PR-only UI coverage to PRs targeting main that actually change iOS inputs.
+App sources/resources, UI scenarios, app project/workspace/dependency configuration and bootstrap
+require all UI groups. Documentation, backend, infrastructure, agent rules, CI tooling and unit-only
+changes do not. This supersedes running UI on every PR into main; main/manual/reusable runs still
+omit UI and require backend, all unit tests and device Release.
+
+Use a dedicated selection job and a full-history merge-base Git diff of PR event base/head SHAs.
+This excludes unrelated main changes, supports forks, avoids API file-list limits and treats renames
+as removal plus addition so moves out of App still require UI. NUL-delimited paths preserve spaces
+and unusual file names. Invalid refs/history fail the selection job and the strict aggregate; do not
+silently return false on lookup errors. The existing producer emits only the selected test matrix.
+
 ## Hosted XCTest resource and fixture budgets (2026-11-02)
 
 Four UI groups still exhausted their 20-minute hosted job limit after cold simulator/Xcode startup;

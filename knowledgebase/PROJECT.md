@@ -3,10 +3,12 @@
 ## iOS CI and verified releases
 
 CI builds test products once, runs all discovered unit tests, and compiles device Release independently.
-Only PRs into main additionally run eight exhaustive UI shards on separate standard Intel macOS
-runners with 14 GB RAM; XCTest products and consumers share their architecture/toolchain. Push/merge
+Only PRs into main that change iOS app inputs or UI scenarios additionally run eight exhaustive UI shards on separate standard Intel macOS
+runners with 14 GB RAM. Documentation/backend/agent-rule/CI-tooling-only PRs omit UI discovery
+and execution; XCTest products and consumers share their architecture/toolchain. Push/merge
 CI for release tagging omits UI discovery/execution while requiring backend, unit and Release checks. The existing `Build and test` aggregate and
-full-workflow success remain required for verified main release tags. Test products are bound to
+full-workflow success remain required for verified main release tags. Main push CI is grouped by
+commit/event so subsequent merges cannot cancel its verification; only superseded PR checks are cancelled. Test products are bound to
 source/Xcode/architecture; per-shard reports expose failures and incomplete coverage. Local reproduction:
 `scripts/ci_ios.py`; execution/diagnostics: `docs/IOS_CI.md`.
 

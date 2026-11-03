@@ -1,5 +1,23 @@
 # Project changelog
 
+## 2026-11-02 — Preserve main CI for verified tags
+
+- Give each non-PR CI revision an event/SHA-scoped concurrency group; only updated PR checks cancel their predecessors. A new main merge can no longer cancel the previous commit's in-progress or pending release-verification CI.
+- Diagnosis: the main push for 8daf14b was cancelled, followed by a skipped tag workflow; the newer 3b28773 CI was still running. Tag creation correctly requires full successful push CI, has explicit contents:write, and no repository tag rulesets were reported. Preserve the success gate and immutable/idempotent tag script; do not manually create tags.
+- Validation: workflow lint and diff checks pass. DECISIONS.md records release concurrency; PROJECT.md and CI/operator runbooks describe the per-commit verification workflow. Live tag creation remains pending successful main CI.
+
+## 2026-11-02 — UI tests only for iOS-changing PRs
+
+- Select UI discovery/execution only for PRs into main whose merge-base diff changes App code/resources, UI scenarios, project/dependency inputs or the iOS bootstrap. Documentation, backend, agent setup, CI tooling and unit-only PRs keep unit/backend/Release checks without scheduling UI groups; this includes the Toolkit PR.
+- Resolve scope from full Git history with both sides of renames. Invalid/missing history blocks CI instead of producing a false successful UI omission. Preserve the strict aggregate and verified-main tag gate.
+- Validation: 23 CI-helper/scope tests and workflow lint pass, including real Git merge-base and rename cases. DECISIONS.md and PROJECT.md record the changed coverage policy; CI/operator runbooks are updated. No deployment or manual tag.
+
+## 2026-11-02 — AWS Agent Toolkit setup
+
+- Add AWS new-experience guidance for Codex, Claude Code, Cursor and Gemini CLI while preserving existing project instructions. The selected project Region is `eu-north-1`; local toolkit connections use the `default` CLI profile and the toolkit service in `us-east-1`.
+- Point Claude/Gemini/Cursor to the existing AGENTS.md contribution rules; keep AWS-specific blocks consistent. Ignore the local `typescript` terminal recording without publishing or deleting it.
+- This configures development tools only; no application resources are deployed. No architectural/product decision or project overview changed; DECISIONS.md and PROJECT.md are unchanged.
+
 ## 2026-11-02 — Hosted XCTest capacity and timing fixes
 
 - Split all 59 PR-only UI methods into eight 7–8-case groups instead of four 14–15-case groups, with a 25-minute per-job budget for boot, Xcode launch, tests and diagnostics. The previous hosted ui-3 run was cancelled while its last scenario was still executing; no case is omitted or retried automatically.
