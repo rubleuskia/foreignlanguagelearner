@@ -67,6 +67,8 @@ class Handler(BaseHTTPRequestHandler):
                 kind = 'text/javascript' if self.path.endswith('.js') else 'text/css'
                 return self.send(200, (STATIC / self.path[1:]).read_bytes(), kind + '; charset=utf-8')
             if self.path == '/api/status': return self.send(200, app.status())
+            if self.path == '/api/readiness':
+                return self.send(200, AWS(app.configuration.load()).readiness())
             if self.path == '/api/state':
                 return self.send(200, {'jobs': app.jobs.list(), 'active': app.jobs.active,
                     'tags': app.jobs.releases.list(), 'configuration': app.configuration.public()})

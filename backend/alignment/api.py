@@ -49,28 +49,32 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     global _service
     if _service is None:
         _service = build_service()
+    return handle(event, _context, _service)
+
+
+def handle(event: dict[str, Any], _context: Any, service: AlignmentService) -> dict[str, Any]:
     request = event.get("requestContext", {}).get("http", {})
     method = request.get("method", "")
     path = request.get("path", "")
     headers = {k.lower(): v for k, v in event.get("headers", {}).items()}
     authorization = headers.get("authorization")
-    job_id = event.get("pathParameters", {}).get("id")
+    job_id = (event.get("pathParameters") or {}).get("id")
     try:
         if method == "POST" and path == "/v1/alignments":
-            status, value = _service.create(_body(event), authorization, headers.get("idempotency-key"))
+            status, value = service.create(_body(event), authorization, headers.get("idempotency-key"))
             return _response(status, value)
         if not job_id:
             raise AlignmentError("NOT_FOUND", "Endpoint was not found.", 404)
         suffix = path.removeprefix(f"/v1/alignments/{job_id}")
         routes = {
-            ("POST", "/upload-urls"): lambda: _service.upload_urls(job_id, _body(event), authorization),
-            ("GET", "/upload"): lambda: _service.upload_status(job_id, authorization),
-            ("POST", "/complete-upload"): lambda: _service.complete_upload(job_id, _body(event), authorization),
-            ("POST", "/start"): lambda: _service.start(job_id, _body(event), authorization),
-            ("GET", ""): lambda: _service.status(job_id, authorization),
-            ("GET", "/result"): lambda: _service.result(job_id, authorization),
-            ("GET", "/diagnostics"): lambda: _service.diagnostics(job_id, authorization),
-            ("POST", "/cancel"): lambda: _service.cancel(job_id, _body(event), authorization),
+            ("POST", "/upload-urls"): lambda: service.upload_urls(job_id, _body(event), authorization),
+            ("GET", "/upload"): lambda: service.upload_status(job_id, authorization),
+            ("POST", "/complete-upload"): lambda: service.complete_upload(job_id, _body(event), authorization),
+            ("POST", "/start"): lambda: service.start(job_id, _body(event), authorization),
+            ("GET", ""): lambda: service.status(job_id, authorization),
+            ("GET", "/result"): lambda: service.result(job_id, authorization),
+            ("GET", "/diagnostics"): lambda: service.diagnostics(job_id, authorization),
+            ("POST", "/cancel"): lambda: service.cancel(job_id, _body(event), authorization),
         }
         action = routes.get((method, suffix))
         if not action:

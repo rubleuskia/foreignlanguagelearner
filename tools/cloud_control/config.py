@@ -14,6 +14,7 @@ CONTEXT_KEYS = {
     'appleApiSecretArn', 'openaiSecretArn', 'callbackUrl', 'loginDomainPrefix',
     'appleProducts', 'appAppleId', 'acceptTranslations', 'paidAlignment',
     'cloudComponents', 'workerRepositoryName', 'workerImageDigest',
+    'operatorUsername', 'dailyModelLimit', 'operatorAlignment',
 }
 REQUIRED_CONTEXT = {
     'appleClientId', 'appleTeamId', 'appleSignInKeyId', 'appleSignInSecretArn',
@@ -34,13 +35,15 @@ def atomic_json(path, value):
 
 def validate(value):
     allowed = {'account_id', 'region', 'profile', 'context', 'apple_roots', 'root_sha256',
-               'policy_file', 'alignment_benchmark_file', 'access_token_file'}
+               'policy_file', 'alignment_benchmark_file', 'access_token_file', 'deployment_mode'}
     if not isinstance(value, dict) or set(value) - allowed:
         raise ControlError('Неизвестные поля настройки. Секретные ключи здесь не поддерживаются.')
     if not isinstance(value.get('account_id'), str) or not re.fullmatch(r'\d{12}', value['account_id']):
         raise ControlError('Нужен 12-значный AWS account ID, не адрес электронной почты.')
     if value.get('region') != REGION:
         raise ControlError('Текущие облачные стеки поддерживают регион eu-north-1 (Стокгольм).')
+    if value.get('deployment_mode', 'subscription') not in {'operator', 'subscription'}:
+        raise ControlError('Выберите первый или второй этап развёртывания.')
     if not isinstance(value.get('profile'), str) or not re.fullmatch(r'[\w.@+-]{1,100}', value['profile']):
         raise ControlError('Укажите имя локального AWS-профиля.')
     context = value.get('context', {})
@@ -51,7 +54,7 @@ def validate(value):
         if key in context and not re.fullmatch(
                 rf"arn:aws:secretsmanager:{REGION}:{value['account_id']}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{{6}}", context[key]):
             raise ControlError(f'{key}: нужен полный ARN секрета в выбранном AWS-аккаунте, не его содержимое.')
-    for key in ['acceptTranslations', 'paidAlignment']:
+    for key in ['acceptTranslations', 'paidAlignment', 'operatorAlignment']:
         if key in context and context[key] not in {'true', 'false'}: raise ControlError(f'{key}: ожидается true или false.')
     if context.get('cloudComponents', 'all') not in {'billing', 'all'}: raise ControlError('cloudComponents: billing или all.')
     for field in ['apple_roots', 'policy_file', 'alignment_benchmark_file', 'access_token_file']:
@@ -61,6 +64,31 @@ def validate(value):
     if not isinstance(hashes, list) or any(not isinstance(h, str) or not re.fullmatch('[a-fA-F0-9]{64}', h) for h in hashes):
         raise ControlError('Отпечатки сертификатов должны быть SHA-256 в hex.')
     return value
+
+
+def is_operator(config):
+    return config.get('deployment_mode') == 'operator'
+
+
+def validate_benchmark(report, digest_value):
+    import math
+    def positive(value, maximum):
+        return type(value) in (int, float) and math.isfinite(value) and 0 < value <= maximum
+    if (not isinstance(report, dict) or report.get('workerImageDigest') != digest_value
+            or not positive(report.get('maxJobCostUsd'), 1000)):
+        raise ControlError('Отчёт замеров должен соответствовать digest образа и содержать предел стоимости.')
+    languages = report.get('languages')
+    if not isinstance(languages, dict):
+        raise ControlError('В отчёте нужен объект languages с реальными замерами.')
+    for language in ('en', 'fr', 'es', 'de', 'it', 'pl'):
+        row = languages.get(language, {})
+        if not isinstance(row, dict):
+            raise ControlError('Неверная строка замеров: ' + language)
+        cost = row.get('costUsd')
+        if (row.get('qualityAccepted') is not True or not positive(row.get('runtimeSeconds'), 13500)
+                or not positive(row.get('peakMemoryMiB'), 8192) or type(cost) not in (int, float)
+                or not math.isfinite(cost) or not 0 <= cost <= report['maxJobCostUsd']):
+            raise ControlError('Нет подтверждённых замеров качества, времени, памяти и стоимости: ' + language)
 
 
 class Configuration:
@@ -82,12 +110,30 @@ class Configuration:
 
 
 def deployment_context(config):
-    context = dict(config['context'])
+    context = dict(config.get('context', {}))
+    if is_operator(config):
+        context = {k:v for k,v in context.items() if k in {
+            'operatorUsername', 'dailyModelLimit', 'operatorAlignment', 'workerRepositoryName', 'workerImageDigest'}}
+        context.setdefault('operatorUsername', 'operator')
+        context.setdefault('dailyModelLimit', '50')
+        context.setdefault('operatorAlignment', 'true')
+        if not re.fullmatch(r'[A-Za-z0-9_.@+-]{1,64}', context['operatorUsername']):
+            raise ControlError('Логин оператора: 1–64 латинских символа, цифры или _.@+-')
+        if not re.fullmatch(r'[1-9]\d{0,3}', context['dailyModelLimit']) or int(context['dailyModelLimit']) > 1000:
+            raise ControlError('Дневной предел запросов к модели: от 1 до 1000.')
+        if context['operatorAlignment'] == 'true':
+            if not re.fullmatch(r'[a-z0-9][a-z0-9._/-]{1,254}', context.get('workerRepositoryName', '')):
+                raise ControlError('Для аудио укажите ECR-репозиторий проверенного образа обработчика.')
+            if not re.fullmatch(r'sha256:[a-f0-9]{64}', context.get('workerImageDigest', '')):
+                raise ControlError('Для аудио нужен неизменяемый digest образа sha256:…')
+            if not config.get('alignment_benchmark_file'):
+                raise ControlError('Для аудио нужен файл реальных замеров образа. Его формат описан в инструкции первого этапа.')
+        return context
     missing = REQUIRED_CONTEXT - context.keys()
     if context.get('cloudComponents') != 'billing' and not context.get('openaiSecretArn'):
         missing.add('openaiSecretArn')
     if missing:
-        raise ControlError('Для подготовки релиза заполните параметры: ' + ', '.join(sorted(missing)))
+        raise ControlError('В разделе «Настройка» → «Параметры деплоя и файлы политики» заполните параметры: ' + ', '.join(sorted(missing)))
     if not re.fullmatch(r'[1-9]\d*', context['appAppleId']):
         raise ControlError('Для prod нужен числовой appAppleId из App Store Connect.')
     if not config.get('apple_roots') or not config.get('root_sha256') or not config.get('policy_file'):
@@ -96,6 +142,9 @@ def deployment_context(config):
 
 
 def expected_stacks(config):
+    if is_operator(config):
+        return ['ForeignLanguageLearnerOperator-prod'] + (['ForeignLanguageLearnerOperatorAlignment-prod']
+            if config.get('context', {}).get('operatorAlignment', 'true') == 'true' else [])
     names = ['ForeignLanguageLearnerCloudFoundation-prod', 'ForeignLanguageLearnerCloudBilling-prod']
     if config.get('context', {}).get('cloudComponents') != 'billing':
         names.append('ForeignLanguageLearnerCloudTranslation-prod')
@@ -105,7 +154,8 @@ def expected_stacks(config):
 
 
 ALL_STACKS = ['ForeignLanguageLearnerCloudFoundation-prod', 'ForeignLanguageLearnerCloudBilling-prod',
-              'ForeignLanguageLearnerCloudTranslation-prod', 'ForeignLanguageLearnerPaidAlignment-prod']
+              'ForeignLanguageLearnerCloudTranslation-prod', 'ForeignLanguageLearnerPaidAlignment-prod',
+              'ForeignLanguageLearnerOperator-prod', 'ForeignLanguageLearnerOperatorAlignment-prod']
 
 
 def digest(value):

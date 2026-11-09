@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as alarmActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
@@ -18,9 +19,12 @@ import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
 import { CloudFoundationStack } from "./cloud-stack";
 import { DEPLOYMENT_REGION } from "./region";
+import { OperatorStack } from "./operator-stack";
 
 export interface AlignmentStackProps extends cdk.StackProps {
   readonly paidFoundation?: CloudFoundationStack;
+  readonly operatorFoundation?: OperatorStack;
+  readonly workerAvailabilityZones?: string[];
   readonly cloudCode?: lambda.Code;
   readonly benchmarkReport?: {
     workerImageDigest: string;
@@ -42,7 +46,9 @@ export class AlignmentStack extends cdk.Stack {
     }
 
     const paid = props?.paidFoundation;
-    if (paid) {
+    const operator = props?.operatorFoundation;
+    if (paid && operator) throw new Error("Select one alignment authentication mode");
+    if (paid || operator) {
       const report = props?.benchmarkReport;
       if (!props?.cloudCode || report?.workerImageDigest !== workerImageDigest || !report ||
           !Number.isFinite(report.maxJobCostUsd) || report.maxJobCostUsd <= 0 ||
@@ -54,7 +60,7 @@ export class AlignmentStack extends cdk.Stack {
               metric.costUsd < 0 || metric.costUsd > report.maxJobCostUsd;
           })) throw new Error("Paid alignment requires an image-matched, reviewed six-language benchmark report");
     }
-    const backendTag = paid ? "alignment-account-v2" : "alignment-v1";
+    const backendTag = operator ? "alignment-operator-v1" : paid ? "alignment-account-v2" : "alignment-v1";
 
     const bucket = new s3.Bucket(this, "TemporaryBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -86,7 +92,7 @@ export class AlignmentStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, "WorkerVpc", {
       natGateways: 0,
-      maxAzs: 2,
+      ...(props?.workerAvailabilityZones ? { availabilityZones: props.workerAvailabilityZones } : { maxAzs: 2 }),
       subnetConfiguration: [{ name: "Public", subnetType: ec2.SubnetType.PUBLIC }],
       gatewayEndpoints: {
         S3: { service: ec2.GatewayVpcEndpointAwsService.S3 },
@@ -146,6 +152,7 @@ export class AlignmentStack extends cdk.Stack {
     });
     const commonEnvironment = {
       ...(paid ? { ...paid.common, PAID_ALIGNMENT: "true" } : {}),
+      ...(operator ? operator.common : {}),
       ALIGNMENT_TABLE: table.tableName,
       ALIGNMENT_BUCKET: bucket.bucketName,
       ECS_CLUSTER_ARN: cluster.clusterArn,
@@ -154,10 +161,11 @@ export class AlignmentStack extends cdk.Stack {
     };
     const finalizer = new lambda.Function(this, "Finalizer", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: paid ? "backend.alignment.finalizer.handler" : "alignment.finalizer.handler",
+      handler: paid || operator ? "backend.alignment.finalizer.handler" : "alignment.finalizer.handler",
       code: lambdaCode,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
+      logGroup: new logs.LogGroup(this, "FinalizerLogs", { retention: logs.RetentionDays.ONE_WEEK }),
       environment: { ...commonEnvironment, STATE_MACHINE_ARN: "PENDING" },
     });
     bucket.grantReadWrite(finalizer);
@@ -267,13 +275,15 @@ export class AlignmentStack extends cdk.Stack {
 
     const apiHandler = new lambda.Function(this, "ApiHandler", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: paid ? "backend.paid_alignment.api.handler" : "alignment.api.handler",
+      handler: operator ? "backend.private_cloud.alignment.handler" : paid ? "backend.paid_alignment.api.handler" : "alignment.api.handler",
       code: lambdaCode,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(28),
       memorySize: 512,
+      logGroup: new logs.LogGroup(this, "ApiLogs", { retention: logs.RetentionDays.ONE_WEEK }),
       environment: { ...commonEnvironment, STATE_MACHINE_ARN: version.attrArn },
     });
     if (paid) apiHandler.addToRolePolicy(new iam.PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [paid.pool.userPoolArn] }));
+    if (operator) operator.table.grantReadWriteData(apiHandler);
     bucket.grantReadWrite(apiHandler);
     table.grantReadWriteData(apiHandler);
     apiHandler.addToRolePolicy(new iam.PolicyStatement({
@@ -291,11 +301,11 @@ export class AlignmentStack extends cdk.Stack {
       conditions: { StringEquals: { "aws:ResourceTag/Backend": backendTag } },
     }));
 
-    const httpApi = paid?.api ?? new apigwv2.HttpApi(this, "HttpApi", {
+    const httpApi = operator?.api ?? paid?.api ?? new apigwv2.HttpApi(this, "HttpApi", {
       createDefaultStage: true,
       corsPreflight: undefined,
     });
-    const defaultStage = !paid && httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
+    const defaultStage = !paid && !operator && httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
     if (defaultStage) defaultStage.defaultRouteSettings = { throttlingBurstLimit: 20, throttlingRateLimit: 10 };
     const integration = new integrations.HttpLambdaIntegration("ApiIntegration", apiHandler);
     const routes: [apigwv2.HttpMethod, string][] = [
@@ -310,7 +320,10 @@ export class AlignmentStack extends cdk.Stack {
       [apigwv2.HttpMethod.POST, "/v1/alignments/{id}/cancel"],
     ];
     for (const [method, routePath] of routes) {
-      if (paid) {
+      if (operator) {
+        new apigwv2.HttpRoute(this, `${method}${routePath}`, { httpApi, routeKey: apigwv2.HttpRouteKey.with(routePath, method),
+          authorizer: operator.authorizer, authorizationScopes: ["aws.cognito.signin.user.admin"], integration });
+      } else if (paid) {
         new apigwv2.HttpRoute(this, `${method}${routePath}`, { httpApi, routeKey: apigwv2.HttpRouteKey.with(routePath.replace("/v1/", "/v2/"), method),
           authorizer: paid.authorizer, authorizationScopes: [paid.scopeName], integration });
       } else { httpApi.addRoutes({ path: routePath, methods: [method], integration }); }
@@ -318,10 +331,11 @@ export class AlignmentStack extends cdk.Stack {
 
     const reconciler = new lambda.Function(this, "Reconciler", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: paid ? "backend.alignment.reconciler.handler" : "alignment.reconciler.handler",
+      handler: paid || operator ? "backend.alignment.reconciler.handler" : "alignment.reconciler.handler",
       code: lambdaCode,
       timeout: cdk.Duration.minutes(2),
       memorySize: 512,
+      logGroup: new logs.LogGroup(this, "ReconcilerLogs", { retention: logs.RetentionDays.ONE_WEEK }),
       environment: { ...commonEnvironment, STATE_MACHINE_ARN: version.attrArn },
     });
     bucket.grantReadWrite(reconciler);
@@ -345,11 +359,20 @@ export class AlignmentStack extends cdk.Stack {
     }
 
     for (const [name, fn] of [["Api", apiHandler], ["Finalizer", finalizer], ["Reconciler", reconciler]] as const) {
-      new cloudwatch.Alarm(this, `${name}Errors`, {
+      const alarm = new cloudwatch.Alarm(this, `${name}Errors`, {
         metric: fn.metricErrors({ period: cdk.Duration.minutes(5) }),
         threshold: 1,
         evaluationPeriods: 1,
       });
+      if (operator) alarm.addAlarmAction(new alarmActions.SnsAction(operator.alarms));
+    }
+    if (operator) {
+      for (const [name, metric] of [["WorkflowFailures", stateMachine.metricFailed()],
+        ["WorkflowTimeouts", stateMachine.metricTimedOut()]] as const) {
+        new cloudwatch.Alarm(this, name, { metric, threshold: 1, evaluationPeriods: 1,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING })
+          .addAlarmAction(new alarmActions.SnsAction(operator.alarms));
+      }
     }
     // AWS::Budgets::Budget is unavailable in Stockholm. Account-level budget alerts
     // are a separate operator prerequisite; regional admission caps remain enforced.

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "synth": "cdk synth",
-    "test": "npm run build && ts-node test/alignment-stack.test.ts && ts-node test/cloud-stack.test.ts",
+    "test": "npm run build && ts-node test/alignment-stack.test.ts && ts-node test/cloud-stack.test.ts && ts-node test/operator-stack.test.ts",
     "synth:cloud": "cdk --app \"npx ts-node bin/cloud.ts\" synth"
   },
   "dependencies": {

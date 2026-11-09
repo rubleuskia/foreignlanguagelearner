@@ -42,7 +42,8 @@ class Releases:
             name, kind, sha, date = line.split('|', 3)
             match = TAG.fullmatch(name)
             if match and kind == 'tag' and sha.startswith(match[2]):
-                result.append({'tag': name, 'sha': sha, 'created_at': date})
+                result.append({'tag': name, 'sha': sha, 'created_at': date,
+                    'operator_supported': bool(self.git('ls-tree', '--name-only', sha, 'infra/alignment/bin/operator.ts'))})
         return result[:100]
 
     def verify(self, tag):

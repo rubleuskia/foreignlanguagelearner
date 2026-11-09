@@ -1,5 +1,16 @@
 # Foreign Language Learner
 
+## Private-first cloud rollout (2026-11-09)
+
+The [two-stage rollout](../docs/CLOUD_ROLLOUT.md) prioritizes a private backend: one console-created
+Cognito username/password operator, protected API, direct translations/word explanations, audio
+alignment and monitoring. Apple accounts, StoreKit subscriptions and customer quotas move to stage
+two. Bedrock Qwen3 235B A22B Instruct 2507 is selected for the first stage, prioritizing Polish/Russian.
+The first live inference was blocked by AWS project verification. The operator backend, separate
+CDK assembly and first-stage dashboard preparation are now implemented; publication needs a new
+verified CI-tag, CDK bootstrap, and the audio image/real benchmark report. The cloud functionality
+described below remains undeployed. See [the operator guide](../docs/OPERATOR_CLOUD.md).
+
 ## iOS CI and verified releases
 
 CI builds test products once, runs all discovered unit tests, and compiles device Release independently.

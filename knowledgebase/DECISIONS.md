@@ -1,5 +1,58 @@
 # Architectural and product decisions
 
+## Operator publication implementation (2026-11-09)
+
+Implement the first stage as separate Operator/OperatorAlignment stacks selected explicitly in the
+local control panel; never infer it from incomplete Apple configuration or reinterpret an older tag.
+Preparation archives only a verified main CI release, builds an Apple-free hash-locked asset, freezes
+actual Stockholm AZ metadata, verifies templates/JWT boundaries and preserves the existing reviewed,
+expiring, single-use deployment plan. Stage/membership changes cannot omit already installed stacks.
+
+Use a console-created named Cognito operator with password/SRP auth and no signup/OAuth redirect or
+implicit flow. Require gateway JWT issuer/client/access token/scope and a live matching GetUser;
+permanently pin the subject on first valid login so recreating the username cannot adopt old data.
+Native password UI is outside this backend release; a local helper completes the initial challenge
+and saves only an expiring access token in an exclusive mode-600 file for real API tests.
+
+Use one regional Qwen3 Converse submission with an 18-second read timeout, 2048-token output cap,
+no SDK retries and a 28-second Lambda. DynamoDB atomically admits the daily request and records its
+idempotency boundary first. A known result is replayed; a late running/uncertain request remains
+unknown and is never automatically re-submitted. Enforce 24-hour result/key lifetime and omit source
+text and backups. Provider JSON is server-validated: Bedrock's potentially 90-second first-schema
+compilation is incompatible with this synchronous HTTP API and is not enabled in this path. Do not
+repair malformed output with another paid call. Monthly subscription accounting stays in stage two.
+
+Reuse the alignment service through a per-invocation operator adapter, not by mutating a shared
+Lambda global or exposing an anonymous creation route. Keep the image-matched actual measurement
+gate and all admission/cancellation/expiry controls. Real readiness inspects identity, bootstrap,
+model-access metadata, ECR image and measurement report; it never provisions roles, publishes an
+image, or claims that metadata authorization proves successful inference. Worker publishing is an
+explicit helper action; temporary Docker credentials and a narrow context exclude local secrets.
+
+## Private operator backend before Apple subscriptions (2026-11-09)
+
+Supersede the Apple-first rollout order with [two stages](../docs/CLOUD_ROLLOUT.md). Stage one targets
+a single manually created Cognito username/password operator, JWT-protected API Gateway routes,
+direct translation/explanation calls, authenticated audio alignment and real monitoring. The
+operator may use all application features; this does not grant administrator AWS runtime permissions.
+Enforce the configured subject so adding another pool user cannot grant operator access.
+
+Remove SQS from the planned stage-one inference path; keep minimal durable idempotency/result
+records and no automatic paid resubmission after unknown outcomes. Fit direct execution below the
+HTTP API's 30-second limit; the existing 45-second provider timeout must change. Long alignment
+continues through Step Functions/Fargate, private S3 and DynamoDB, with image/measurement gates.
+Retain global cost/concurrency controls without subscription quotas.
+
+Stage two adds Apple, purchases, webhooks, customer ownership/isolation, entitlement/allowance
+accounting and paid-service recovery. Explicitly migrate ownership and keep operator authority
+separate. Existing subscription assemblies remain unchanged until stage-one implementation; this
+decision does not claim deployment. The operator subsequently selected Bedrock and the stage-one
+default is Qwen3 235B A22B Instruct 2507 (`qwen.qwen3-235b-a22b-2507-v1:0`) with regional Converse
+in eu-north-1. Polish/Russian language support, structured JSON and regional on-demand availability
+motivate this choice; measured task quality/latency remain unverified. Read-only access checks pass,
+but the first Converse attempt was rejected while AWS verifies the project. Verify schema, language,
+latency and cost after that clears; do not use EU/global routing to bypass this condition.
+
 ## Restore arm64 after unsuccessful Intel trial (2026-11-02)
 
 The higher-memory Intel runner booted its simulator but failed both 240-second unit-discovery

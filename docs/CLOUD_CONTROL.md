@@ -1,5 +1,11 @@
 # Local AWS production control
 
+The [two-stage rollout plan](CLOUD_ROLLOUT.md) now targets a private operator backend before Apple
+and subscriptions. The operator assembly/dashboard mode is implemented: see [first-stage publication](OPERATOR_CLOUD.md).
+Choose the first stage in settings; no Apple parameters are required. Older verified tags do not
+contain that assembly and are filtered out. The subscription-specific procedure below applies to
+the second stage. Do not fill Apple fields with dummy values.
+
 From the repository root, run `bash scripts/cloud-control.sh` and open **http://127.0.0.1:8767**.
 Python 3.12+, Node/npm, Git and authenticated GitHub CLI (`gh auth login`) are required. The launcher
 creates an ignored local environment with the existing hash-locked dependencies. It never deploys on

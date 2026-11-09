@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from http.server import ThreadingHTTPServer
 from .aws import AWS, api_url, deployable
-from .config import Configuration, ControlError, digest, validate
+from .config import Configuration, ControlError, digest, validate, deployment_context, expected_stacks, validate_benchmark
 from .health import run
 from .jobs import Jobs, atomic_json, tree_digest
 from .releases import Releases
@@ -53,6 +53,83 @@ class ControlTests(unittest.TestCase):
         aws.client=Mock(return_value=sts)
         with self.assertRaises(ControlError): aws.snapshot()
         aws.client.assert_called_once_with('sts')
+
+    def test_prepare_with_view_only_config_reports_missing_deployment_fields(self):
+        self.config.save({k:v for k,v in CONFIG.items() if k != 'context'})
+        aws_factory=Mock(); releases=Mock()
+        jobs=Jobs(ROOT,self.config,aws_factory=aws_factory,releases=releases)
+        result=self.wait(jobs,jobs.start('prepare',{'tag':TAG})['id'])
+        self.assertEqual(result['state'],'failed')
+        self.assertIn('Настройка',result['error'])
+        self.assertIn('appleClientId',result['error'])
+        self.assertIn('openaiSecretArn',result['error'])
+        self.assertNotIn('KeyError',result['error'])
+        aws_factory.assert_not_called(); releases.verify.assert_not_called()
+
+    def test_operator_context_requires_no_apple_and_audio_requires_real_artifacts(self):
+        config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        context=deployment_context(config)
+        self.assertEqual(context['operatorUsername'],'operator')
+        self.assertEqual(expected_stacks(config),['ForeignLanguageLearnerOperator-prod'])
+        self.assertNotIn('appleClientId',context)
+        for extra in [{}, {'workerRepositoryName':'worker'},
+                      {'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}]:
+            with self.assertRaises(ControlError):
+                deployment_context({**config,'context':{'operatorAlignment':'true',**extra}})
+        for limit in ['0','1001','-1','1.5']:
+            with self.assertRaises(ControlError): deployment_context({**config,'context':{'dailyModelLimit':limit}})
+
+    def test_benchmark_rejects_unmatched_image_missing_languages_and_nonfinite_metrics(self):
+        digest_value='sha256:'+'a'*64
+        good={'workerImageDigest':digest_value,'maxJobCostUsd':1,'languages':{
+            language:{'qualityAccepted':True,'runtimeSeconds':300,'peakMemoryMiB':1024,'costUsd':0.1}
+            for language in ('en','fr','es','de','it','pl')}}
+        validate_benchmark(good,digest_value)
+        for changed in [{'workerImageDigest':'wrong'},{'languages':{}},{'maxJobCostUsd':float('nan')}]:
+            with self.assertRaises(ControlError): validate_benchmark({**good,**changed},digest_value)
+
+    def test_operator_prepare_uses_verified_source_and_operator_builder_without_apple(self):
+        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}})
+        aws=Mock();aws.snapshot.return_value=[]
+        release=Mock();release.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
+        jobs=Jobs(ROOT,self.config,aws_factory=lambda c:aws,releases=release)
+        commands=[]
+        def execute(key,argv,**kwargs):
+            commands.append(argv)
+            if argv[:2]==['git','archive']:
+                with tarfile.open(argv[4],'w') as bundle:
+                    for name in ['scripts/build-cloud.py','infra/alignment/bin/cloud.ts','infra/alignment/bin/operator.ts']:
+                        info=tarfile.TarInfo(name);info.size=1;bundle.addfile(info,io.BytesIO(b'x'))
+            if 'synth' in argv:
+                area=jobs.plans/key/'assembly';area.mkdir()
+                (area/'template.json').write_text(json.dumps({'Resources':{}}))
+                (area/'manifest.json').write_text(json.dumps({'artifacts':{'Operator':{
+                    'type':'aws:cloudformation:stack','environment':'aws://123456789012/eu-north-1',
+                    'properties':{'stackName':'ForeignLanguageLearnerOperator-prod','templateFile':'template.json'}}}}))
+        jobs.execute=execute
+        result=self.wait(jobs,jobs.start('prepare',{'tag':TAG})['id'])
+        self.assertEqual(result['state'],'ready',result.get('error'))
+        release.verify.assert_called_once_with(TAG)
+        build=next(c for c in commands if '--output' in c and 'scripts/build-cloud.py' in c[1])
+        self.assertIn('operator',build);self.assertNotIn('--apple-roots',build)
+        synth=next(c for c in commands if 'synth' in c)
+        self.assertIn('node_modules/.bin/ts-node bin/operator.ts',synth)
+        self.assertFalse(any('deploy' in c for c in commands))
+
+    def test_operator_smoke_uses_operator_profile_without_subscription_routes(self):
+        config={**self.token_config(),'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        snapshot=[{**SNAPSHOT[0],'name':'ForeignLanguageLearnerOperator-prod'}]
+        paths=[]
+        def call(base,path,method='GET',body=None,token=None,key=None):
+            paths.append(path)
+            if path.startswith('/control-nonexistent-'): return 404,{},1
+            if not token: return 401,{},1
+            if path=='/v1/me': return 200,{'schema_version':1,'user_id':'operator','role':'operator'},1
+            if path=='/v1/health': return 200,{'status':'ok'},1
+            return (400 if path=='/v1/context-analyses' else 404),{},1
+        report=run(config,snapshot,call=call)
+        self.assertEqual(report['state'],'passed')
+        self.assertNotIn('/v1/me/entitlements',paths);self.assertNotIn('/v1/products',paths)
 
     def test_busy_failed_stack_and_non_aws_endpoint_are_blocked(self):
         for status in ['UPDATE_IN_PROGRESS','ROLLBACK_FAILED','DELETE_COMPLETE']:
