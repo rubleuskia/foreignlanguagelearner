@@ -23,7 +23,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Create immutable tag for the tested main commit
+      - name: Create immutable version tag for the tested main commit
         run: bash scripts/tag-verified-main.sh
         env:
           RELEASE_EVENT: ${{ github.event.workflow_run.event }}

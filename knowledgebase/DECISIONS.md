@@ -1,5 +1,26 @@
 # Architectural and product decisions
 
+## Versioned backend release tags (2026-11-09)
+
+Replace newly produced `backend-<CI run>-<12-character SHA>` names with
+`v<backend/VERSION>-backend.<CI run>`, initially `v0.0.1-backend.123`. This uses a valid SemVer
+prerelease identifier rather than a fourth numeric version component; the leading v is the Git-tag
+convention. The core is reviewed in the tracked backend/VERSION file and is independent of iOS.
+Use the CI run number instead of a separately incremented mutable counter to preserve uniqueness
+across concurrent main commits and deterministic workflow reruns.
+
+Read the core version from the exact tested commit, not the current working file. Annotate new tags
+with deterministic schema-versioned JSON binding version, full commit SHA, CI run number and run URL.
+A rerun must match the immutable tag object identity/annotation semantics produced by this script;
+refuse moved commits, lightweight tags or changed metadata. Publication still requires successful
+main-push CI from this repository; no extra deployment or weakened gate follows naming changes.
+
+The dashboard fetches new and legacy tag namespaces without forcing changes, checks annotation
+against the tagged version file and GitHub's successful main CI identity, and preserves operator-mode
+compatibility filtering. Keep reading/verifying legacy SHA-suffixed tags for rollback; never rename,
+move or delete them. This supersedes only the earlier tag naming choice, not source verification,
+plan review, release concurrency or rollback/data-restore boundaries.
+
 ## Operator publication implementation (2026-11-09)
 
 Implement the first stage as separate Operator/OperatorAlignment stacks selected explicitly in the

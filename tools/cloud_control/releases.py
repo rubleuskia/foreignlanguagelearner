@@ -3,7 +3,19 @@ import re
 import subprocess
 from .config import ControlError, REPOSITORY
 
-TAG = re.compile(r'backend-([1-9]\d*)-([a-f0-9]{12})\Z')
+CORE_VERSION = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
+TAG = re.compile(r'v(' + CORE_VERSION + r')-backend\.([1-9][0-9]*)\Z')
+LEGACY_TAG = re.compile(r'backend-([1-9][0-9]*)-([a-f0-9]{12})\Z')
+CI_URL = re.compile(r'https://github\.com/' + re.escape(REPOSITORY) + r'/actions/runs/[1-9][0-9]*\Z')
+
+
+def parse_tag(name):
+    if not isinstance(name, str): return None
+    current = TAG.fullmatch(name)
+    if current: return {'version': current[1], 'run_number': int(current[2]), 'legacy': False}
+    legacy = LEGACY_TAG.fullmatch(name)
+    if legacy: return {'sha_prefix': legacy[2], 'run_number': int(legacy[1]), 'legacy': True}
+    return None
 
 
 def command(argv, *, cwd=None, env=None, timeout=90):
@@ -31,37 +43,61 @@ class Releases:
             raise ControlError('origin должен указывать на ' + REPOSITORY)
         # Existing release tags cannot be silently moved by a fetch.
         self.git('fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main',
-                 'refs/tags/backend-*:refs/tags/backend-*')
+                 'refs/tags/backend-*:refs/tags/backend-*',
+                 'refs/tags/v*:refs/tags/v*')
         return self.list()
+
+    def identity(self, tag, sha):
+        parsed = parse_tag(tag)
+        if not parsed:
+            raise ControlError('Выберите версию вида v0.0.1-backend.123.')
+        if parsed['legacy']:
+            if not sha.startswith(parsed['sha_prefix']):
+                raise ControlError('Тег не соответствует своему коммиту.')
+            return parsed
+        try:
+            metadata = json.loads(self.git('for-each-ref', '--format=%(contents)', 'refs/tags/' + tag))
+        except (ValueError, TypeError):
+            raise ControlError('Версия не содержит проверенные метаданные CI.') from None
+        if (not isinstance(metadata, dict) or set(metadata) != {'schema_version', 'version', 'commit', 'ci_run_number', 'ci_url'}
+                or type(metadata['schema_version']) is not int or metadata['schema_version'] != 1
+                or metadata['version'] != parsed['version'] or metadata['commit'] != sha
+                or type(metadata['ci_run_number']) is not int or metadata['ci_run_number'] != parsed['run_number']
+                or not isinstance(metadata['ci_url'], str) or not CI_URL.fullmatch(metadata['ci_url'])):
+            raise ControlError('Метаданные версии не соответствуют тегу и коммиту.')
+        if self.git('show', sha + ':backend/VERSION') != parsed['version']:
+            raise ControlError('Версия тега не совпадает с backend/VERSION проверенного коммита.')
+        return {**parsed, 'ci_url': metadata['ci_url']}
 
     def list(self):
         result = []
         for line in self.git('for-each-ref', '--sort=-creatordate',
                              '--format=%(refname:short)|%(objecttype)|%(*objectname)|%(creatordate:iso8601)',
-                             'refs/tags/backend-*').splitlines():
+                             'refs/tags/backend-*', 'refs/tags/v*-backend.*').splitlines():
             name, kind, sha, date = line.split('|', 3)
-            match = TAG.fullmatch(name)
-            if match and kind == 'tag' and sha.startswith(match[2]):
-                result.append({'tag': name, 'sha': sha, 'created_at': date,
-                    'operator_supported': bool(self.git('ls-tree', '--name-only', sha, 'infra/alignment/bin/operator.ts'))})
+            if kind != 'tag' or not parse_tag(name): continue
+            try: parsed = self.identity(name, sha)
+            except ControlError: continue
+            result.append({'tag': name, 'sha': sha, 'created_at': date,
+                'version': parsed.get('version'), 'legacy': parsed['legacy'],
+                'operator_supported': bool(self.git('ls-tree', '--name-only', sha, 'infra/alignment/bin/operator.ts'))})
         return result[:100]
 
     def verify(self, tag):
-        match = TAG.fullmatch(tag) if isinstance(tag, str) else None
-        if not match:
-            raise ControlError('Выберите CI-тег вида backend-123-012345abcdef.')
+        if not parse_tag(tag):
+            raise ControlError('Выберите версию вида v0.0.1-backend.123.')
         self.refresh()
         if self.git('cat-file', '-t', 'refs/tags/' + tag) != 'tag':
             raise ControlError('Нужен аннотированный CI-тег.')
         sha = self.git('rev-parse', 'refs/tags/' + tag + '^{commit}')
-        if not sha.startswith(match[2]):
-            raise ControlError('Тег не соответствует своему коммиту.')
+        parsed = self.identity(tag, sha)
         self.git('merge-base', '--is-ancestor', sha, 'origin/main')
         runs = json.loads(command(['gh', 'api',
             f'repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={sha}&event=push&per_page=100']))
-        approved = [r for r in runs.get('workflow_runs', []) if r.get('run_number') == int(match[1])
+        approved = [r for r in runs.get('workflow_runs', []) if r.get('run_number') == parsed['run_number']
                     and r.get('head_sha') == sha and r.get('head_branch') == 'main'
-                    and r.get('event') == 'push' and r.get('conclusion') == 'success']
+                    and r.get('event') == 'push' and r.get('conclusion') == 'success'
+                    and (parsed['legacy'] or r.get('html_url') == parsed['ci_url'])]
         if not approved:
             raise ControlError('Для этого тега не найден успешный push-CI основной ветки. Дождитесь окончания CI.')
         return {'tag': tag, 'sha': sha, 'ci_url': approved[0]['html_url']}
