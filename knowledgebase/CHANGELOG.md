@@ -1,5 +1,55 @@
 # Project changelog
 
+## 2026-11-09 — Publish the private first stage through Cloud Control
+
+- Implement an independent operator CDK assembly with console-created Cognito password/SRP login,
+  JWT/live-session checks and permanent subject binding. Add direct regional Qwen3 translations/
+  word explanations, bounded inference without SDK retries, transactional daily admission and
+  24-hour idempotent result recovery; no Apple, subscription or SQS inference dependency.
+- Protect reused alignment routes with operator authentication; retain private S3, Fargate workflow,
+  admission/recovery logic and real image/benchmark gates. Pin verified availability zones for
+  lookup-free assembly. Add one-week logs, token/latency/error metrics and SNS-linked alarms.
+- Add first/second-stage dashboard settings, compatible-tag filtering, real readiness checks and
+  post-deployment Cognito/API outputs. Build an Apple-free hash-locked Linux asset; provide local
+  password-login and explicit worker-image build/publish helpers with a restricted Docker context.
+- Document publication and remaining prerequisites in OPERATOR_CLOUD.md. Existing tags cannot publish
+  the new assembly; bootstrap, an actual worker image and reviewed measurements remain absent.
+  No bootstrap, worker publishing, cloud deployment or successful paid inference is claimed.
+- Validation: all 99 backend tests pass with real local DynamoDB, including concurrent replay;
+  25 dashboard tests and all three CDK assertion suites pass. Full two-stack CLI synthesis runs
+  without lookups; AWS ValidateTemplate accepts both templates (audio in equivalent compact JSON).
+  Browser checks confirm first-stage settings save, Apple fields are hidden, incompatible tags are
+  explained, and real readiness shows the missing bootstrap/image/measurements. No iOS behavior changed.
+- DECISIONS.md records operator authorization and direct-call recovery; PROJECT.md describes the
+  implemented publication mode and remaining release prerequisites.
+
+## 2026-11-09 — Bedrock model selected for Polish/Russian
+
+- Select regional Bedrock Qwen3 235B A22B Instruct 2507 for stage-one translation/explanation;
+  document model ID, language rationale, IAM-based access and Stockholm Standard pricing.
+- Read-only access checks pass; live evaluation is blocked by AWS project verification. Do not
+  claim measured quality, schema compliance, latency or deployed provider integration.
+- Update rollout, DECISIONS.md and PROJECT.md; runtime migration remains to be implemented.
+
+## 2026-11-09 — Two-stage cloud rollout plan
+
+- Document a private single-operator backend first: manual Cognito username/password user, protected
+  API, direct model calls without SQS, authenticated alignment and monitoring. Move Apple identity,
+  purchases, customer isolation and subscription accounting to stage two.
+- Record the 30-second HTTP API deadline, minimal idempotency recovery, retained alignment image/
+  measurement gates and required new assembly/dashboard mode. No deployment or runtime change.
+- Inspect the live eu-north-1 Bedrock catalogue/profiles and document regional candidates, access
+  caveats and a six-language evaluation. No inference or provider migration performed.
+- DECISIONS.md records the new rollout boundary; PROJECT.md reflects its planned status. Link the
+  superseded paid-backend plan and current dashboard runbook to the new plan.
+
+## 2026-11-09 — Cloud dashboard release selection and setup errors
+
+- Replace hidden release-tag autocomplete suggestions with an explicit dropdown and a visible count of fetched tags. Preserve the selected release during status polling.
+- Validation: JavaScript syntax and diff checks pass; live dashboard shows the fetched tag and retains its selection during polling.
+- Preparation with account/profile-only settings now reports missing deployment parameters and the settings section instead of KeyError. A regression test confirms validation stops before GitHub/AWS work; all 21 control-panel tests pass.
+- No architectural decision or project overview changed.
+
 ## 2026-11-02 — Restore ARM XCTest execution after Intel discovery timeouts
 
 - Restore matching macos-26 arm64 producer/consumer runners. In main CI 41528072926 the Intel simulator reached ready state, but both unit-discovery attempts exceeded 240 seconds; PR #77 UI discovery also timed out before its producer job was cancelled. More memory did not establish a working Intel path.

@@ -50,7 +50,14 @@ function operationRow(job) {
   return row(actions[job.action]+(job.tag ? ' · '+job.tag:''),date(job.created_at)+(job.error ? ' · '+job.error:''),right);
 }
 function renderState() {
-  $('release-options').replaceChildren(...state.tags.map(r=>{const o=element('option');o.value=r.tag;return o;}));
+  const operator=state.configuration?.deployment_mode==='operator';
+  const compatible=operator ? state.tags.filter(r=>r.operator_supported) : state.tags;
+  $('release-readiness').textContent=operator ? 'Первый этап · совместимых CI-тегов: '+compatible.length+(compatible.length ? '. Выберите версию ниже.' : '. Нужен новый тег после слияния первого этапа в main и успешного CI.') : 'Второй этап · Apple и подписки.';
+  const picker=$('release-tag'), selected=picker.value;
+  const placeholder=element('option',compatible.length ? 'Выберите тег релиза' : 'Нет тегов — нажмите «Получить теги»');placeholder.value='';
+  picker.replaceChildren(placeholder,...compatible.map(r=>{const o=element('option',r.tag);o.value=r.tag;return o;}));
+  picker.value=compatible.some(r=>r.tag===selected) ? selected : '';
+  $('release-count').textContent='Доступно для выбранного этапа: '+compatible.length;
   rows('recent-operations',state.jobs.slice(0,4),operationRow,'Операций ещё не было');
   rows('operations',state.jobs,operationRow,'Операций ещё не было');
   rows('plans',state.jobs.filter(j=>j.action==='prepare' && j.state==='ready'),job=>{
@@ -76,7 +83,7 @@ function renderState() {
   if(!initialized){fillConfig(state.configuration);initialized=true;}
 }
 async function refreshState() {try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}}
-function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
+function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и Bedrock','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
 async function refreshStatus() {
   if(statusBusy)return;statusBusy=true;
   try {
@@ -84,8 +91,11 @@ async function refreshStatus() {
     $('connection-note').hidden=!!result.stacks;
     $('connection-note').textContent=result.error || 'Подключите AWS, чтобы увидеть состояние продакшена.';
     if(!result.stacks){$('infra-status').textContent=result.configured?'Нет доступа':'Не подключено';$('infra-detail').textContent='Откройте «Настройка»';$('release-status').textContent='—';
+      rows('client-outputs',[],()=>{},'Нет актуальных реквизитов из AWS');
       rows('stacks',[],()=>{},'Нет актуального состояния из AWS');rows('alarms',[],()=>{},'Нет актуальных данных из AWS');$('checked-at').textContent='—';return;}
     const stacks=result.stacks, installed=stacks.filter(s=>s.status!=='NOT_DEPLOYED');
+    const outputs=stacks.find(s=>s.name==='ForeignLanguageLearnerOperator-prod')?.outputs || {};
+    rows('client-outputs',Object.entries(outputs).filter(([key])=>['ApiUrl','UserPoolId','ClientId','OperatorUsername','BedrockModelId','AlarmTopicArn'].includes(key)),([key,value])=>row(({ApiUrl:'Адрес API',UserPoolId:'Cognito User Pool',ClientId:'Cognito Client ID',OperatorUsername:'Создайте пользователя с логином',BedrockModelId:'Модель Bedrock',AlarmTopicArn:'Тема оповещений SNS'})[key],value),'Реквизиты появятся после деплоя первого этапа.');
     const unhealthy=installed.some(s=>!['CREATE_COMPLETE','UPDATE_COMPLETE','UPDATE_ROLLBACK_COMPLETE','IMPORT_COMPLETE'].includes(s.status));
     $('infra-status').textContent=!installed.length?'Не развёрнуто':unhealthy?'Требует внимания':'Стеки доступны';
     $('infra-detail').textContent=result.account_id+' · '+installed.length+' компонентов';
@@ -100,7 +110,7 @@ async function refreshStatus() {
 async function start(path, body) {try{notice('');const job=await api(path,body);await refreshState();showOperation(job.id);}catch(e){notice(e.message);}}
 $('refresh-status').onclick=refreshStatus;
 $('refresh-tags').onclick=()=>start('/api/refresh',{});
-$('prepare').onclick=()=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите или введите CI-тег.');start('/api/prepare',{tag});};
+$('prepare').onclick=()=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите CI-тег из списка.');start('/api/prepare',{tag});};
 $('smoke-tests').onclick=()=>start('/api/tests',{mode:'smoke'});
 function confirm(title,description,expected,action) {
   const dialog=$('confirm-dialog');$('confirm-title').textContent=title;$('confirm-description').textContent=description;
@@ -111,14 +121,28 @@ function confirm(title,description,expected,action) {
 }
 function deploy(plan) {confirm('Развернуть '+plan.tag+'?', 'Изменится prod в аккаунте '+plan.account_id+'. Проверьте изменения, особенно права IAM, замену и удаление ресурсов. Используется подготовленная сборка и зафиксированная конфигурация. Откат к старому тегу не восстанавливает данные.',plan.account_id+'/'+plan.tag,value=>start('/api/deploy',{plan_id:plan.id,confirm:value}));}
 $('inference-tests').onclick=()=>confirm('Запустить сквозной тест?', 'Будут созданы до двух новых запросов к платной модели для тестового подписчика. Повтор того же ключа должен вернуть тот же результат. Прерванная операция не запускается повторно автоматически.','2',value=>start('/api/tests',{mode:'inference',confirm:value}));
+function updateMode() {const operator=$('deployment-mode').value==='operator';$('operator-settings').hidden=!operator;$('subscription-settings').hidden=operator;}
+$('deployment-mode').onchange=updateMode;
+$('check-readiness').onclick=async()=>{const b=$('check-readiness');b.disabled=true;try{const r=await api('/api/readiness');rows('readiness-cases',r.cases,c=>row(c.name,c.detail,pill(c.state)),'Нет проверок');notice(r.note);}catch(e){notice(e.message);}finally{b.disabled=false;}};
 function fillConfig(c) {
   c=c || {account_id:'',profile:'fll-prod',region:'eu-north-1',context:{acceptTranslations:'false',paidAlignment:'false'}};
+  $('deployment-mode').value=c.deployment_mode || 'subscription';
+  const ctx=c.context || {};
+  $('operator-username').value=ctx.operatorUsername || 'operator';$('daily-model-limit').value=ctx.dailyModelLimit || '50';
+  $('operator-alignment').value=ctx.operatorAlignment || 'true';$('worker-repository').value=ctx.workerRepositoryName || '';
+  $('worker-digest').value=ctx.workerImageDigest || '';$('benchmark-file').value=c.alignment_benchmark_file || '';updateMode();
   $('account-id').value=c.account_id;$('profile').value=c.profile;$('access-token-file').value=c.access_token_file || '';
-  const extra={...c};delete extra.account_id;delete extra.profile;delete extra.region;delete extra.access_token_file;
+  const extra={...c};delete extra.deployment_mode;delete extra.account_id;delete extra.profile;delete extra.region;delete extra.access_token_file;
   $('deploy-config').value=JSON.stringify(extra,null,2);
 }
 $('config-form').onsubmit=async event=>{event.preventDefault();try{
   const extra=JSON.parse($('deploy-config').value), c={...extra,account_id:$('account-id').value.trim(),profile:$('profile').value.trim(),region:$('region').value};
+  c.deployment_mode=$('deployment-mode').value;
+  if(c.deployment_mode==='operator'){c.context={operatorUsername:$('operator-username').value.trim(),dailyModelLimit:$('daily-model-limit').value,operatorAlignment:$('operator-alignment').value};
+    if($('worker-repository').value.trim())c.context.workerRepositoryName=$('worker-repository').value.trim();
+    if($('worker-digest').value.trim())c.context.workerImageDigest=$('worker-digest').value.trim();
+    delete c.apple_roots;delete c.root_sha256;delete c.policy_file;delete c.alignment_benchmark_file;
+    if($('benchmark-file').value.trim())c.alignment_benchmark_file=$('benchmark-file').value.trim();}
   if($('access-token-file').value.trim())c.access_token_file=$('access-token-file').value.trim();
   await api('/api/config',c);notice('Настройки сохранены. Проверяю подключение к AWS.');await refreshState();await refreshStatus();
 }catch(e){notice(e.message);}};

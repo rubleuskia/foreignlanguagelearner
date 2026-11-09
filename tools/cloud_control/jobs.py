@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from . import health
 from .aws import AWS, clean_error, deployable
-from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks
+from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks, is_operator, validate_benchmark
 from .releases import Releases
 
 
@@ -175,10 +175,23 @@ class Jobs:
 
     def prepare(self, key, config, body):
         context = deployment_context(config)
+        if is_operator(config) and context.get('operatorAlignment') == 'true':
+            validate_benchmark(json.loads(Path(config['alignment_benchmark_file']).read_text()), context['workerImageDigest'])
         release = self.releases.verify(body.get('tag'))
         self.update(key, **release)
         aws = self.aws_factory(config)
         snapshot = aws.snapshot(); deployable(snapshot)
+        if is_operator(config):
+            # No hidden bootstrap or image publishing during preparation.
+            aws.client('cloudformation').describe_stacks(StackName='CDKToolkit')
+            if context.get('operatorAlignment') == 'true':
+                aws.client('ecr').describe_images(repositoryName=context['workerRepositoryName'],
+                    imageIds=[{'imageDigest': context['workerImageDigest']}])
+                zones = aws.client('ec2').describe_availability_zones(Filters=[{'Name': 'state', 'Values': ['available']}])['AvailabilityZones']
+                names = sorted(z['ZoneName'] for z in zones if z.get('ZoneType', 'availability-zone') == 'availability-zone'
+                               and re.fullmatch(r'eu-north-1[a-z]', z['ZoneName']))
+                if len(names) < 2: raise ControlError('Для обработчика аудио нужны две доступные зоны Стокгольма.')
+                context['workerAvailabilityZones'] = ','.join(names[:2])
         if any(s['status'] != 'NOT_DEPLOYED' and s['name'] not in expected_stacks(config) for s in snapshot):
             raise ControlError('Конфигурация исключает уже развёрнутый стек. Верните его в состав релиза; панель не удаляет стеки.')
         area = self.plans / key
@@ -190,23 +203,32 @@ class Jobs:
         archive.unlink()
         for required in ['scripts/build-cloud.py', 'infra/alignment/bin/cloud.ts']:
             if not (source / required).exists(): raise ControlError('Этот тег не содержит поддерживаемый облачный бэкенд.')
-        roots = area / 'roots'; roots.mkdir()
-        for p in Path(config['apple_roots']).glob('*.cer'): shutil.copyfile(p, roots / p.name)
-        policy = area / 'policy.json'; shutil.copyfile(config['policy_file'], policy)
-        context.update(stage='prod', cloudAsset=str(area / 'lambda'), cloudPolicy=str(policy))
-        if context.get('paidAlignment') == 'true':
+        context.update(stage='prod', cloudAsset=str(area / 'lambda'))
+        operator = is_operator(config)
+        if operator:
+            if not (source / 'infra/alignment/bin/operator.ts').exists():
+                raise ControlError('Этот тег ещё не содержит первый этап. Нужен новый CI-тег после слияния изменений в main.')
+            build_args = ['--mode', 'operator']
+        else:
+            roots = area / 'roots'; roots.mkdir()
+            for p in Path(config['apple_roots']).glob('*.cer'): shutil.copyfile(p, roots / p.name)
+            policy = area / 'policy.json'; shutil.copyfile(config['policy_file'], policy)
+            context['cloudPolicy'] = str(policy)
+            build_args = ['--apple-roots', str(roots), *[arg for h in config['root_sha256'] for arg in ['--root-sha256', h]]]
+        if context.get('paidAlignment') == 'true' or (operator and context.get('operatorAlignment') == 'true'):
             if not config.get('alignment_benchmark_file'): raise ControlError('Нужен подтверждённый benchmark report для платного аудио.')
             benchmark = area / 'benchmark.json'; shutil.copyfile(config['alignment_benchmark_file'], benchmark)
             context['alignmentBenchmarkReport'] = str(benchmark)
         env = self.environment(config)
-        self.execute(key, [sys.executable, str(source / 'scripts/build-cloud.py'), '--apple-roots', str(roots),
-            '--output', str(area / 'lambda'), *[arg for h in config['root_sha256'] for arg in ['--root-sha256', h]]],
+        self.execute(key, [sys.executable, str(source / 'scripts/build-cloud.py'),
+            '--output', str(area / 'lambda'), *build_args],
             cwd=source, env=env)
         infra = source / 'infra/alignment'
         self.execute(key, ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=infra, env=env)
         cdk = str(infra / 'node_modules/.bin/cdk')
         # Fixed app command, never a command supplied by the browser or the tag field.
-        self.execute(key, [cdk, '--app', 'node_modules/.bin/ts-node bin/cloud.ts', 'synth', '--all',
+        entry = 'operator' if operator else 'cloud'
+        self.execute(key, [cdk, '--app', f'node_modules/.bin/ts-node bin/{entry}.ts', 'synth', '--all',
             '--lookups=false', '--output', str(area / 'assembly'),
             *[arg for k, v in sorted(context.items()) for arg in ['--context', f'{k}={v}']]], cwd=infra, env=env)
         manifest = json.loads((area / 'assembly/manifest.json').read_text())

@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from urllib import error, request
 from .aws import api_url
-from .config import ControlError
+from .config import ControlError, is_operator
 
 
 class NoRedirect(request.HTTPRedirectHandler):
@@ -21,7 +21,7 @@ def transport(base, path, method='GET', body=None, token=None, key=None):
                           data=None if body is None else json.dumps(body).encode())
     started = time.monotonic()
     try:
-        response = request.build_opener(NoRedirect()).open(req, timeout=15)
+        response = request.build_opener(NoRedirect()).open(req, timeout=30)
     except error.HTTPError as exc:
         response = exc
     with response:
@@ -49,6 +49,7 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
     if mode not in {'smoke', 'inference'}: raise ControlError('Неизвестный набор тестов.')
     base = api_url(snapshot)
     token = access_token(config)
+    operator = is_operator(config)
     if mode == 'inference' and not token:
         raise ControlError('Для сквозного теста нужен access token отдельного тестового подписчика.')
     report = {'mode': mode, 'endpoint': base, 'cases': [], 'requests': [], 'coverage': 'public'}
@@ -69,8 +70,11 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
     for path, method in [('/v1/me', 'GET'), ('/v1/me/entitlements', 'GET'),
                          ('/v1/context-analyses', 'POST'), ('/v1/word-explanations', 'POST'),
                          ('/v1/requests/' + str(uuid.uuid4()), 'GET')]:
+        if operator and path == '/v1/me/entitlements': continue
         probe(f'{method} {"/v1/requests/{id}" if "requests/" in path else path}: без входа',
               path, 401, method, {} if method == 'POST' else None)
+    if operator and config.get('context', {}).get('operatorAlignment', 'true') == 'true':
+        probe('Аудио оператора: без входа', '/v1/alignments', 401, 'POST', {})
     if config.get('context', {}).get('paidAlignment') == 'true':
         probe('Платное аудио: без входа', '/v2/alignments', 401, 'POST', {})
     probe('Неизвестный маршрут', '/control-nonexistent-' + str(uuid.uuid4()), 404)
@@ -80,13 +84,17 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
     else:
         report['coverage'] = 'authenticated'
         probe('Профиль тестового аккаунта', '/v1/me', 200, auth=True,
-              check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1 and bool(v.get('user_id')) and bool(v.get('app_account_token')))
-        probe('Подписка и остатки лимитов', '/v1/me/entitlements', 200, auth=True,
-              check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1
-              and isinstance(v.get('features'), dict) and isinstance(v.get('allowance'), dict))
-        probe('Каталог и доступность покупок', '/v1/products', 200, auth=True,
-              check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1
-              and isinstance(v.get('products'), list) and type(v.get('purchases_enabled')) is bool)
+              check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1 and bool(v.get('user_id')) and (v.get('role') == 'operator' if operator else bool(v.get('app_account_token'))))
+        if operator:
+            probe('Защищённая проверка доступности', '/v1/health', 200, auth=True,
+                  check=lambda v: isinstance(v, dict) and v.get('status') == 'ok')
+        else:
+            probe('Подписка и остатки лимитов', '/v1/me/entitlements', 200, auth=True,
+                  check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1
+                  and isinstance(v.get('features'), dict) and isinstance(v.get('allowance'), dict))
+            probe('Каталог и доступность покупок', '/v1/products', 200, auth=True,
+                  check=lambda v: isinstance(v, dict) and v.get('schema_version') == 1
+                  and isinstance(v.get('products'), list) and type(v.get('purchases_enabled')) is bool)
         probe('Чужой/несуществующий ключ запроса', '/v1/requests/by-key/' + str(uuid.uuid4()), 404, auth=True)
         probe('Неверный запрос отклоняется до расхода квоты', '/v1/context-analyses', 400, 'POST', {}, auth=True)
     if mode == 'inference':
@@ -106,7 +114,7 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
             try:
                 try:
                     code, value, _ = call(base, path, 'POST', payload, token, item['key'])
-                    if code != 202: raise ControlError('Admission rejected')
+                    if code not in ({200, 202} if operator else {202}): raise ControlError('Admission rejected')
                 except Exception:
                     # Recover by key even when the submission response was lost.
                     code, value, _ = call(base, '/v1/requests/by-key/' + item['key'], token=token)
@@ -125,7 +133,7 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
                 validate_output(kind, value['result'], payload)
                 # Same POST/key must recover the same success without reserving/invoking again.
                 code, again, _ = call(base, path, 'POST', payload, token, item['key'])
-                if (code != 202 or again.get('request_id') != item['request_id'] or again.get('state') != 'succeeded'
+                if (code not in ({200, 202} if operator else {202}) or again.get('request_id') != item['request_id'] or again.get('state') != 'succeeded'
                         or again.get('result') != value['result']):
                     raise ControlError('Idempotency failed')
                 report['cases'].append({'name': f'{kind}: результат, схема и повтор ключа', 'state': 'passed'})

@@ -1,0 +1,21 @@
+# Audio-worker context contains only its code. Never send local state/credentials to the daemon.
+**
+!backend/
+!backend/**
+!tools/
+!tools/subtitle-aligner/
+!tools/subtitle-aligner/**
+**/__pycache__
+**/.venv
+**/venv
+**/.env*
+**/*.p8
+**/*.pem
+**/*.key
+**/*.mp3
+**/*.wav
+**/*.m4a
+**/*.mp4
+**/*.pt
+**/output*
+**/results*

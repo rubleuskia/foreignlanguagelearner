@@ -1,5 +1,10 @@
 # Paid cloud backend: subscriptions, translations and alignment
 
+> Rollout order superseded on 2026-11-09: [Cloud rollout in two stages](CLOUD_ROLLOUT.md).
+> First deliver a private username/password operator API, direct model requests, alignment and
+> monitoring. Apple, billing and the paid-service contracts below belong to stage two. This file
+> records the existing subscription implementation; it is not the prerequisite list for stage one.
+
 **Status:** Implemented in code/offline validation; undeployed, with external acceptance and operating-policy approval pending.
 **Updated:** 2026-11-01.
 **Scope:** Extend the existing AWS alignment architecture with account identity, Apple subscription verification, service-operated AI translation and durable usage limits.

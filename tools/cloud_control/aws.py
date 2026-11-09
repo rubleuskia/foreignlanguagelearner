@@ -2,7 +2,7 @@ import datetime
 import json
 import threading
 import time
-from .config import ALL_STACKS, REGION, ControlError, digest
+from .config import ALL_STACKS, REGION, ControlError, digest, is_operator, expected_stacks, deployment_context
 
 
 def clean_error(error):
@@ -61,8 +61,63 @@ class AWS:
             result = self.client('cloudwatch').describe_alarms(AlarmNames=names[offset:offset+100])
             alarms.extend({'name': a['AlarmName'], 'state': a['StateValue']} for a in result['MetricAlarms'])
         # Infrastructure success and alarms are displayed separately from API functional coverage.
+        visible = expected_stacks(self.config) if is_operator(self.config) else ALL_STACKS[:4]
         return {'configured': True, 'account_id': self.config['account_id'], 'region': self.config['region'],
-            'stacks': rows, 'alarms': alarms, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+            'stacks': [r for r in rows if r['name'] in visible or r['status'] != 'NOT_DEPLOYED'],
+            'alarms': alarms, 'deployment_mode': self.config.get('deployment_mode', 'subscription'),
+            'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+
+    def readiness(self):
+        """Metadata reads only. This does not invoke Bedrock, bootstrap or publish images."""
+        from pathlib import Path
+        cases = []
+        def record(name, fn):
+            try:
+                detail = fn()
+                cases.append({'name': name, 'state': 'passed', 'detail': detail or 'Готово'})
+            except Exception as error:
+                cases.append({'name': name, 'state': 'failed', 'detail': str(error) if isinstance(error, ControlError)
+                              else 'Проверка недоступна: ' + clean_error(error)})
+        record('Доступ к проекту AWS', lambda: str(self.identity()))
+        record('Параметры выбранного этапа', lambda: (deployment_context(self.config), 'Настройки заполнены')[1])
+        def bootstrap():
+            try:
+                self.client('cloudformation').describe_stacks(StackName='CDKToolkit')
+            except Exception as error:
+                if clean_error(error) == 'ValidationError':
+                    raise ControlError('CDKToolkit отсутствует. Нужна одноразовая подготовка CDK перед публикацией; панель не создаёт служебные роли автоматически.') from None
+                raise
+            return 'CDKToolkit найден'
+        record('Подготовка AWS для CDK', bootstrap)
+        if is_operator(self.config):
+            model = 'qwen.qwen3-235b-a22b-2507-v1:0'
+            def model_access():
+                value = self.client('bedrock').get_foundation_model_availability(modelId=model)
+                if (value.get('authorizationStatus') != 'AUTHORIZED' or value.get('regionAvailability') != 'AVAILABLE'
+                        or value.get('entitlementAvailability') != 'AVAILABLE'
+                        or value.get('agreementAvailability', {}).get('status') != 'AVAILABLE'):
+                    raise ControlError('Модель пока не разрешена проекту в Стокгольме.')
+                return 'Разрешение найдено; платный вызов и верификация проекта проверяются отдельно.'
+            record('Bedrock Qwen3: регион и разрешение', model_access)
+            ctx = self.config.get('context', {})
+            if ctx.get('operatorAlignment', 'true') == 'true':
+                def image():
+                    if not ctx.get('workerRepositoryName') or not ctx.get('workerImageDigest'):
+                        raise ControlError('Образ аудио ещё не указан. Заполните репозиторий и digest в настройках.')
+                    self.client('ecr').describe_images(repositoryName=ctx['workerRepositoryName'],
+                                                      imageIds=[{'imageDigest': ctx['workerImageDigest']}])
+                    return 'Неизменяемый образ найден в ECR'
+                record('Образ обработчика аудио', image)
+                def benchmark():
+                    import json
+                    from .config import validate_benchmark
+                    path = self.config.get('alignment_benchmark_file')
+                    if not path: raise ControlError('Укажите файл реальных замеров образа.')
+                    validate_benchmark(json.loads(Path(path).read_text()), ctx.get('workerImageDigest'))
+                    return 'Отчёт соответствует образу и ограничениям'
+                record('Замеры обработчика аудио', benchmark)
+        return {'cases': cases, 'ready': all(c['state'] == 'passed' for c in cases),
+                'note': 'Перед публикацией нужен совместимый проверенный CI-тег. Эта проверка не вызывает модель и не подтверждает её качество.'}
 
 
 def deployable(snapshot):
@@ -73,7 +128,8 @@ def deployable(snapshot):
 
 def api_url(snapshot):
     from urllib.parse import urlparse
-    base = next((s['outputs'].get('ApiUrl') for s in snapshot if s['name'].endswith('Foundation-prod')), None)
+    base = next((s['outputs'].get('ApiUrl') for s in snapshot
+                 if s['name'].endswith(('Foundation-prod', 'Operator-prod'))), None)
     parsed = urlparse(base or '')
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
             or parsed.query or parsed.fragment or parsed.path not in {'', '/'}
