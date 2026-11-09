@@ -13,6 +13,11 @@ described below remains undeployed. See [the operator guide](../docs/OPERATOR_CL
 
 ## iOS CI and verified releases
 
+Backend releases use annotated SemVer-style Git tags such as `v0.0.1-backend.123`. The three-part
+core comes from `backend/VERSION`; the suffix is the successful main CI run number. Full commit and
+run identity live in verified annotation metadata. Cloud Control lists/selects these versions and
+keeps old `backend-<run>-<sha>` tags usable for rollback. No tag is moved or manually rewritten.
+
 CI builds test products once, runs all discovered unit tests, and compiles device Release independently.
 Only PRs into main that change iOS app inputs or UI scenarios additionally run eight exhaustive UI shards on separate standard arm64 macOS
 runners. Documentation/backend/agent-rule/CI-tooling-only PRs omit UI discovery

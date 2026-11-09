@@ -16,7 +16,7 @@ from .aws import AWS, api_url, deployable
 from .config import Configuration, ControlError, digest, validate, deployment_context, expected_stacks, validate_benchmark
 from .health import run
 from .jobs import Jobs, atomic_json, tree_digest
-from .releases import Releases
+from .releases import Releases, parse_tag
 from .server import Application, Handler
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -366,27 +366,144 @@ class HTTPTests(unittest.TestCase):
 
 
 class TaggingTests(unittest.TestCase):
-    def test_tag_creation_idempotency_and_main_push_restriction_with_local_origin(self):
-        with tempfile.TemporaryDirectory() as directory:
-            area=Path(directory);remote=area/'origin.git';repo=area/'repo'
-            env={**os.environ,'GIT_CONFIG_GLOBAL':'/dev/null','GIT_CONFIG_NOSYSTEM':'1'}
-            def cmd(*args,check=True):return subprocess.run(args,cwd=repo if repo.exists() else area,env=env,capture_output=True,text=True,check=check)
-            cmd('git','init','--bare',str(remote));repo.mkdir();cmd('git','init','-b','main')
-            (repo/'test').write_text('fixture')
-            cmd('git','add','test');cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture')
-            sha=cmd('git','rev-parse','HEAD').stdout.strip();cmd('git','remote','add','origin',str(remote));cmd('git','push','origin','main')
-            env.update(RELEASE_EVENT='push',RELEASE_BRANCH='main',RELEASE_SHA=sha,RELEASE_RUN_NUMBER='123')
-            cmd('bash',str(ROOT/'scripts/tag-verified-main.sh'));cmd('bash',str(ROOT/'scripts/tag-verified-main.sh'))
-            tag='backend-123-'+sha[:12]
-            self.assertEqual(cmd('git','rev-parse',tag+'^{commit}').stdout.strip(),sha)
-            self.assertEqual(cmd('git','cat-file','-t',tag).stdout.strip(),'tag')
-            env['RELEASE_RUN_NUMBER']='124'
-            corrupt='backend-124-'+sha[:12]
-            cmd('git','tag',corrupt);cmd('git','push','origin',corrupt)
-            self.assertNotEqual(cmd('bash',str(ROOT/'scripts/tag-verified-main.sh'),check=False).returncode,0)
-            self.assertEqual(cmd('git','cat-file','-t',corrupt).stdout.strip(),'commit')
-            env['RELEASE_EVENT']='pull_request'
-            self.assertNotEqual(cmd('bash',str(ROOT/'scripts/tag-verified-main.sh'),check=False).returncode,0)
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        area=Path(self.tmp.name);self.remote=area/'origin.git';self.repo=area/'repo'
+        self.env={**os.environ,'GIT_CONFIG_GLOBAL':'/dev/null','GIT_CONFIG_NOSYSTEM':'1'}
+        self.cmd('git','init','--bare',str(self.remote));self.repo.mkdir();self.cmd('git','init','-b','main')
+        (self.repo/'backend').mkdir();(self.repo/'backend/VERSION').write_text('0.0.1\n')
+        operator=self.repo/'infra/alignment/bin/operator.ts';operator.parent.mkdir(parents=True);operator.write_text('// fixture')
+        self.cmd('git','add','backend/VERSION','infra')
+        self.cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture')
+        self.sha=self.cmd('git','rev-parse','HEAD').stdout.strip()
+        self.cmd('git','remote','add','origin',str(self.remote));self.cmd('git','push','origin','main')
+        self.ci_url='https://github.com/rubleuskia/foreignlanguagelearner/actions/runs/456'
+        self.env.update(RELEASE_EVENT='push',RELEASE_BRANCH='main',RELEASE_SHA=self.sha,
+                        RELEASE_RUN_NUMBER='123',RELEASE_CI_URL=self.ci_url)
+        self.tag='v0.0.1-backend.123'
+
+    def cmd(self,*args,check=True):
+        return subprocess.run(args,cwd=self.repo if self.repo.exists() else self.repo.parent,
+                              env=self.env,capture_output=True,text=True,check=check)
+
+    def tag_script(self,check=True):
+        return self.cmd('bash',str(ROOT/'scripts/tag-verified-main.sh'),check=check)
+
+    def metadata(self,run=123,**changes):
+        return {'schema_version':1,'version':'0.0.1','commit':self.sha,'ci_run_number':run,
+                'ci_url':self.ci_url,**changes}
+
+    def annotate(self,tag,metadata):
+        self.cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid',
+                 'tag','-a',tag,'-m',json.dumps(metadata))
+
+    def test_tag_creation_is_annotated_immutable_and_idempotent(self):
+        self.tag_script();first=self.cmd('git','rev-parse',self.tag).stdout.strip();self.tag_script()
+        self.assertEqual(self.cmd('git','rev-parse',self.tag).stdout.strip(),first)
+        self.assertEqual(self.cmd('git','rev-parse',self.tag+'^{commit}').stdout.strip(),self.sha)
+        self.assertEqual(self.cmd('git','cat-file','-t',self.tag).stdout.strip(),'tag')
+        annotation=json.loads(self.cmd('git','for-each-ref','--format=%(contents)','refs/tags/'+self.tag).stdout)
+        self.assertEqual(annotation,self.metadata())
+        self.assertEqual(self.cmd('git','tag','-l','backend-*').stdout.strip(),'')
+
+    def test_producer_reads_version_from_tested_commit_not_dirty_working_copy(self):
+        (self.repo/'backend/VERSION').write_text('99.0.0\n')
+        self.tag_script()
+        self.assertEqual(self.cmd('git','tag','-l').stdout.strip(),self.tag)
+
+    def test_unverified_events_branches_identity_and_ci_url_cannot_create_tags(self):
+        for changes in [{'RELEASE_EVENT':'pull_request'},{'RELEASE_BRANCH':'feature'},
+                        {'RELEASE_SHA':'b'*40},{'RELEASE_RUN_NUMBER':'01'},
+                        {'RELEASE_CI_URL':'https://evil.example/actions/runs/456'}]:
+            with self.subTest(changes=changes):
+                old=self.env.copy();self.env.update(changes)
+                self.assertNotEqual(self.tag_script(check=False).returncode,0)
+                self.assertEqual(self.cmd('git','tag','-l').stdout.strip(),'')
+                self.env=old
+
+    def test_existing_lightweight_or_mismatched_annotation_cannot_be_replaced(self):
+        for run,annotated in [(124,False),(125,True)]:
+            tag='v0.0.1-backend.'+str(run)
+            if annotated:self.annotate(tag,self.metadata(run,commit='b'*40))
+            else:self.cmd('git','tag',tag)
+            self.cmd('git','push','origin',tag)
+            before=self.cmd('git','rev-parse',tag).stdout.strip()
+            self.env['RELEASE_RUN_NUMBER']=str(run)
+            self.assertNotEqual(self.tag_script(check=False).returncode,0)
+            self.assertEqual(self.cmd('git','rev-parse',tag).stdout.strip(),before)
+
+    def test_invalid_base_version_is_rejected(self):
+        for version in ['01.0.1','0.0.1.extra','0.0.1\n0.0.2']:
+            with self.subTest(version=version):
+                (self.repo/'backend/VERSION').write_text(version+'\n')
+                self.cmd('git','add','backend/VERSION')
+                self.cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','invalid version')
+                self.env['RELEASE_SHA']=self.cmd('git','rev-parse','HEAD').stdout.strip()
+                self.assertNotEqual(self.tag_script(check=False).returncode,0)
+                self.assertEqual(self.cmd('git','tag','-l').stdout.strip(),'')
+
+    def test_listing_preserves_legacy_rollbacks_and_operator_capability(self):
+        self.tag_script()
+        legacy='backend-122-'+self.sha[:12]
+        self.cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid',
+                 'tag','-a',legacy,'-m','Verified main CI: legacy')
+        self.cmd('git','tag','v0.0.1-backend.126')
+        self.annotate('v0.0.1-backend.127',self.metadata(127,commit='b'*40))
+        self.annotate('v9.9.9-backend.128',self.metadata(128,version='9.9.9'))
+        self.annotate('v0.0.1-backend.129',{'schema_version':1})
+        releases=Releases(self.repo);listed=releases.list()
+        self.assertEqual({r['tag'] for r in listed},{self.tag,legacy})
+        self.assertTrue(all(r['operator_supported'] for r in listed))
+        self.assertEqual(next(r for r in listed if r['tag']==self.tag)['version'],'0.0.1')
+        self.assertTrue(next(r for r in listed if r['tag']==legacy)['legacy'])
+
+    def test_refresh_fetches_version_and_legacy_tags_with_valid_git_refspecs(self):
+        self.tag_script()
+        legacy='backend-122-'+self.sha[:12]
+        self.cmd('git','-c','user.name=Test','-c','user.email=test@example.invalid',
+                 'tag','-a',legacy,'-m','Verified main CI: legacy')
+        self.cmd('git','push','origin',legacy)
+        self.cmd('git','tag','-d',legacy,self.tag)
+        releases=Releases(self.repo);original=releases.git
+        def git(*args):
+            if args==('remote','get-url','origin'): return 'https://github.com/rubleuskia/foreignlanguagelearner.git'
+            return original(*args)
+        with patch.object(releases,'git',side_effect=git): listed=releases.refresh()
+        self.assertEqual({r['tag'] for r in listed},{self.tag,legacy})
+
+    def test_metadata_schema_rejects_boolean_numbers_foreign_urls_and_extra_fields(self):
+        releases=Releases(self.repo)
+        for changes in [{'schema_version':True},{'ci_run_number':True},{'ci_url':'https://evil.example/'},
+                        {'ci_url':123},{'extra':'unexpected'}]:
+            with self.subTest(changes=changes):
+                releases.git=Mock(return_value=json.dumps(self.metadata(**changes)))
+                with self.assertRaises(ControlError):releases.identity(self.tag,self.sha)
+
+    def test_new_version_requires_matching_successful_main_ci_and_annotation_url(self):
+        self.tag_script();releases=Releases(self.repo);releases.refresh=Mock()
+        good={'run_number':123,'head_sha':self.sha,'head_branch':'main','event':'push',
+              'conclusion':'success','html_url':self.ci_url}
+        with patch('tools.cloud_control.releases.command',wraps=__import__('tools.cloud_control.releases',fromlist=['command']).command) as command:
+            # Git remains real; only the GitHub response is faked.
+            original=command._mock_wraps
+            def call(argv,**kwargs):
+                if argv[0]=='gh':return json.dumps({'workflow_runs':[good]})
+                return original(argv,**kwargs)
+            command.side_effect=call
+            self.assertEqual(releases.verify(self.tag)['sha'],self.sha)
+            for change in [{'run_number':124},{'head_sha':'b'*40},{'event':'pull_request'},
+                           {'head_branch':'other'},{'conclusion':'failure'},{'html_url':self.ci_url+'7'}]:
+                with self.subTest(change=change):
+                    rejected={**good,**change}
+                    command.side_effect=lambda argv,**kw: json.dumps({'workflow_runs':[rejected]}) if argv[0]=='gh' else original(argv,**kw)
+                    with self.assertRaises(ControlError): releases.verify(self.tag)
+
+    def test_version_parser_accepts_semver_core_and_rejects_ambiguous_or_unsafe_refs(self):
+        self.assertEqual(parse_tag('v0.0.1-backend.123')['run_number'],123)
+        self.assertEqual(parse_tag('v12.3.4-backend.1')['version'],'12.3.4')
+        for name in ['v01.0.1-backend.1','v0.0.1-backend.01','v0.0.1.extra.1','v0.0.1-backend.1+build',
+                     'v0.0.1-backend.1\n','v0.0.1-backend.1٣','--all',None,'v0.0.1-backend.$(touch /tmp/oops)']:
+            with self.subTest(name=name):self.assertIsNone(parse_tag(name))
 
 
 if __name__=='__main__':unittest.main()

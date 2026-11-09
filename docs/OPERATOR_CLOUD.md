@@ -44,7 +44,7 @@ and API checks for initial backend acceptance; a native password UI can be integ
 ## Before preparation
 
 1. Merge the implementation PR and wait for successful main CI and its automatic annotated
-   `backend-<run>-<sha>` tag. Older tags such as `backend-199-df7dc61bfc31` do not contain this assembly;
+   `v<backend/VERSION>-backend.<CI run number>` tag (for example `v0.0.1-backend.123`). Older tags such as `backend-199-df7dc61bfc31` do not contain this assembly;
    the dashboard explains/filter them in operator mode. Do not manually create a release tag.
 2. Confirm the project Region in AWS Settings → View all projects → Overview → Additional Info.
    The configured SDK Region is Stockholm. Check spend status in AWS Settings → Billing.

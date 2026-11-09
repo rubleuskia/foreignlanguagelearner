@@ -49,14 +49,21 @@ The separate `Tag verified main` workflow runs after full `CI` success for a **p
 main**, including backend contracts, all iOS unit tests and device Release compilation. UI tests run
 only on PRs into main that change iOS inputs (app/resources/project/dependencies/UI scenarios),
 not documentation/backend-only PRs, and are not repeated for the post-merge tag. PR/fork/failed/cancelled/reusable publishing runs cannot tag.
-The annotated immutable name is `backend-<CI run number>-<12-char SHA>`. It records the exact tested
-main commit even when another merge arrives. Re-running accepts the identical tag and refuses to move
-one. Main push CI is grouped per event/commit and survives newer merges; only superseded PR checks
-are automatically cancelled. No deployment follows tagging. The first tag appears after this change merges and main CI passes.
+The annotated immutable name is `v<backend/VERSION>-backend.<CI run number>`, initially
+`v0.0.1-backend.123`. `backend/VERSION` contains the reviewed three-part SemVer core, independent
+of the iOS app version. The numeric suffix is the original CI workflow run number, not a shared
+counter; concurrent commits cannot take the same release number. Bump the core through a normal PR.
+The annotation is schema-versioned JSON containing the core version, full tested commit SHA, CI run
+number and GitHub run URL. The producer reads VERSION from that tested commit, so uncommitted local
+edits cannot rename it. Re-running accepts only the identical commit and metadata and never moves
+a tag. Main push CI is grouped per event/commit and survives newer merges; only superseded PR checks
+are automatically cancelled. No deployment follows tagging. New version tags appear after this change merges and main CI passes.
 
 **Получить теги** fetches main/release tags without forcing existing tag changes. Prepare and deploy
-each recheck annotation, SHA suffix, ancestry in current origin/main and successful matching push-CI
-head/run number via GitHub. A local branch, PR success or unverified tag cannot select production code.
+each recheck annotation, version against the tagged commit's backend/VERSION, ancestry in current
+origin/main and the exact successful main push-CI head/run number/URL via GitHub. Legacy
+`backend-<run>-<12-char SHA>` tags remain visible and retain their SHA-prefix and successful-CI checks
+for rollback; they are neither rewritten nor deleted. A local branch, PR success or unverified tag cannot select production code.
 Older revisions without these verified tags are not selectable.
 The iOS checks use a shared test build, an exhaustive unit shard and eight UI shards only on iOS-changing PRs into main; see [IOS_CI.md](IOS_CI.md).
 Tag latency depends on complete CI and runner availability, not a fixed ten-minute timer.

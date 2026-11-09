@@ -54,7 +54,7 @@ function renderState() {
   const compatible=operator ? state.tags.filter(r=>r.operator_supported) : state.tags;
   $('release-readiness').textContent=operator ? 'Первый этап · совместимых CI-тегов: '+compatible.length+(compatible.length ? '. Выберите версию ниже.' : '. Нужен новый тег после слияния первого этапа в main и успешного CI.') : 'Второй этап · Apple и подписки.';
   const picker=$('release-tag'), selected=picker.value;
-  const placeholder=element('option',compatible.length ? 'Выберите тег релиза' : 'Нет тегов — нажмите «Получить теги»');placeholder.value='';
+  const placeholder=element('option',compatible.length ? 'Выберите версию бэкенда' : 'Нет тегов — нажмите «Получить теги»');placeholder.value='';
   picker.replaceChildren(placeholder,...compatible.map(r=>{const o=element('option',r.tag);o.value=r.tag;return o;}));
   picker.value=compatible.some(r=>r.tag===selected) ? selected : '';
   $('release-count').textContent='Доступно для выбранного этапа: '+compatible.length;
@@ -110,7 +110,7 @@ async function refreshStatus() {
 async function start(path, body) {try{notice('');const job=await api(path,body);await refreshState();showOperation(job.id);}catch(e){notice(e.message);}}
 $('refresh-status').onclick=refreshStatus;
 $('refresh-tags').onclick=()=>start('/api/refresh',{});
-$('prepare').onclick=()=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите CI-тег из списка.');start('/api/prepare',{tag});};
+$('prepare').onclick=()=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите проверенную версию из списка.');start('/api/prepare',{tag});};
 $('smoke-tests').onclick=()=>start('/api/tests',{mode:'smoke'});
 function confirm(title,description,expected,action) {
   const dialog=$('confirm-dialog');$('confirm-title').textContent=title;$('confirm-description').textContent=description;

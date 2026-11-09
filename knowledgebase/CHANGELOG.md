@@ -1,5 +1,18 @@
 # Project changelog
 
+## 2026-11-09 — Readable versioned backend releases
+
+- Produce annotated backend versions such as `v0.0.1-backend.123`, using tracked backend/VERSION and
+  the successful main CI run number. Keep the full tested SHA and CI run URL in immutable metadata.
+- Update Cloud Control fetching/listing/verification and version labels while retaining legacy tag
+  rollback and first-stage operator compatibility. No old tag is moved, renamed or deleted.
+- Add disposable local-origin coverage for valid refspec fetching, metadata/source binding,
+  successful-main CI verification, immutable reruns, invalid versions and legacy rollback.
+- Validation: all 34 control-panel/local-Git tests pass, including real fetch refspecs and producer
+  reruns; shell/JavaScript syntax and diff checks pass. No remote release tags are minted by tests.
+- DECISIONS.md records the naming and verification contract; PROJECT.md and publication guides
+  describe version selection. No AWS resource, deployment behavior or iOS product behavior changes.
+
 ## 2026-11-09 — Publish the private first stage through Cloud Control
 
 - Implement an independent operator CDK assembly with console-created Cognito password/SRP login,
