@@ -72,9 +72,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install project generator
         run: brew install xcodegen
+      - name: Verify all unit tests on one prewarmed simulator
+        if: needs.changes.outputs.run_ui != 'true'
+        run: python3 scripts/ci_ios.py unit
       - name: Compile XCTest products once
+        if: needs.changes.outputs.run_ui == 'true'
         run: python3 scripts/ci_ios.py compile
       - name: Boot isolated simulators and enumerate all tests
+        if: needs.changes.outputs.run_ui == 'true'
         id: plan
         env:
           RUN_UI_TESTS: ${{ needs.changes.outputs.run_ui }}
@@ -85,8 +90,10 @@ jobs:
             python3 scripts/ci_ios.py plan --unit-only
           fi
       - name: Archive portable test products
+        if: needs.changes.outputs.run_ui == 'true'
         run: python3 scripts/ci_ios.py pack
       - name: Share portable test products
+        if: needs.changes.outputs.run_ui == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ios-test-products
@@ -102,12 +109,16 @@ jobs:
           path: |
             build/test-enumeration*.json
             build/test-shards.json
+            build/Tests-unit.xcresult
+            build/summary-unit.json
+            build/DerivedData/Logs/Build
             build/Enumeration-*.xcresult
           if-no-files-found: ignore
           retention-days: 7
   ios-tests:
     name: iOS tests (${{ matrix.shard }})
-    needs: ios-build
+    needs: [changes, ios-build]
+    if: needs.changes.outputs.run_ui == 'true'
     runs-on: macos-26
     timeout-minutes: 25
     strategy:
@@ -168,7 +179,7 @@ jobs:
     # Require every selected shard; only PRs into main touching iOS inputs include UI.
     name: Build and test
     if: always()
-    needs: [ios-build, ios-tests, ios-release]
+    needs: [changes, ios-build, ios-tests, ios-release]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
@@ -181,5 +192,10 @@ jobs:
           results = json.loads(os.environ['CI_JOB_RESULTS'])
           for name, value in results.items():
               print(name, value['result'])
-          assert all(v['result'] == 'success' for v in results.values()), 'An iOS build or test shard did not pass'
+          for name in ['changes', 'ios-build', 'ios-release']:
+              assert results[name]['result'] == 'success', name + ' did not pass'
+          selection = results['changes']['outputs']['run_ui']
+          assert selection in ['true', 'false'], 'Missing UI selection'
+          expected = 'success' if selection == 'true' else 'skipped'
+          assert results['ios-tests']['result'] == expected, 'Required test shards did not pass'
           PY

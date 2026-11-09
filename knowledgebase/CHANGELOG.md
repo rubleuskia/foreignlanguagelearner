@@ -1,5 +1,19 @@
 # Project changelog
 
+## 2026-11-09 — Reuse one simulator for exhaustive unit-only CI
+
+- Main push and other runs without UI coverage now overlap simulator boot with compilation, then
+  discover and execute the complete frozen unit suite on that same runner/device. Remove the
+  duplicate unit consumer boot and artifact handoff. UI-selected PRs retain all matrix shards.
+- Preserve exact discovered-method/count checks, revision/Xcode/architecture binding, diagnostics,
+  25-minute budgets, one discovery-infrastructure retry and no automatic actual-test retries.
+  The aggregate accepts a skipped matrix only after successful combined unit execution and Release.
+- Evidence: main CI 42710302925 spent 128 s compiling and 561 s booting/discovering before a second
+  consumer boot. Local combined execution passes all 273 unit tests with zero skips; 31 CI regression
+  tests cover reuse, retry boundaries, count enforcement and required-gate failure cases. Hosted
+  speed improvement remains to be measured; no fixed completion-time claim.
+- DECISIONS.md records the unit lifecycle change; PROJECT.md and the CI runbook describe the new path.
+
 ## 2026-11-09 — Readable versioned backend releases
 
 - Produce annotated backend versions such as `v0.0.1-backend.123`, using tracked backend/VERSION and
