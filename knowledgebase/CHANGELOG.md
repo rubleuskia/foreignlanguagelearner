@@ -9,8 +9,13 @@
   retain reviewed quality, runtime, memory and cost gates. Stage-two requirements remain unchanged.
 - Explain the scope and missing-evidence requirements in the dashboard and operational guides.
   DECISIONS.md and PROJECT.md record the narrower initial release boundary.
-- Validation: boundary/language/report tests and all three infrastructure assertion suites pass.
-  Actual pilot measurements and listening acceptance are separate pending operational evidence.
+- Add an independent bootstrap-free private Fargate benchmark plan, real engine driver/controller,
+  input/driver checksums, failure-evidence preservation, per-task time limits and guarded cleanup.
+  This provisions no API/service and does not bypass the application benchmark gate.
+- Validation: boundary/language/report tests, failure/privacy harness regression, all four CDK suites
+  and CloudFormation ValidateTemplate pass. Native cloud execution/listening acceptance remain pending.
+  The ARM-host x86 local experiment was stopped after 26.1 audio seconds took 213 seconds; it is not
+  a completed performance/cost benchmark. No accepted report or API deployment is claimed.
 
 ## 2026-11-10 — Complete the Linux audio worker dependency lock
 

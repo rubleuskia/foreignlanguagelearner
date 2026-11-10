@@ -37,7 +37,7 @@ status inspection. For deployment, expand the JSON settings and fill the public 
 [config.example.json](../tools/cloud_control/config.example.json), replacing every placeholder:
 grouped Apple IDs, numeric prod appAppleId, approved product IDs, complete same-account secret ARNs,
 reviewed Apple DER root directory/fingerprints, and absolute path to the reviewed product policy.
-Optional alignment needs the immutable worker image and `alignment_benchmark_file` with real reviewed
+First-stage optional alignment is Polish-only with a 300-second probed duration limit. It needs the immutable worker image and `alignment_benchmark_file` with real reviewed
 measurements. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
 approve budgets/benefits or automatically turn admissions on. Unknown/credential fields are rejected.
 Configure account-level budget notifications separately before enabling paid work; the Stockholm

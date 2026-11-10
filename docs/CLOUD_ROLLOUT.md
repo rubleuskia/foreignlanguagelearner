@@ -103,7 +103,7 @@ The first inference attempt was refused by AWS project verification; no successf
 3. Adapt translations/explanations to direct requests and minimal request records. Validate the
    provider, schema, deadline, repeated-key recovery and disconnect/unknown-outcome behavior.
 4. Adapt alignment to operator authorization without subscription dependencies. Build and publish
-   the immutable worker image; measure actual runtime/memory/cost and six-language quality before
+   the immutable worker image; measure actual runtime/memory/cost and reviewed Polish quality for the first-stage 300-second pilot before
    enabling real jobs. Verify upload/start/result/cancel/expiry and interruption recovery.
 5. Connect alarms and operator notifications, configure retention and cost/concurrency bounds,
    run live smoke and explicitly bounded inference/audio acceptance, and connect the native client.
