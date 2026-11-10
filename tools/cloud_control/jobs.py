@@ -176,7 +176,7 @@ class Jobs:
     def prepare(self, key, config, body):
         context = deployment_context(config)
         if is_operator(config) and context.get('operatorAlignment') == 'true':
-            validate_benchmark(json.loads(Path(config['alignment_benchmark_file']).read_text()), context['workerImageDigest'])
+            validate_benchmark(json.loads(Path(config['alignment_benchmark_file']).read_text()), context['workerImageDigest'], operator=True)
         release = self.releases.verify(body.get('tag'))
         self.update(key, **release)
         aws = self.aws_factory(config)

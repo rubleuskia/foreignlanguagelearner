@@ -47,6 +47,44 @@ The monthly estimate must also include measured ECR storage/pulls, versioned S3 
 requests, transfer, API Gateway, Lambda, DynamoDB, Step Functions, logs, alarms, and the scheduled
 reconciler. The budget resource is an alert and does not stop spending.
 
+## Private operator pilot
+
+The private first stage is a separate measured envelope: Polish only, at most 300 seconds of
+probed audio. `OPERATOR_ALIGNMENT_PILOT=pl-300-v1` is set on the operator alignment Lambdas and
+worker task by CDK. Admission rejects other languages before creating uploads; FFprobe rejects
+actual audio longer than 300 seconds before inference, including files with misleading metadata.
+The shared account/anonymous versions retain their existing six-language/60-minute limits.
+
+For this pilot, use a matching 300-second Polish fixture, run it cold at least three times and
+record provenance/input hashes, slowest wall time, highest memory/disk use, failures and output
+coverage. Listen to the beginning, middle, end and every flagged region before accepting quality.
+Do not silently promote old alignment output or a model-loading check to acceptance evidence.
+The full six-language/60-minute matrix below applies to the broader release, not this pilot.
+
+The dashboard and operator CDK require a report matching the exact image digest, with
+`scope: "operator-pl-300-v1"`, `maxAudioSeconds: 300`, positive `maxJobCostUsd`, and `languages.pl`
+containing `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`, positive finite
+`runtimeSeconds` ≤13500 and `peakMemoryMiB` ≤8192, plus finite nonnegative `costUsd` within the
+stated budget. Attach the raw runs and review evidence; field validation is not quality review.
+Local Docker measurements must identify emulation/hardware and cannot be described as Fargate
+billed measurements. Leave unmeasured cost and unreviewed quality pending.
+
+Run preliminary offline Docker measurements with:
+
+```sh
+python scripts/alignment-benchmark-local.py \
+  --image YOUR_ECR_REPOSITORY@sha256:YOUR_PUBLISHED_DIGEST \
+  --audio /absolute/path/polish-300s.wav \
+  --text /absolute/path/matching-transcript.txt \
+  --output /absolute/path/new-local-measurements
+```
+
+The helper starts three separate CPU-only containers with networking disabled, executes the real
+`base/guided` engine and retains subtitle outputs, logs, input hashes, container wall time and
+Linux cgroup peak memory when available. It records failures and stops rather than retrying them.
+It produces **local evidence**, with quality unaccepted and cloud cost unset, not a deployable
+acceptance report. Supply your own matching fixture and review its recording/text rights.
+
 ## Six-language audio-quality release matrix
 
 Status on 2026-10-27: **not executed**. No matching real-audio fixtures or downloaded model weights were available in this checkout. Existing historical English/Polish smoke results in the conversion reports are not new measurements of these rows. Mocked six-language tests verify accepted codes, pinned worker input, idempotency and punctuation/text reconstruction only.

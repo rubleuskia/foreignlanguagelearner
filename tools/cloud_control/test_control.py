@@ -88,6 +88,21 @@ class ControlTests(unittest.TestCase):
         for changed in [{'workerImageDigest':'wrong'},{'languages':{}},{'maxJobCostUsd':float('nan')}]:
             with self.assertRaises(ControlError): validate_benchmark({**good,**changed},digest_value)
 
+    def test_polish_pilot_report_requires_measured_scope_and_three_full_length_runs(self):
+        image='sha256:'+'a'*64
+        row={'qualityAccepted':True,'runtimeSeconds':300,'peakMemoryMiB':1024,
+             'costUsd':0.1,'audioSeconds':300,'runs':3}
+        report={'workerImageDigest':image,'scope':'operator-pl-300-v1','maxAudioSeconds':300,
+                'maxJobCostUsd':1,'languages':{'pl':row}}
+        validate_benchmark(report,image,operator=True)
+        with self.assertRaises(ControlError): validate_benchmark(report,image)
+        for changed in [{'qualityAccepted':False},{'audioSeconds':299},{'runs':2},
+                        {'runtimeSeconds':float('nan')},{'peakMemoryMiB':8193}]:
+            with self.subTest(changed=changed), self.assertRaises(ControlError):
+                validate_benchmark({**report,'languages':{'pl':{**row,**changed}}},image,operator=True)
+        for changed in [{'scope':'other'},{'maxAudioSeconds':3600},{'workerImageDigest':'wrong'}]:
+            with self.assertRaises(ControlError): validate_benchmark({**report,**changed},image,operator=True)
+
     def test_operator_prepare_uses_verified_source_and_operator_builder_without_apple(self):
         self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}})
         aws=Mock();aws.snapshot.return_value=[]

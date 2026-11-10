@@ -24,8 +24,8 @@ sys.path.insert(0, str(ALIGNER_DIR))
 
 import align  # noqa: E402
 from backend.alignment.domain import (  # noqa: E402
-    AUDIO_LIMIT, DURATION_LIMIT, ERROR_CODES, OUTPUT_LIMIT, TEXT_LIMIT,
-    canonical_json, epoch_now, validate_cues,
+    AUDIO_LIMIT, ERROR_CODES, OUTPUT_LIMIT, TEXT_LIMIT,
+    canonical_json, duration_limit, epoch_now, pilot_enabled, validate_cues,
 )
 from backend.alignment.repository import DynamoRepository  # noqa: E402
 
@@ -85,8 +85,8 @@ def probe_duration(audio: Path) -> float:
         raise
     except Exception as error:
         raise WorkerFailure("INVALID_AUDIO") from error
-    if not 0 < duration <= DURATION_LIMIT:
-        raise WorkerFailure("DURATION_LIMIT" if duration > DURATION_LIMIT else "INVALID_AUDIO")
+    if not 0 < duration <= duration_limit():
+        raise WorkerFailure("DURATION_LIMIT" if duration > duration_limit() else "INVALID_AUDIO")
     return duration
 
 
@@ -150,6 +150,8 @@ class Worker:
         job_id = specification["job_id"]
         if specification.get("schema_version") != 1 or specification.get("profile_id") != "base-guided-v1":
             raise WorkerFailure("INFRASTRUCTURE_FAILURE")
+        if pilot_enabled() and specification.get("language") != "pl":
+            raise WorkerFailure("INVALID_TEXT")
         if not self.model_dir.is_dir():
             raise WorkerFailure("INFRASTRUCTURE_FAILURE")
         if not self.repository.claim_worker(job_id, task_arn(), epoch_now()):

@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 import re
 import unittest
+from unittest.mock import patch
 
 from backend.alignment.domain import (
     PART_SIZE, capability_matches, expected_part_size, part_count, token_hash,
@@ -98,3 +99,18 @@ class DomainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OperatorPilotTests(unittest.TestCase):
+    @patch.dict("os.environ", {"OPERATOR_ALIGNMENT_PILOT": "pl-300-v1"})
+    def test_pilot_rejects_non_polish_and_actual_audio_over_300_seconds(self):
+        from backend.alignment.domain import validate_create, validate_cues
+        from backend.alignment.test_service import request
+        validate_create(request())
+        for language in ("en", "fr", "es", "de", "it"):
+            with self.subTest(language=language), self.assertRaises(AlignmentError):
+                validate_create({**request(), "language": language})
+        validate_cues([{"start": 0, "end": 1000}], 300)
+        with self.assertRaises(AlignmentError) as error:
+            validate_cues([{"start": 0, "end": 1000}], 300.001)
+        self.assertEqual(error.exception.code, "DURATION_LIMIT")

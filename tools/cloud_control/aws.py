@@ -113,7 +113,7 @@ class AWS:
                     from .config import validate_benchmark
                     path = self.config.get('alignment_benchmark_file')
                     if not path: raise ControlError('Укажите файл реальных замеров образа.')
-                    validate_benchmark(json.loads(Path(path).read_text()), ctx.get('workerImageDigest'))
+                    validate_benchmark(json.loads(Path(path).read_text()), ctx.get('workerImageDigest'), operator=True)
                     return 'Отчёт соответствует образу и ограничениям'
                 record('Замеры обработчика аудио', benchmark)
         return {'cases': cases, 'ready': all(c['state'] == 'passed' for c in cases),

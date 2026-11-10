@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import math
+import os
 import re
 import time
 import uuid
@@ -37,6 +38,21 @@ ERROR_CODES = frozenset({
     "WORKER_RESOURCE_LIMIT", "WORKER_TIMEOUT", "INFRASTRUCTURE_FAILURE",
 })
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def pilot_enabled() -> bool:
+    return os.environ.get("OPERATOR_ALIGNMENT_PILOT") == "pl-300-v1"
+
+
+def duration_limit() -> float:
+    return 300.0 if pilot_enabled() else DURATION_LIMIT
+
+
+def validate_language(language: Any) -> None:
+    allowed = {"pl"} if pilot_enabled() else ALLOWED_LANGUAGES
+    if not isinstance(language, str) or language not in allowed:
+        raise AlignmentError("INVALID_PARAMETER", "This audio pilot supports Polish only." if pilot_enabled()
+                             else "Unsupported language.")
 
 
 def epoch_now() -> int:
@@ -102,8 +118,7 @@ def validate_create(body: Any) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise AlignmentError("INVALID_PARAMETER", "Request body must be a JSON object.")
     _exact_fields(body, {"language", "profile_id", "allow_untimed_words", "audio", "text"}, "request")
-    if not isinstance(body["language"], str) or body["language"] not in ALLOWED_LANGUAGES:
-        raise AlignmentError("INVALID_PARAMETER", "Unsupported language.")
+    validate_language(body["language"])
     if body["profile_id"] not in ALLOWED_PROFILES:
         raise AlignmentError("INVALID_PARAMETER", "Unsupported alignment profile.")
     if not isinstance(body["allow_untimed_words"], bool):
@@ -252,8 +267,8 @@ def validate_manifest(
 def validate_cues(cues: Any, duration_seconds: float) -> None:
     if not isinstance(duration_seconds, (int, float)) or not math.isfinite(duration_seconds) or duration_seconds <= 0:
         raise AlignmentError("INVALID_AUDIO", "Audio duration is invalid.")
-    if duration_seconds > DURATION_LIMIT:
-        raise AlignmentError("DURATION_LIMIT", "Audio exceeds the 60-minute limit.")
+    if duration_seconds > duration_limit():
+        raise AlignmentError("DURATION_LIMIT", f"Audio exceeds the {duration_limit():g}-second limit.")
     if not isinstance(cues, list) or not cues:
         raise AlignmentError("INVALID_TIMINGS", "Alignment produced no subtitle cues.")
     previous_end = 0.0
