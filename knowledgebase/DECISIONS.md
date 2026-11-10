@@ -758,3 +758,23 @@ not just the dashboard. Its image-matched benchmark requires three full-length P
 reviewed quality, timing, memory and cost. The subscription/anonymous six-language and 60-minute
 contracts retain their existing limits and benchmark requirements. Missing evidence still blocks
 publication; a local smoke test does not establish Fargate cost or alignment quality.
+
+
+Native pilot measurements use a separate temporary, bootstrap-free CloudFormation assembly with
+one-off Linux/x86_64 Fargate tasks (2 vCPU, 8 GiB), private encrypted/versioned S3 evidence and scoped
+execution/task roles. It creates no API or ECS service. Authorize actual cloud execution separately;
+keep raw evidence locally before deleting only this tagged stack. The controller starts three cold
+runs, attempts to stop each after 20 minutes, and the engine has a 15-minute alarm. Benchmarking
+cannot accept its own listening quality or replace unmeasured cloud billing with local zero cost.
+
+
+## 2026-11-10 — Accept measured private pilot with a listening-check waiver
+
+Following the authorized native Fargate benchmark, the user accepted the Polish ≤300-second pilot
+result and explicitly skipped manual checks for now. The first strict run failed; three runs of
+the existing `allow_untimed_words=true` mode completed with byte-identical SRTs, preserving 626 words
+and flagging 15. The release report records `qualityAccepted=true` as this scoped user acceptance,
+with a waiver method and no claim that manual listening was performed. Raw measurements remain
+unaltered and output review flags stay accurate. Stage-two/broader-language requirements are not
+waived. The temporary benchmark stack was deleted after retaining evidence; image/report readiness
+checks pass. CDKToolkit and the application API remain undeployed.

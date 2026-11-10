@@ -84,7 +84,9 @@ and API checks for initial backend acceptance; a native password UI can be integ
    and `languages.pl`: `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`,
    `runtimeSeconds` ≤13500, `peakMemoryMiB` ≤8192 and nonnegative `costUsd` ≤maxJobCostUsd.
    Runtime/memory must be positive and finite. Record the slowest/highest measured values.
-   A missing or unreviewed report still blocks preparation. Do not substitute smoke checks or
+   A missing or unaccepted report still blocks preparation. The private pilot user may explicitly
+   accept the measured result and waive listening checks; record the waiver without claiming review.
+   Do not substitute smoke checks or
    synthetic infrastructure-test values. Stage two retains its six-language gate.
 5. Bedrock metadata access for Qwen is authorized, but the first actual inference was rejected
    while AWS verifies the project. Metadata readiness cannot prove inference access or language

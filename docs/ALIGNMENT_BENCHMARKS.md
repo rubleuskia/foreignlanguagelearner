@@ -58,7 +58,10 @@ The shared account/anonymous versions retain their existing six-language/60-minu
 For this pilot, use a matching 300-second Polish fixture, run it cold at least three times and
 record provenance/input hashes, slowest wall time, highest memory/disk use, failures and output
 coverage. Listen to the beginning, middle, end and every flagged region before accepting quality.
-Do not silently promote old alignment output or a model-loading check to acceptance evidence.
+Do not silently promote old alignment output or a model-loading check to acceptance evidence. For the
+2026-11-10 private pilot the user explicitly accepted the measured result and waived manual checks;
+record this as user acceptance with a waiver, never as completed listening review. Broader release
+requirements remain unchanged. See [the actual result](AUDIO_PILOT_BENCHMARK.md#measured-private-pilot-result--2026-11-10).
 The full six-language/60-minute matrix below applies to the broader release, not this pilot.
 
 The dashboard and operator CDK require a report matching the exact image digest, with
@@ -78,6 +81,9 @@ python scripts/alignment-benchmark-local.py \
   --text /absolute/path/matching-transcript.txt \
   --output /absolute/path/new-local-measurements
 ```
+
+For native AWS measurements, use the separate [private benchmark plan](AUDIO_PILOT_BENCHMARK.md).
+It has no API/service and does not need the application CDK bootstrap.
 
 The helper starts three separate CPU-only containers with networking disabled, executes the real
 `base/guided` engine and retains subtitle outputs, logs, input hashes, container wall time and

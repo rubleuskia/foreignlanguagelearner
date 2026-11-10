@@ -59,7 +59,7 @@ jobs:
         run: |
           PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
-          python -m unittest tools.cloud_control.test_control -v
+          python -m unittest tools.cloud_control.test_control scripts.test_alignment_benchmark -v
           python -m unittest discover -s Tests/CI -p 'test_*.py' -v
           python -m compileall -q backend tools/subtitle-aligner/worker tools/cloud_control
           node --check tools/cloud_control/web/app.js

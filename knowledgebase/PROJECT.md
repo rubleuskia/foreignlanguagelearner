@@ -9,7 +9,12 @@ two. Bedrock Qwen3 235B A22B Instruct 2507 is selected for the first stage, prio
 The first live inference was blocked by AWS project verification. The operator backend, separate
 CDK assembly and first-stage dashboard preparation are now implemented; publication needs a new
 verified CI-tag, CDK bootstrap, and the audio image/real benchmark report. The private operator audio pilot is limited to Polish
-and 5-minute recordings, with three real measured runs and quality review before publication. The cloud functionality
+and 5-minute recordings, with three real measured runs and quality review before publication.
+The private native Fargate benchmark has completed: three runs took 113–124 seconds for 5-minute
+audio, with 15 of 626 words flagged for timing review. The user accepted the private pilot and
+explicitly waived manual checks. The image/report checks pass; the temporary measurement stack
+was deleted. Application CDK bootstrap/deployment remain separate.
+The cloud functionality
 described below remains undeployed. See [the operator guide](../docs/OPERATOR_CLOUD.md).
 
 ## iOS CI and verified releases
@@ -52,7 +57,7 @@ New books may use English, French, Spanish, German, Italian or Polish, with Russ
 
 Dictionary and Practice share one remembered source-language selection. Its flag-labelled dropdown offers only languages represented by books in the library; when all books share one language, the flag and name remain visible without a dropdown. With no books, saved entry languages remain available. Counts, levels, eligible phrases, quick starts, learnt reviews and resumable rounds stay within that language. Each saved entry retains its own source language after its book is deleted. Reading knowledge is shared across books in the same canonical language and isolated across languages; dictionary phrases and reading forms remain separate metrics. Library backup carries all independent unfinished rounds and language preferences.
 
-Local and backend alignment accept the six lowercase source codes. Deployment remains gated on measured task limits and the six-language real-audio benchmark matrix; no deployment accompanies this change.
+Local and shared account/anonymous alignment accept the six lowercase source codes and retain their six-language benchmark gate. The private operator pilot supports Polish only, up to 300 seconds, with its own three-run Polish benchmark gate. No deployment accompanies this scope change.
 
 
 ## Purpose

@@ -10,7 +10,7 @@ import time
 
 
 DRIVER = r'''
-import json, resource, sys, time
+import json, os, resource, sys, time
 from pathlib import Path
 sys.path.insert(0, '/app/tools/subtitle-aligner')
 import align
@@ -18,7 +18,8 @@ from worker.worker import probe_duration
 
 started = time.monotonic()
 audio = Path('/fixture/audio.wav')
-result = {'qualityAccepted': False, 'costUsd': None}
+allow_untimed = os.environ.get('BENCHMARK_ALLOW_UNTIMED_WORDS') == 'true'
+result = {'qualityAccepted': False, 'costUsd': None, 'allowUntimedWords': allow_untimed}
 try:
     duration = probe_duration(audio)
     if duration != 300:
@@ -28,7 +29,8 @@ try:
         '--audio', str(audio), '--text', '/fixture/transcript.txt',
         '--output', '/result/alignment', '--language', 'pl',
         '--model', 'base', '--guided', '--device', 'cpu',
-        '--model-dir', '/opt/models', '--format', 'both'])
+        '--model-dir', '/opt/models', '--format', 'both'] +
+        (['--allow-untimed-words'] if allow_untimed else []))
     align.run(args)
     data = json.loads(Path('/result/alignment/alignment.json').read_text())
     words = [w for segment in data['alignment']['segments'] for w in segment['words']]
@@ -58,6 +60,7 @@ def main():
     parser.add_argument('--text', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='New local evidence directory')
     parser.add_argument('--runs', type=int, default=3)
+    parser.add_argument('--allow-untimed-words', action='store_true')
     args = parser.parse_args()
     if not re.fullmatch(r'[^\s]+@sha256:[a-f0-9]{64}', args.image):
         parser.error('Use the immutable published image digest')
@@ -75,6 +78,7 @@ def main():
               'hostArchitecture': architecture, 'platform': 'linux/amd64', 'cpus': 2, 'memoryLimitMiB': 8192,
               'audioSha256': sha(args.audio), 'textSha256': sha(args.text),
               'qualityAccepted': False, 'costUsd': None, 'runs': [],
+              'allowUntimedWords': args.allow_untimed_words,
               'note': 'Not a release acceptance report. Listening review, disk and actual cloud billing remain pending.'}
     for number in range(1, args.runs + 1):
         target = args.output / f'run-{number}'
@@ -84,6 +88,7 @@ def main():
         argv = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--network', 'none',
                 '--cpus', '2', '--memory', '8g', '--memory-swap', '8g',
                 '-e', 'OPERATOR_ALIGNMENT_PILOT=pl-300-v1', '-e', 'OMP_NUM_THREADS=2',
+                '-e', 'BENCHMARK_ALLOW_UNTIMED_WORDS=' + str(args.allow_untimed_words).lower(),
                 '-e', 'MKL_NUM_THREADS=2', '-e', 'AWS_EC2_METADATA_DISABLED=true',
                 '--mount', f'type=bind,src={args.audio.resolve()},dst=/fixture/audio.wav,readonly',
                 '--mount', f'type=bind,src={args.text.resolve()},dst=/fixture/transcript.txt,readonly',
