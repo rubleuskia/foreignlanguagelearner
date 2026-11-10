@@ -79,6 +79,9 @@ python scripts/alignment-benchmark-local.py \
   --output /absolute/path/new-local-measurements
 ```
 
+For native AWS measurements, use the separate [private benchmark plan](AUDIO_PILOT_BENCHMARK.md).
+It has no API/service and does not need the application CDK bootstrap.
+
 The helper starts three separate CPU-only containers with networking disabled, executes the real
 `base/guided` engine and retains subtitle outputs, logs, input hashes, container wall time and
 Linux cgroup peak memory when available. It records failures and stops rather than retrying them.
