@@ -1,6 +1,22 @@
 # Project changelog
 
 
+## 2026-11-10 — Execute and retain the private Polish audio benchmark
+
+- Run the published pilot image on native Stockholm Fargate: one strict failure, then three
+  successful cold runs in the existing keep-untimed-words mode (113–124 seconds per 300-second audio).
+  Preserve all 626 words, 15 untimed-word flags and identical SRTs. Conservative peak memory is
+  1,173.69 MiB; calculated task/IPv4 cost across all four attempts is $0.02748, excluding other services.
+- Keep actual inputs/provenance/raw results/video outside Git; generate an image-matched report.
+  Record the user's acceptance and explicit manual-check waiver without claiming listening review.
+  Point Cloud Control at that report and image; both readiness checks pass after restart.
+- Confirm temporary stack DELETE_COMPLETE and retain ECR. Add the stack Purpose tag to the CLI
+  deployment example and expose the existing review-required mode explicitly in measurement helpers.
+- Validation: live native runs, report validation, teardown/ECR checks, harness regressions and
+  workflow lint. DECISIONS.md records scoped user acceptance; PROJECT.md records readiness boundaries.
+  Application bootstrap/API deployment have not been performed.
+
+
 ## 2026-11-10 — Limit first-stage audio to a Polish five-minute pilot
 
 - Restrict operator audio admission to Polish and enforce actual ≤300-second audio in the worker

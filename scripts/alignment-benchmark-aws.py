@@ -83,6 +83,7 @@ def main():
     parser.add_argument('--audio', type=Path, required=True)
     parser.add_argument('--text', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--allow-untimed-words', action='store_true', help='Measure the existing review-required mode')
     args = parser.parse_args()
     if not args.audio.is_file() or not args.text.is_file():
         parser.error('Provide matching real audio/text fixtures')
@@ -106,13 +107,15 @@ def main():
     for path, key in [(args.audio, 'audio.wav'), (args.text, 'transcript.txt'), (driver_path, 'driver.py')]:
         s3.upload_file(str(path), out['Bucket'], 'input/' + key)
     summary = {'workerImageDigest': out['ImageDigest'], 'scope': 'operator-pl-300-v1',
+               'allowUntimedWords': args.allow_untimed_words,
                'maxAudioSeconds': 300, 'qualityAccepted': False, 'costUsd': None,
                'stackId': stack['StackId'], 'project': args.project, 'bucket': out['Bucket'],
                'audioSha256': sha(args.audio), 'textSha256': sha(args.text), 'runs': []}
     (args.output / 'aws-measurements.json').write_text(json.dumps(summary, indent=2))
     for number in range(1, 4):
         run = str(uuid.uuid4())
-        env = [{'name': 'BENCHMARK_RUN_ID', 'value': run}]
+        env = [{'name': 'BENCHMARK_RUN_ID', 'value': run},
+               {'name': 'BENCHMARK_ALLOW_UNTIMED_WORDS', 'value': str(args.allow_untimed_words).lower()}]
         env += [{'name': 'BENCHMARK_' + name + '_SHA256', 'value': sha(path)}
                 for name, path in [('AUDIO', args.audio), ('TEXT', args.text), ('DRIVER', driver_path)]]
         task = None

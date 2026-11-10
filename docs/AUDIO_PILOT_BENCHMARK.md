@@ -1,9 +1,10 @@
 # Private Polish audio measurements
 
-This is a prepared operational workflow, not a completed benchmark. Native cloud execution needs
-separate authorization under [the benchmark procedure](ALIGNMENT_BENCHMARKS.md). A local x86 image
+This workflow was executed for the private Polish pilot on 2026-11-10 after explicit user authorization.
+The measured result and acceptance scope are recorded below. Further native runs need authorization
+under [the benchmark procedure](ALIGNMENT_BENCHMARKS.md). A local x86 image
 run on the ARM development host took 213 seconds to transcribe 26.1 seconds of audio and was stopped;
-it does not establish Fargate performance. No accepted quality/cost report has been generated.
+it does not establish Fargate performance. The local experiment did not produce a completed benchmark. Native measurements below replace it.
 
 The separate `bin/benchmark.ts` assembly creates one private versioned/encrypted S3 bucket, a VPC
 with one verified Stockholm public subnet and S3 gateway endpoint, a security group without inbound
@@ -46,7 +47,8 @@ After approving the concrete template, create only the disposable measurement st
 ```sh
 aws cloudformation deploy --profile fll-control --region eu-north-1 \
   --stack-name ForeignLanguageLearnerAudioBenchmark \
-  --template-file /absolute/path/benchmark-template.json --capabilities CAPABILITY_IAM
+  --template-file /absolute/path/benchmark-template.json --capabilities CAPABILITY_IAM \
+  --tags Purpose=fll-audio-benchmark
 ```
 
 From the repository root, use the project virtual environment with boto3 installed:
@@ -54,9 +56,12 @@ From the repository root, use the project virtual environment with boto3 install
 ```sh
 .cloud-control/venv/bin/python scripts/alignment-benchmark-aws.py \
   --project YOUR_PROJECT_ID --audio /absolute/path/polish-300s.wav \
-  --text /absolute/path/matching-transcript.txt --output /absolute/path/new-aws-evidence
+  --text /absolute/path/matching-transcript.txt --output /absolute/path/new-aws-evidence \
+  --allow-untimed-words
 ```
 
+The example measures the existing review-required mode. Omit `--allow-untimed-words` to test strict
+word timings; the initial strict pilot run failed on zero-duration words and is retained separately.
 The controller refuses another active run, uploads hashed input/driver files, and starts exactly
 three sequential cold tasks. Each driver downloads/verifies fixtures, loads the bundled model,
 probes actual duration and executes the real base/guided engine. Logs with source material stay
@@ -93,3 +98,31 @@ aws cloudformation wait stack-delete-complete --profile fll-control --region eu-
 ```
 
 Keep local evidence, the original source recordings and the existing ECR repository/image.
+
+
+## Measured private pilot result — 2026-11-10
+
+Image: `sha256:1be50fab67827af707be0a7cb6ed25c5a94d9761035311b8bdef0270e866fa45`.
+All runs used the same matching 300-second Polish fixture (626 words), multilingual base/guided,
+2 vCPU and 8 GiB Fargate Linux/x86_64. Preserve the raw local evidence/provenance outside Git.
+
+| Run | Mode | Engine wall seconds | ECS billed seconds | Outcome |
+|---|---|---:|---:|---|
+| Baseline | Strict word durations | 123.386 | 187 | Rejected zero-duration word timings |
+| 1 | Keep untimed words; require review | 113.404 | 173 | Completed |
+| 2 | Keep untimed words; require review | 123.968 | 190 | Completed |
+| 3 | Keep untimed words; require review | 124.077 | 191 | Completed |
+
+All three completed outputs preserve 626 words, flag 15 without individual duration and produce
+byte-identical SRT files. Conservative peak memory across cgroup/process measurements is
+1,173.69 MiB; observed peak root-disk use is 3,731.61 MiB. Calculated compute plus an IPv4-lifetime
+upper bound for all four attempts is $0.02748. This is rate-based arithmetic from measured ECS
+lifetimes, not an invoice; S3/logs/ECR charges remain separate.
+
+The user accepted this result for the private pilot and explicitly waived manual checks:
+“подходит, ручные проверки пока скипаем”. The accepted report records that decision and method;
+**no manual listening acceptance is claimed**. The engine's `requires_review`/untimed-word data
+remain truthful. This is not approval of broader languages, longer audio or stage-two quality.
+The temporary stack reached DELETE_COMPLETE; the ECR image, raw results, input provenance and
+review video were retained locally. Cloud Control's image/report checks pass; application CDK
+bootstrap and application deployment were not performed by this benchmark.

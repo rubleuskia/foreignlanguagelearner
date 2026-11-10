@@ -10,7 +10,10 @@ The first live inference was blocked by AWS project verification. The operator b
 CDK assembly and first-stage dashboard preparation are now implemented; publication needs a new
 verified CI-tag, CDK bootstrap, and the audio image/real benchmark report. The private operator audio pilot is limited to Polish
 and 5-minute recordings, with three real measured runs and quality review before publication.
-A separate private Fargate benchmark plan prepares these measurements without deploying the API.
+The private native Fargate benchmark has completed: three runs took 113–124 seconds for 5-minute
+audio, with 15 of 626 words flagged for timing review. The user accepted the private pilot and
+explicitly waived manual checks. The image/report checks pass; the temporary measurement stack
+was deleted. Application CDK bootstrap/deployment remain separate.
 The cloud functionality
 described below remains undeployed. See [the operator guide](../docs/OPERATOR_CLOUD.md).
 

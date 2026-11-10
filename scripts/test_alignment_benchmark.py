@@ -52,7 +52,7 @@ class BenchmarkHarnessTests(unittest.TestCase):
         clients['s3'].delete_objects.assert_not_called()
         clients['cloudformation'].delete_stack.assert_not_called()
 
-    def test_failed_real_engine_preserves_private_logs_and_cannot_accept_quality(self):
+    def test_engine_failure_preserves_private_logs_and_cannot_accept_quality(self):
         spec = importlib.util.spec_from_file_location('benchmark', Path(__file__).with_name('alignment-benchmark-aws.py'))
         benchmark = importlib.util.module_from_spec(spec); spec.loader.exec_module(benchmark)
         uploaded = {}
@@ -66,12 +66,14 @@ class BenchmarkHarnessTests(unittest.TestCase):
             print('private transcript sentinel')
             raise ValueError('engine failed')
         engine = types.ModuleType('align')
-        engine.parser = lambda: types.SimpleNamespace(parse_args=lambda _: None)
+        arguments = []
+        engine.parser = lambda: types.SimpleNamespace(parse_args=lambda values: arguments.append(values))
         engine.run = fail
         worker = types.ModuleType('worker.worker'); worker.probe_duration = lambda _: 300
         with tempfile.TemporaryDirectory() as temp:
             driver = benchmark.cloud_driver().replace('/tmp/result', temp+'/result').replace('/tmp/fixture', temp+'/fixture')
             env = {'BENCHMARK_BUCKET': 'test-bucket', 'BENCHMARK_RUN_ID': 'test-run',
+                   'BENCHMARK_ALLOW_UNTIMED_WORDS': 'true',
                    **{'BENCHMARK_'+name+'_SHA256': hashlib.sha256(fixtures[key]).hexdigest()
                       for name, key in [('AUDIO','audio.wav'),('TEXT','transcript.txt')]}}
             stdout = io.StringIO()
@@ -83,6 +85,8 @@ class BenchmarkHarnessTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 1)
         row = json.loads(uploaded['results/test-run/measurement.json'])
         self.assertFalse(row['success']); self.assertFalse(row['qualityAccepted'])
+        self.assertTrue(row['allowUntimedWords'])
+        self.assertIn('--allow-untimed-words', arguments[0])
         self.assertIsNone(row['costUsd'])
         self.assertIn(b'private transcript sentinel', uploaded['results/test-run/private.log'])
         self.assertNotIn('private transcript sentinel', stdout.getvalue())
