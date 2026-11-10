@@ -19,6 +19,8 @@ run identity live in verified annotation metadata. Cloud Control lists/selects t
 keeps old `backend-<run>-<sha>` tags usable for rollback. No tag is moved or manually rewritten.
 
 CI builds test products once, runs all discovered unit tests, and compiles device Release independently.
+When UI is not selected, simulator boot overlaps compilation and full unit discovery/execution share
+one owned device on the producer, with no separate unit artifact transfer or second runner.
 Only PRs into main that change iOS app inputs or UI scenarios additionally run eight exhaustive UI shards on separate standard arm64 macOS
 runners. Documentation/backend/agent-rule/CI-tooling-only PRs omit UI discovery
 and execution; XCTest products and consumers share their architecture/toolchain. Push/merge

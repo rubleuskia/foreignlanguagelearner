@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build XCTest products once, then run an exhaustive frozen test shard without rebuilding."""
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import os
 import platform
@@ -88,7 +88,7 @@ def simulator_template():
 
 
 @contextmanager
-def prepared_simulator(label):
+def prepared_simulator(label, *, during_boot=None):
     runtime, template = simulator_template()
     owned = not os.environ.get('SIMULATOR_ID')
     sid = template['udid']
@@ -102,6 +102,9 @@ def prepared_simulator(label):
     try:
         if owned or template['state'] == 'Shutdown':
             command(['xcrun', 'simctl', 'boot', sid], timeout=60)
+        # CoreSimulator boots asynchronously; compile while its migration proceeds on this runner.
+        if during_boot:
+            during_boot()
         # An available UUID is not a ready simulator. Wait for first boot before testmanagerd starts.
         # Hosted first-boot migrations exceed three minutes; restarting repeats that work.
         command(['xcrun', 'simctl', 'bootstatus', sid, '-b'], timeout=600)
@@ -140,29 +143,33 @@ def target_enumeration(value, target):
     return {'errors': [], 'values': [{'enabledTests': enabled, 'disabledTests': []}]}
 
 
+def enumerate_on_simulator(run_file, target, directory, sid, attempt):
+    prefix = f'{target}-{attempt}-{uuid.uuid4().hex[:8]}'
+    output = directory / f'test-enumeration-{prefix}.json'
+    failed = None
+    try:
+        command(['xcodebuild', 'test-without-building', '-xctestrun', run_file,
+            '-destination', 'platform=iOS Simulator,id=' + sid, '-parallel-testing-enabled', 'NO',
+            '-only-testing:' + target, '-resultBundlePath', directory / f'Enumeration-{prefix}.xcresult',
+            '-enumerate-tests', '-test-enumeration-style', 'flat', '-test-enumeration-format', 'json',
+            '-test-enumeration-output-path', output], timeout=240)
+    except subprocess.CalledProcessError as error:
+        failed = error
+    except subprocess.TimeoutExpired as error:
+        raise DiscoveryBootstrapError('XCTest discovery timed out: ' + str(error)) from error
+    if not output.exists():
+        if failed: raise failed
+        raise ValueError('Xcode did not write the discovery manifest for ' + target)
+    result = target_enumeration(json.loads(output.read_text()), target)
+    if failed: raise failed
+    return result
+
+
 def discover_target(run_file, target, directory):
     for attempt in [1, 2]:
-        prefix = f'{target}-{attempt}-{uuid.uuid4().hex[:8]}'
-        output = directory / f'test-enumeration-{prefix}.json'
         try:
             with prepared_simulator('discover-' + target) as sid:
-                failed = None
-                try:
-                    command(['xcodebuild', 'test-without-building', '-xctestrun', run_file,
-                        '-destination', 'platform=iOS Simulator,id=' + sid, '-parallel-testing-enabled', 'NO',
-                        '-only-testing:' + target, '-resultBundlePath', directory / f'Enumeration-{prefix}.xcresult',
-                        '-enumerate-tests', '-test-enumeration-style', 'flat', '-test-enumeration-format', 'json',
-                        '-test-enumeration-output-path', output], timeout=240)
-                except subprocess.CalledProcessError as error:
-                    failed = error
-                except subprocess.TimeoutExpired as error:
-                    raise DiscoveryBootstrapError('XCTest discovery timed out: ' + str(error)) from error
-                if not output.exists():
-                    if failed: raise failed
-                    raise ValueError('Xcode did not write the discovery manifest for ' + target)
-                result = target_enumeration(json.loads(output.read_text()), target)
-                if failed: raise failed
-                return result
+                return enumerate_on_simulator(run_file, target, directory, sid, attempt)
         except DiscoveryBootstrapError as error:
             # Discovery runs no test methods. Retry only its infrastructure bootstrap on a fresh device.
             print(f'Discovery bootstrap failed for {target}, attempt {attempt}: {error}', flush=True)
@@ -190,6 +197,10 @@ def plan_tests(derived, *, include_ui=True):
     for target in ([UI_TARGET, UNIT_TARGET] if include_ui else [UNIT_TARGET]):
         enumeration['values'].extend(discover_target(run_file, target, ROOT / 'build')['values'])
     (ROOT / 'build/test-enumeration.json').write_text(json.dumps(enumeration, indent=2) + '\n')
+    freeze_plan(enumeration, include_ui=include_ui)
+
+
+def freeze_plan(enumeration, *, include_ui):
     plan = make_plan(enumeration, command(['git', 'rev-parse', 'HEAD'], capture=True),
                      command(['xcodebuild', '-version'], capture=True), include_ui=include_ui)
     plan_file = ROOT / 'build/test-shards.json'
@@ -222,8 +233,8 @@ def validate_shard(plan, shard, revision, xcode_version):
     return tests
 
 
-def run_shard(bundle, shard):
-    plan = json.loads((bundle / 'test-shards.json').read_text())
+def run_shard(bundle, shard, *, simulator_id=None, plan_file=None):
+    plan = json.loads((plan_file or bundle / 'test-shards.json').read_text())
     tests = validate_shard(plan, shard, command(['git', 'rev-parse', 'HEAD'], capture=True),
                            command(['xcodebuild', '-version'], capture=True))
     run_file = xctestrun(bundle / 'Products')
@@ -234,7 +245,7 @@ def run_shard(bundle, shard):
         '-default-test-execution-time-allowance', '180', '-maximum-test-execution-time-allowance', '240',
         *['-only-testing:' + test for test in tests], 'CODE_SIGNING_ALLOWED=NO']
     print(f'Running {shard}: {len(tests)} frozen test identifiers', flush=True)
-    with prepared_simulator(shard) as sid:
+    with (nullcontext(simulator_id) if simulator_id else prepared_simulator(shard)) as sid:
         result = subprocess.run([*argv, '-destination', 'platform=iOS Simulator,id=' + sid], cwd=ROOT)
     if results.exists():
         summary = command(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path', results,
@@ -249,9 +260,29 @@ def run_shard(bundle, shard):
         raise subprocess.CalledProcessError(result.returncode, ['xcodebuild', 'test-without-building'])
 
 
+def verify_units(derived):
+    """Compile, discover and execute every unit test with one owned simulator lifecycle."""
+    (ROOT / 'build/test-shards.json').unlink(missing_ok=True)
+    for attempt in [1, 2]:
+        warmup = (lambda: compile_products(derived)) if attempt == 1 else None
+        with prepared_simulator('unit', during_boot=warmup) as sid:
+            run_file = xctestrun(derived / 'Build/Products')
+            validate_compiled_targets(run_file)
+            try:
+                enumeration = enumerate_on_simulator(run_file, UNIT_TARGET, ROOT / 'build', sid, attempt)
+            except DiscoveryBootstrapError as error:
+                # Actual tests execute outside this handler and are never automatically retried.
+                print(f'Discovery bootstrap failed for {UNIT_TARGET}, attempt {attempt}: {error}', flush=True)
+                if attempt == 2: raise
+                continue
+            freeze_plan(enumeration, include_ui=False)
+            run_shard(derived / 'Build', 'unit', simulator_id=sid, plan_file=ROOT / 'build/test-shards.json')
+            return
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['build', 'compile', 'plan', 'pack', 'run'])
+    parser.add_argument('action', choices=['build', 'compile', 'plan', 'pack', 'run', 'unit'])
     parser.add_argument('--derived-data', type=Path, default=ROOT / 'build/DerivedData')
     parser.add_argument('--bundle', type=Path, default=ROOT / 'build/ci-testing')
     parser.add_argument('--shard')
@@ -259,6 +290,7 @@ def main():
     args = parser.parse_args()
     (ROOT / 'build').mkdir(exist_ok=True)
     try:
+        if args.action == 'unit': verify_units(args.derived_data.resolve())
         if args.action in {'compile', 'build'}: compile_products(args.derived_data.resolve())
         if args.action in {'plan', 'build'}: plan_tests(args.derived_data.resolve(), include_ui=not args.unit_only)
         if args.action in {'pack', 'build'}: package_products(args.derived_data.resolve())

@@ -1,14 +1,18 @@
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import json
+import io
+import os
 import plistlib
 import subprocess
 from pathlib import Path
 import tempfile
 import unittest
+import textwrap
+from contextlib import redirect_stdout
 from unittest.mock import patch
 from scripts.ci_ios import (DiscoveryBootstrapError, discover_target, make_plan,
                             plan_tests, prepared_simulator, target_enumeration, validate_compiled_targets,
-                            validate_shard, xctestrun, UI_TARGET)
+                            validate_shard, verify_units, run_shard, xctestrun, UI_TARGET)
 
 
 def enumeration(unit=5, ui=59):
@@ -187,6 +191,109 @@ class DiscoveryTests(unittest.TestCase):
                 self.assertEqual(sid,'owned')
                 self.assertEqual([c.args[0][2] for c in invoke.call_args_list],['create','boot','bootstatus'])
             self.assertEqual([c.args[0][2] for c in cleanup.call_args_list],['shutdown','delete'])
+
+    def test_compilation_overlaps_boot_before_readiness_and_cleanup_still_runs(self):
+        template={'udid':'template','state':'Shutdown','name':'iPhone','deviceTypeIdentifier':'type'}
+        sequence=[]
+        def invoke(argv,**kwargs):
+            sequence.append(argv[2]);return 'owned'
+        with patch.dict('os.environ',{},clear=True), \
+             patch('scripts.ci_ios.simulator_template',return_value=('runtime',template)), \
+             patch('scripts.ci_ios.command',side_effect=invoke),patch('scripts.ci_ios.subprocess.run') as cleanup:
+            with prepared_simulator('unit',during_boot=lambda:sequence.append('compile')):
+                sequence.append('execute')
+        self.assertEqual(sequence,['create','boot','compile','bootstatus','execute'])
+        self.assertEqual(cleanup.call_count,2)
+
+
+class CombinedUnitTests(unittest.TestCase):
+    def execute(self, discovery=None, execution_error=None):
+        calls=[]
+        @contextmanager
+        def simulator(label,*,during_boot=None):
+            sid='owned-'+str(len(calls)+1);calls.append(sid)
+            if during_boot:during_boot()
+            yield sid
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'build').mkdir()
+            (root/'build/test-shards.json').write_text('stale')
+            with patch('scripts.ci_ios.ROOT',root), \
+                 patch('scripts.ci_ios.prepared_simulator',side_effect=simulator), \
+                 patch('scripts.ci_ios.compile_products') as build, \
+                 patch('scripts.ci_ios.xctestrun',return_value=Path('fixture')), \
+                 patch('scripts.ci_ios.validate_compiled_targets'), \
+                 patch('scripts.ci_ios.enumerate_on_simulator',side_effect=discovery or [enumeration(ui=0)]) as discover, \
+                 patch('scripts.ci_ios.command',return_value='fixture'), \
+                 patch('scripts.ci_ios.run_shard',side_effect=execution_error) as run, \
+                 patch.dict('os.environ',{},clear=True):
+                try:verify_units(root/'derived');error=None
+                except Exception as caught:error=caught
+                plan=json.loads((root/'build/test-shards.json').read_text()) if not error else None
+                return calls,build.call_count,discover.call_count,run.call_args_list,error,plan
+
+    def test_full_unit_discovery_and_execution_share_one_device_without_packaging(self):
+        calls,builds,discoveries,runs,error,plan=self.execute()
+        self.assertIsNone(error);self.assertEqual(calls,['owned-1'])
+        self.assertEqual((builds,discoveries,len(runs)),(1,1,1))
+        self.assertEqual(len(plan['shards']['unit']),5)
+        self.assertEqual(set(plan['shards']),{'unit'})
+        self.assertEqual(runs[0].kwargs['simulator_id'],'owned-1')
+
+    def test_discovery_infrastructure_retry_reuses_build_but_owns_a_fresh_device(self):
+        calls,builds,discoveries,runs,error,plan=self.execute([DiscoveryBootstrapError('bootstrap'),enumeration(ui=0)])
+        self.assertIsNone(error);self.assertEqual(calls,['owned-1','owned-2'])
+        self.assertEqual((builds,discoveries,len(runs)),(1,2,1))
+        self.assertEqual(runs[0].kwargs['simulator_id'],'owned-2')
+
+    def test_actual_test_failure_is_not_retried(self):
+        calls,builds,discoveries,runs,error,_=self.execute(execution_error=subprocess.CalledProcessError(65,['xcodebuild']))
+        self.assertIsInstance(error,subprocess.CalledProcessError)
+        self.assertEqual((len(calls),builds,discoveries,len(runs)),(1,1,1,1))
+
+    def test_partial_discovery_still_prevents_any_unit_execution(self):
+        calls,builds,discoveries,runs,error,_=self.execute([ValueError('partial discovery')])
+        self.assertIsInstance(error,ValueError);self.assertEqual(runs,[])
+        self.assertEqual((len(calls),discoveries),(1,1))
+
+    def test_reusing_a_simulator_preserves_the_actual_test_count_guard(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'build').mkdir();(root/'build/Tests-unit.xcresult').mkdir()
+            plan=root/'plan.json';plan.write_text(json.dumps(make_plan(enumeration(ui=0),'commit','Xcode',include_ui=False)))
+            def invoke(argv,**kwargs):
+                if argv[0]=='git':return 'commit'
+                if argv[0]=='xcodebuild':return 'Xcode'
+                return json.dumps({'totalTestCount':4})
+            with patch('scripts.ci_ios.ROOT',root),patch('scripts.ci_ios.command',side_effect=invoke), \
+                 patch('scripts.ci_ios.xctestrun',return_value=Path('fixture')), \
+                 patch('scripts.ci_ios.subprocess.run') as run,patch('scripts.ci_ios.prepared_simulator') as prepare:
+                run.return_value.returncode=0
+                with self.assertRaisesRegex(ValueError,'expected 5 tests, got 4'):
+                    run_shard(root,'unit',simulator_id='same-device',plan_file=plan)
+                prepare.assert_not_called()
+                self.assertIn('platform=iOS Simulator,id=same-device',run.call_args.args[0])
+
+
+class WorkflowGateTests(unittest.TestCase):
+    def evaluate(self, include_ui, *, build='success', release='success', matrix=None, selection='success'):
+        workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/ci.yml').read_text()
+        policy=textwrap.dedent(workflow.rsplit("python3 - <<'PY'\n",1)[1].split('\n          PY',1)[0])
+        needs={'changes':{'result':selection,'outputs':{'run_ui':include_ui}},
+               'ios-build':{'result':build},'ios-release':{'result':release},
+               'ios-tests':{'result':matrix or ('success' if include_ui=='true' else 'skipped')}}
+        with patch.dict(os.environ,{'CI_JOB_RESULTS':json.dumps(needs)}),redirect_stdout(io.StringIO()):
+            exec(compile(policy,'workflow-gate','exec'),{})
+
+    def test_unit_only_success_requires_combined_execution_and_release(self):
+        self.evaluate('false')
+        for kwargs in [{'build':'failure'},{'build':'skipped'},{'release':'cancelled'},
+                       {'matrix':'failure'},{'selection':'failure'}]:
+            with self.subTest(kwargs=kwargs),self.assertRaises(AssertionError):self.evaluate('false',**kwargs)
+
+    def test_ui_selection_requires_every_matrix_job_and_a_valid_selection(self):
+        self.evaluate('true')
+        for kwargs in [{'matrix':'skipped'},{'matrix':'failure'},{'build':'failure'}]:
+            with self.subTest(kwargs=kwargs),self.assertRaises(AssertionError):self.evaluate('true',**kwargs)
+        with self.assertRaises(AssertionError):self.evaluate('')
 
 
 if __name__=='__main__':unittest.main()

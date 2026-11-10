@@ -1,5 +1,25 @@
 # Architectural and product decisions
 
+## Single simulator lifecycle for unit-only CI (2026-11-09)
+
+Run exhaustive unit discovery and execution together on the producer when the existing event/path
+selector does not require UI coverage. Boot one owned simulator before compiling, overlap migration
+with compilation, wait for readiness, freeze every discovered unit method and execute that exact
+plan on the same device. This supersedes fresh separate discovery/execution devices only for the
+unit-only path. A discovery bootstrap failure gets one new owned device without recompiling; actual
+test execution occurs outside the retry handler and is never automatically repeated.
+
+Avoid a second macOS runner, duplicate first-boot migration and artifact transport for this path.
+Retain source/Xcode/architecture identity, complete target/method validation, actual-result count
+checks and diagnostics. The final gate requires successful selection, combined producer and device
+Release; only the unselected matrix may be skipped. UI-selected PRs retain full build-once discovery,
+the unit/eight-UI-shard matrix and isolated execution devices. Full main CI remains mandatory for tags.
+
+Motivation is measured startup cost, not weaker coverage: run 42710302925 used 128 seconds for build
+and 561 seconds for initial boot/discovery before the separate unit consumer repeated simulator
+startup. Local combined validation ran all 273 unit tests with no skips; hosted wall-time savings
+must be measured after the change rather than promised in advance.
+
 ## Versioned backend release tags (2026-11-09)
 
 Replace newly produced `backend-<CI run>-<12-character SHA>` names with

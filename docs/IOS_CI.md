@@ -26,20 +26,30 @@ of silently omitting UI. Full Git history avoids file-list pagination limits and
 
 The `CI` workflow has independent jobs:
 
-- **Select UI coverage** computes the event/path decision before the test plan. Failure blocks the
-  producer and therefore the aggregate; it cannot become a successful skip.
-
-- **Build iOS test products** builds the host architecture once, enumerates actual XCTest methods
-  and packages Products plus a frozen test plan. When UI is not selected, `plan --unit-only`
-  enumerates only the unit bundle; test products still compile together. Its 25-minute bound covers compilation/enumeration.
-- **iOS tests (unit/ui-1…ui-8)** restore that artifact and use `test-without-building` on separate
-  macOS machines. All unit cases run in one shard; sorted UI methods are distributed round-robin
-  across eight shards, spreading the expensive library/reader classes. Each job has a 25-minute bound, including boot, Xcode launch and diagnostic upload.
-- **Compile iOS device Release** runs independently, with a 25-minute bound.
-- **Build and test** preserves the existing required-check name. It succeeds only if the build,
-  every event-selected matrix shard and Release succeeded; skipped/cancelled/failed dependencies
-  fail the gate. UI shards are absent from the main matrix, not accepted as failed/skipped prerequisites.
+- **Select UI coverage** computes the event/path decision. Failure blocks verification.
+- **Build iOS test products** has two exhaustive paths. With no UI selected, `ci_ios.py unit` starts
+  an owned simulator before compilation, lets first-boot migration overlap the build, discovers
+  every unit method and immediately executes the frozen unit plan on that same device. It saves
+  diagnostics directly; there is no unit artifact upload/download or second runner/boot. With UI
+  selected, the existing producer compiles, separately discovers both bundles and packages Products
+  with the complete frozen matrix. The job retains its 25-minute budget.
+- **iOS tests (unit/ui-1…ui-8)** runs only when UI coverage is selected. Its consumers restore the
+  architecture-bound artifact and execute the exhaustive matrix on separate macOS runners, with
+  a fresh simulator for each shard and the existing 25-minute budget. The unit matrix entry still
+  runs all unit cases; UI cases retain eight balanced groups.
+- **Compile iOS device Release** runs independently, with a 25-minute budget.
+- **Build and test** keeps the required-check name. Selection, producer and Release must succeed.
+  With UI selected, every matrix job must also succeed. With no UI selected, the matrix must be
+  intentionally skipped and the producer must have passed the combined unit execution. Missing
+  selection, failed/skipped producer, failed Release or failed/cancelled required matrix jobs fail.
 - Backend checks remain independent and required for overall workflow success.
+
+Run [42710302925](https://github.com/rubleuskia/foreignlanguagelearner/actions/runs/42710302925)
+measured 128 seconds of simulator compilation and 561 seconds of first boot plus unit discovery.
+The old consumer then booted a second fresh simulator for the same unit bundle. The new path removes
+that duplicate lifecycle and artifact handoff, while overlapping boot with compilation. Local
+validation executed all 273 unit tests successfully on the reused device with zero skipped tests;
+hosted before/after wall time still needs measurement. UI-changing PRs retain the matrix path.
 
 Tagging still requires complete successful **main push CI**, including backend, unit and Release jobs. UI is checked on iOS-changing PRs into main and is not repeated
 after merge. There is no manual tag bypass or backend-only success path. Total wall time also depends on available runners;
@@ -75,11 +85,15 @@ symlinks that ordinary artifact file uploads cannot preserve. A stable product a
 re-running only failed jobs while reusing the successful build from the same workflow; a producer
 re-run overwrites that artifact. Shard diagnostic artifact names include the attempt number.
 
-Each discovery target and test shard receives its own fresh simulator, with explicit `bootstatus -b`
-readiness before Xcode starts. First-boot system migration has a separate 600-second budget;
+UI matrix discovery targets and execution shards each receive their own fresh simulator. The
+unit-only path owns one fresh simulator for discovery and execution together. In both paths,
+`bootstatus -b` readiness must complete before XCTest discovery starts. First-boot system migration has a separate 600-second budget;
 a readiness timeout fails without recreating the device and repeating migration. Unit and UI discovery are separate invocations to avoid cross-bundle
 testmanagerd bootstrap interference. A user-specified SIMULATOR_ID is prewarmed but never erased/deleted.
-Owned CI devices are cleaned up afterward. Compile, discovery and packaging have separate workflow steps.
+Owned devices are cleaned up afterward, including on compilation/discovery/test failure. In the
+unit-only path compilation runs during boot; a bounded discovery-only retry creates a fresh device
+without repeating compilation, then executes on that successfully discovered device. Actual-test
+execution is outside the discovery retry handler. UI compilation/discovery/packaging retain separate steps.
 
 Xcode can exit successfully with a partial manifest after losing testmanagerd. Such a manifest is
 rejected, including placeholder bundle identifiers. Only XCTest discovery bootstrap loss/timeout after device readiness gets one
@@ -96,6 +110,10 @@ run. Matrix fail-fast is disabled so other shards can finish and save their diag
 
 ```sh
 python3 -m unittest discover -s Tests/CI -p 'test_*.py' -v
+# Combined exhaustive unit-only path:
+python3 scripts/ci_ios.py unit --derived-data build/UnitCIDerivedData
+
+# Separate UI-matrix reproduction (preserve the previous Tests-unit.xcresult first):
 python3 scripts/ci_ios.py build
 mkdir -p build/ci-testing
 tar -xzf build/ios-test-products.tar.gz -C build/ci-testing
