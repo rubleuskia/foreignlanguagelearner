@@ -54,6 +54,32 @@ class ControlTests(unittest.TestCase):
         with self.assertRaises(ControlError): aws.snapshot()
         aws.client.assert_called_once_with('sts')
 
+    def test_missing_bootstrap_is_actionable_but_other_service_errors_are_not_mislabelled(self):
+        from botocore.exceptions import ClientError
+        aws=AWS.__new__(AWS);cf=Mock();aws.client=Mock(return_value=cf)
+        missing=ClientError({'Error':{'Code':'ValidationError','Message':'Stack with id CDKToolkit does not exist'}},'DescribeStacks')
+        cf.describe_stacks.side_effect=missing
+        with self.assertRaisesRegex(ControlError,'одноразовая подготовка CDK'):
+            aws.require_bootstrap()
+        for code,message in [('ValidationError','Invalid parameter'),('AccessDenied','Not authorized')]:
+            error=ClientError({'Error':{'Code':code,'Message':message}},'DescribeStacks')
+            cf.describe_stacks.side_effect=error
+            with self.assertRaises(ClientError) as result: aws.require_bootstrap()
+            self.assertIs(result.exception,error)
+
+    def test_prepare_preserves_bootstrap_explanation_before_building_assets(self):
+        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}})
+        aws=Mock();aws.snapshot.return_value=[]
+        aws.require_bootstrap.side_effect=ControlError('CDKToolkit отсутствует. Нужна одноразовая подготовка CDK.')
+        releases=Mock();releases.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
+        jobs=Jobs(ROOT,self.config,aws_factory=lambda _:aws,releases=releases)
+        jobs.execute=Mock()
+        result=self.wait(jobs,jobs.start('prepare',{'tag':TAG})['id'])
+        self.assertEqual(result['state'],'failed')
+        self.assertIn('CDKToolkit отсутствует',result['error'])
+        self.assertNotIn('ValidationError',result['error'])
+        jobs.execute.assert_not_called()
+
     def test_prepare_with_view_only_config_reports_missing_deployment_fields(self):
         self.config.save({k:v for k,v in CONFIG.items() if k != 'context'})
         aws_factory=Mock(); releases=Mock()

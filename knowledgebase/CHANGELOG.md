@@ -1,6 +1,18 @@
 # Project changelog
 
 
+## 2026-11-10 — Explain missing CDK bootstrap during plan preparation
+
+- Reuse the same missing-CDKToolkit check in readiness and first-stage preparation, replacing the
+  opaque `Operation unavailable: ValidationError` with a one-time bootstrap instruction and guide link.
+  Other validation/authorization errors retain their own classification; no bootstrap is automatic.
+- Validation: 37 control-panel tests pass, including missing-stack handling, unrelated service errors
+  and stopping preparation before asset building. No architecture or project overview changed.
+- Reviewed the pinned CLI bootstrap template for Stockholm. Execution was rejected by automatic
+  approval review because its persistent CloudFormation role uses AdministratorAccess without
+  explicit approval of that IAM change. CDKToolkit remains absent; no bootstrap creation is claimed.
+
+
 ## 2026-11-10 — Execute and retain the private Polish audio benchmark
 
 - Run the published pilot image on native Stockholm Fargate: one strict failure, then three
