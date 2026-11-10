@@ -57,6 +57,10 @@ and API checks for initial backend acceptance; a native password UI can be integ
    AWS_PROFILE=fll-control node_modules/.bin/cdk bootstrap aws://YOUR_PROJECT_ID/eu-north-1
    ```
 
+   The default bootstrap includes a CloudFormation execution role with AdministratorAccess, plus
+   deployment/publishing/lookup roles and private asset stores. Review `cdk bootstrap --show-template`
+   and obtain explicit authorization for this persistent privileged IAM change before running it.
+   Trust only the current project, use the selected Region, and retain the toolkit for deployment.
    The panel does not bootstrap or grant itself permissions. No bootstrap/deployment is performed
    by opening it or checking readiness. Prepare/deploy still use the explicit named SDK profile.
 4. For audio, obtain an immutable ECR worker digest and matching actual measurements. Build from

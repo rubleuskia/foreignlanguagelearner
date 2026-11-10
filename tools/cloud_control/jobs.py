@@ -183,7 +183,7 @@ class Jobs:
         snapshot = aws.snapshot(); deployable(snapshot)
         if is_operator(config):
             # No hidden bootstrap or image publishing during preparation.
-            aws.client('cloudformation').describe_stacks(StackName='CDKToolkit')
+            aws.require_bootstrap()
             if context.get('operatorAlignment') == 'true':
                 aws.client('ecr').describe_images(repositoryName=context['workerRepositoryName'],
                     imageIds=[{'imageDigest': context['workerImageDigest']}])

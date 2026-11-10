@@ -67,6 +67,18 @@ class AWS:
             'alarms': alarms, 'deployment_mode': self.config.get('deployment_mode', 'subscription'),
             'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
 
+    def require_bootstrap(self):
+        try:
+            self.client('cloudformation').describe_stacks(StackName='CDKToolkit')
+        except Exception as error:
+            message = getattr(error, 'response', {}).get('Error', {}).get('Message', '')
+            if clean_error(error) == 'ValidationError' and 'does not exist' in message:
+                raise ControlError('CDKToolkit отсутствует. Нужна одноразовая подготовка CDK в eu-north-1 '
+                    'перед подготовкой плана публикации. Инструкция: docs/OPERATOR_CLOUD.md, '
+                    '«Before preparation», шаг 3. Панель не создаёт служебные роли автоматически.') from None
+            raise
+        return 'CDKToolkit найден'
+
     def readiness(self):
         """Metadata reads only. This does not invoke Bedrock, bootstrap or publish images."""
         from pathlib import Path
@@ -80,15 +92,7 @@ class AWS:
                               else 'Проверка недоступна: ' + clean_error(error)})
         record('Доступ к проекту AWS', lambda: str(self.identity()))
         record('Параметры выбранного этапа', lambda: (deployment_context(self.config), 'Настройки заполнены')[1])
-        def bootstrap():
-            try:
-                self.client('cloudformation').describe_stacks(StackName='CDKToolkit')
-            except Exception as error:
-                if clean_error(error) == 'ValidationError':
-                    raise ControlError('CDKToolkit отсутствует. Нужна одноразовая подготовка CDK перед публикацией; панель не создаёт служебные роли автоматически.') from None
-                raise
-            return 'CDKToolkit найден'
-        record('Подготовка AWS для CDK', bootstrap)
+        record('Подготовка AWS для CDK', self.require_bootstrap)
         if is_operator(self.config):
             model = 'qwen.qwen3-235b-a22b-2507-v1:0'
             def model_access():
