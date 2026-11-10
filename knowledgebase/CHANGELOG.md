@@ -1,5 +1,17 @@
 # Project changelog
 
+## 2026-11-10 — Complete the Linux audio worker dependency lock
+
+- Pin Whisper's Linux/x86_64 Triton dependency to 3.3.1 with the official CPython 3.12 wheel hash.
+  This fixes strict Docker builds failing on unpinned `triton>=2`; CPU-only PyTorch and hash enforcement remain unchanged.
+- Add a real Linux dependency-resolution/hash check to backend CI, with pip caching for the worker
+  and billing locks. It performs a dry run so worker versions do not replace backend test dependencies.
+- Validation: strict Linux/amd64 Docker build succeeds; pip check reports no broken requirements.
+  Offline runtime checks pass as UID 65532: CPU-only PyTorch/torchaudio, multilingual Whisper base
+  loading, model checksum and worker import. Three worker-adapter tests, workflow lint and diff checks pass.
+  This is a runtime smoke check, not the real-audio quality/cost benchmark.
+- No architectural decision or project overview changed.
+
 ## 2026-11-09 — Reuse one simulator for exhaustive unit-only CI
 
 - Main push and other runs without UI coverage now overlap simulator boot with compilation, then
