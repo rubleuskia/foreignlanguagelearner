@@ -70,7 +70,7 @@ def is_operator(config):
     return config.get('deployment_mode') == 'operator'
 
 
-def validate_benchmark(report, digest_value):
+def validate_benchmark(report, digest_value, *, operator=False):
     import math
     def positive(value, maximum):
         return type(value) in (int, float) and math.isfinite(value) and 0 < value <= maximum
@@ -80,10 +80,15 @@ def validate_benchmark(report, digest_value):
     languages = report.get('languages')
     if not isinstance(languages, dict):
         raise ControlError('В отчёте нужен объект languages с реальными замерами.')
-    for language in ('en', 'fr', 'es', 'de', 'it', 'pl'):
+    if operator and (report.get('scope') != 'operator-pl-300-v1'
+                     or report.get('maxAudioSeconds') != 300):
+        raise ControlError('Нужны реальные замеры пилота: польский язык, запись 300 секунд.')
+    for language in (('pl',) if operator else ('en', 'fr', 'es', 'de', 'it', 'pl')):
         row = languages.get(language, {})
         if not isinstance(row, dict):
             raise ControlError('Неверная строка замеров: ' + language)
+        if operator and (row.get('audioSeconds') != 300 or type(row.get('runs')) is not int or row['runs'] < 3):
+            raise ControlError('Для польского пилота нужны минимум три прогона записи длиной 300 секунд.')
         cost = row.get('costUsd')
         if (row.get('qualityAccepted') is not True or not positive(row.get('runtimeSeconds'), 13500)
                 or not positive(row.get('peakMemoryMiB'), 8192) or type(cost) not in (int, float)
@@ -127,7 +132,7 @@ def deployment_context(config):
             if not re.fullmatch(r'sha256:[a-f0-9]{64}', context.get('workerImageDigest', '')):
                 raise ControlError('Для аудио нужен неизменяемый digest образа sha256:…')
             if not config.get('alignment_benchmark_file'):
-                raise ControlError('Для аудио нужен файл реальных замеров образа. Его формат описан в инструкции первого этапа.')
+                raise ControlError('Для аудио нужен файл реальных замеров образа. Нужны три прогона польской записи длиной 5 минут; формат — в инструкции первого этапа.')
         return context
     missing = REQUIRED_CONTEXT - context.keys()
     if context.get('cloudComponents') != 'billing' and not context.get('openaiSecretArn'):

@@ -1,5 +1,17 @@
 # Project changelog
 
+
+## 2026-11-10 — Limit first-stage audio to a Polish five-minute pilot
+
+- Restrict operator audio admission to Polish and enforce actual ≤300-second audio in the worker
+  and cue validation. CDK applies the same pilot scope to alignment functions and worker tasks.
+- Require an image-matched three-run, 300-second Polish report in both Cloud Control and CDK;
+  retain reviewed quality, runtime, memory and cost gates. Stage-two requirements remain unchanged.
+- Explain the scope and missing-evidence requirements in the dashboard and operational guides.
+  DECISIONS.md and PROJECT.md record the narrower initial release boundary.
+- Validation: boundary/language/report tests and all three infrastructure assertion suites pass.
+  Actual pilot measurements and listening acceptance are separate pending operational evidence.
+
 ## 2026-11-10 — Complete the Linux audio worker dependency lock
 
 - Pin Whisper's Linux/x86_64 Triton dependency to 3.3.1 with the official CPython 3.12 wheel hash.

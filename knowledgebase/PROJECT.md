@@ -8,7 +8,8 @@ alignment and monitoring. Apple accounts, StoreKit subscriptions and customer qu
 two. Bedrock Qwen3 235B A22B Instruct 2507 is selected for the first stage, prioritizing Polish/Russian.
 The first live inference was blocked by AWS project verification. The operator backend, separate
 CDK assembly and first-stage dashboard preparation are now implemented; publication needs a new
-verified CI-tag, CDK bootstrap, and the audio image/real benchmark report. The cloud functionality
+verified CI-tag, CDK bootstrap, and the audio image/real benchmark report. The private operator audio pilot is limited to Polish
+and 5-minute recordings, with three real measured runs and quality review before publication. The cloud functionality
 described below remains undeployed. See [the operator guide](../docs/OPERATOR_CLOUD.md).
 
 ## iOS CI and verified releases

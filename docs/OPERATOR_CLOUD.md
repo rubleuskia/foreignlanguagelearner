@@ -78,10 +78,14 @@ and API checks for initial backend acceptance; a native password UI can be integ
    excludes local state/credentials; never add them to the build context.
 
    The provenance file is not a benchmark/quality acceptance report. Record runtime, peak memory,
-   cost and manually reviewed six-language quality using [the benchmark procedure](ALIGNMENT_BENCHMARKS.md).
-   The report must contain `workerImageDigest`, positive `maxJobCostUsd` and `languages` with en/fr/es/
-   de/it/pl rows: `qualityAccepted: true`, `runtimeSeconds` ≤13500, `peakMemoryMiB` ≤8192 and nonnegative
-   `costUsd` ≤maxJobCostUsd. Do not substitute synthetic CDK test reports for measured results.
+   cost and manually reviewed Polish quality using [the pilot benchmark procedure](ALIGNMENT_BENCHMARKS.md#private-operator-pilot).
+   Stage one is restricted to Polish and probed audio duration ≤300 seconds. Its report must contain
+   `workerImageDigest`, `scope: "operator-pl-300-v1"`, `maxAudioSeconds: 300`, positive `maxJobCostUsd`
+   and `languages.pl`: `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`,
+   `runtimeSeconds` ≤13500, `peakMemoryMiB` ≤8192 and nonnegative `costUsd` ≤maxJobCostUsd.
+   Runtime/memory must be positive and finite. Record the slowest/highest measured values.
+   A missing or unreviewed report still blocks preparation. Do not substitute smoke checks or
+   synthetic infrastructure-test values. Stage two retains its six-language gate.
 5. Bedrock metadata access for Qwen is authorized, but the first actual inference was rejected
    while AWS verifies the project. Metadata readiness cannot prove inference access or language
    quality; finish the bounded live acceptance after verification clears. Do not change Regions.

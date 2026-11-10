@@ -748,3 +748,13 @@ no billing/provider secret access. Real benchmarks, Apple sandbox/TestFlight/pro
 deployment remain unexecuted; code/runbooks do not constitute release approval.
 
 Before StoreKit checkout, require an authenticated server catalogue of configured products/allowances with purchases enabled. Show server allowances alongside Apple prices/periods; block checkout for a disabled or unconfigured service, and suppress repurchase when a verified current purchase needs recovery.
+
+
+## 2026-11-10 — Bound the private operator audio pilot
+
+The first stage supports Polish audio only, with an actual FFprobe duration at most 300 seconds.
+This is a user-selected narrower release envelope. Enforce it in operator admission and the worker,
+not just the dashboard. Its image-matched benchmark requires three full-length Polish runs and
+reviewed quality, timing, memory and cost. The subscription/anonymous six-language and 60-minute
+contracts retain their existing limits and benchmark requirements. Missing evidence still blocks
+publication; a local smoke test does not establish Fargate cost or alignment quality.

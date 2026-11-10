@@ -27,8 +27,10 @@ export interface AlignmentStackProps extends cdk.StackProps {
   readonly workerAvailabilityZones?: string[];
   readonly cloudCode?: lambda.Code;
   readonly benchmarkReport?: {
+    scope?: string;
+    maxAudioSeconds?: number;
     workerImageDigest: string;
-    languages: Record<string, { qualityAccepted: boolean; runtimeSeconds: number; peakMemoryMiB: number; costUsd: number }>;
+    languages: Record<string, { qualityAccepted: boolean; runtimeSeconds: number; peakMemoryMiB: number; costUsd: number; audioSeconds?: number; runs?: number }>;
     maxJobCostUsd: number;
   };
 }
@@ -52,13 +54,14 @@ export class AlignmentStack extends cdk.Stack {
       const report = props?.benchmarkReport;
       if (!props?.cloudCode || report?.workerImageDigest !== workerImageDigest || !report ||
           !Number.isFinite(report.maxJobCostUsd) || report.maxJobCostUsd <= 0 ||
-          ["en", "fr", "es", "de", "it", "pl"].some(language => {
+          (operator && (report.scope !== "operator-pl-300-v1" || report.maxAudioSeconds !== 300)) ||
+          (operator ? ["pl"] : ["en", "fr", "es", "de", "it", "pl"]).some(language => {
             const metric = report.languages?.[language];
-            return !metric || metric.qualityAccepted !== true || !Number.isFinite(metric.runtimeSeconds) ||
+            return !metric || (operator && (metric.audioSeconds !== 300 || !Number.isInteger(metric.runs) || (metric.runs ?? 0) < 3)) || metric.qualityAccepted !== true || !Number.isFinite(metric.runtimeSeconds) ||
               metric.runtimeSeconds <= 0 || metric.runtimeSeconds > 13500 || !Number.isFinite(metric.peakMemoryMiB) ||
               metric.peakMemoryMiB <= 0 || metric.peakMemoryMiB > 8192 || !Number.isFinite(metric.costUsd) ||
               metric.costUsd < 0 || metric.costUsd > report.maxJobCostUsd;
-          })) throw new Error("Paid alignment requires an image-matched, reviewed six-language benchmark report");
+          })) throw new Error("Alignment requires an image-matched reviewed benchmark report for its release scope");
     }
     const backendTag = operator ? "alignment-operator-v1" : paid ? "alignment-account-v2" : "alignment-v1";
 
@@ -140,6 +143,7 @@ export class AlignmentStack extends cdk.Stack {
       environment: {
         ALIGNMENT_TABLE: table.tableName,
         ALIGNMENT_BUCKET: bucket.bucketName,
+        ...(operator ? { OPERATOR_ALIGNMENT_PILOT: "pl-300-v1" } : {}),
         MODEL_DIR: "/opt/models",
         WORKER_IMAGE_DIGEST: workerImageDigest,
       },
@@ -152,7 +156,7 @@ export class AlignmentStack extends cdk.Stack {
     });
     const commonEnvironment = {
       ...(paid ? { ...paid.common, PAID_ALIGNMENT: "true" } : {}),
-      ...(operator ? operator.common : {}),
+      ...(operator ? { ...operator.common, OPERATOR_ALIGNMENT_PILOT: "pl-300-v1" } : {}),
       ALIGNMENT_TABLE: table.tableName,
       ALIGNMENT_BUCKET: bucket.bucketName,
       ECS_CLUSTER_ARN: cluster.clusterArn,
