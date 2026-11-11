@@ -4,6 +4,19 @@
 - Documented the paid-team requirement for Release and native Apple reauthentication/recovery testing.
 - Signing configuration decision recorded in DECISIONS.md; project purpose and boundaries are unchanged, so PROJECT.md is unchanged.
 
+## 2026-11-11 — Prepare private backend migration from Bedrock to OpenAI
+
+- Replace the operator Qwen Converse provider with the existing OpenAI Responses integration,
+  defaulting to GPT-5 mini/minimal reasoning like the app, strict JSON and server validation.
+- Preserve one-submission idempotency/unknown outcomes and the 2048-token cap; use an 18-second
+  operator timeout without changing the subscription worker's 45-second default.
+- Add a same-project Stockholm Secrets Manager ARN to CDK/dashboard configuration, scope key
+  read permission to the translation handler, and replace Bedrock readiness with secret metadata.
+  Health/login/audio do not fetch the provider key. No secret enters source or browser settings.
+- Update rollout/setup instructions, architecture decisions and project status. Live OpenAI
+  acceptance and deployment require a configured secret and a new verified release; neither is
+  claimed by this implementation. Existing unknown Bedrock requests are not retried.
+
 ## 2026-11-11 — Curated downloadable book library
 
 - Added an operator-authenticated catalog and short-lived S3 download links, a native library

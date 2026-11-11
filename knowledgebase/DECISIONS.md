@@ -1,3 +1,23 @@
+## OpenAI replaces Bedrock for private inference (2026-11-11)
+
+Supersede the regional Qwen provider selection for future operator releases. The selected AWS
+project has zero model-specific Bedrock online inference quotas. Use the existing shared OpenAI
+Responses provider with the app's default `gpt-5-mini`, minimal reasoning, `store: false`, strict
+JSON Schema and server validation. Operator calls cap output at 2048 tokens and use an 18-second
+HTTP timeout; subscription workers retain their 45-second default. Keep one paid submission,
+daily admission and existing unknown-outcome/idempotency behavior; never retry historical unknown
+Bedrock requests as part of this migration.
+
+Store a server-owned OpenAI key as JSON `api_key` in Secrets Manager in eu-north-1. CDK accepts
+only a complete same-project/Region ARN, grants the translation handler read access, removes
+Bedrock inference permission, and does not pass the secret to audio handlers. Fetch lazily for
+inference and cache in the warm process, so health/auth/audio do not depend on key retrieval.
+Readiness inspects secret metadata only and cannot attest key validity, billing or live quality.
+The bounded source excerpt leaves AWS for OpenAI, as on the personal-key app path; server billing
+and credentials remain separate from the user's device Keychain. Audio/authentication boundaries
+and the second-stage subscription assembly are unchanged. Publication stays behind verified main
+CI tags and reviewed dashboard plans; this implementation is not a deployment record.
+
 # Architectural and product decisions
 
 ## Single simulator lifecycle for unit-only CI (2026-11-09)

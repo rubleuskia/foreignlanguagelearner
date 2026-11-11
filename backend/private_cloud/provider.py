@@ -1,34 +1,25 @@
-"""One Bedrock Converse submission with a bounded read and no SDK retries."""
+"""Lazy server credential loading and one bounded OpenAI Responses submission."""
 import json
-from backend.translation.contract import canonical, output_schema, validate_output
-from backend.translation.provider import CONTEXT_PROMPT, WORD_PROMPT, ProviderFailure
+from backend.translation.provider import OpenAIProvider, ProviderFailure
 
-MODEL_ID = 'qwen.qwen3-235b-a22b-2507-v1:0'
+MODEL_ID = 'gpt-5-mini'
 
 
-class BedrockProvider:
-    def __init__(self, client):
-        self.client = client
+class OperatorProvider:
+    def __init__(self, secrets, secret_arn, opener=None):
+        self.secrets, self.secret_arn, self.opener = secrets, secret_arn, opener
+        self.provider = None
 
     def run(self, kind, payload):
-        # Prompt + server validation avoid Bedrock's first-schema compilation delay (up to 90s),
-        # which exceeds this synchronous API's deadline. Never repair via a second paid call.
-        prompt = (CONTEXT_PROMPT if kind == 'context' else WORD_PROMPT)
-        prompt += '\nReturn JSON without markdown, matching this schema: ' + canonical(output_schema(kind))
-        try:
-            response = self.client.converse(modelId=MODEL_ID,
-                system=[{'text': prompt}], messages=[{'role': 'user', 'content': [{'text': canonical(payload)}]}],
-                inferenceConfig={'maxTokens': 2048, 'temperature': 0.1})
-        except Exception:
-            raise ProviderFailure(unknown=True) from None
-        usage = response.get('usage', {})
-        tokens = {'input_tokens': int(usage.get('inputTokens', 0)), 'output_tokens': int(usage.get('outputTokens', 0))}
-        try:
-            if response.get('stopReason') != 'end_turn':
-                raise ValueError('Incomplete output')
-            raw = ''.join(block.get('text', '') for block in response['output']['message']['content'])
-            if len(raw.encode()) > 131072:
-                raise ValueError('Oversized output')
-            return validate_output(kind, json.loads(raw), payload), tokens
-        except Exception:
-            raise ProviderFailure(tokens=tokens) from None
+        # Health/login/alignment never retrieve the model key. Cache only in this warm process.
+        if self.provider is None:
+            try:
+                value = self.secrets.get_secret_value(SecretId=self.secret_arn)
+                key = json.loads(value['SecretString'])['api_key']
+                if not isinstance(key, str) or not key.strip() or key != key.strip():
+                    raise ValueError('Invalid provider credential')
+                self.provider = OpenAIProvider(key, self.opener, timeout=18)
+            except Exception:
+                # No external model submission occurred; do not expose secret/service messages.
+                raise ProviderFailure() from None
+        return self.provider.run(kind, payload, MODEL_ID, 2048)

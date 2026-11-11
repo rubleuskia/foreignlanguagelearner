@@ -5,11 +5,13 @@
 The [two-stage rollout](../docs/CLOUD_ROLLOUT.md) prioritizes a private backend: one console-created
 Cognito username/password operator, protected API, direct translations/word explanations, audio
 alignment and monitoring. Apple accounts, StoreKit subscriptions and customer quotas move to stage
-two. Bedrock Qwen3 235B A22B Instruct 2507 is selected for the first stage, prioritizing Polish/Russian.
-The initial live inference was blocked by AWS project verification. The private operator backend
-and alignment stack are now deployed in Stockholm as v0.0.1-backend.216 (2026-11-11); both stacks
-are CREATE_COMPLETE. Gateway probes reject unauthenticated requests with 401. The manually created
-`operator` user is still absent, so authenticated application/provider acceptance remains pending.
+two. Stage one now targets OpenAI Responses API with the app's default GPT-5 mini/minimal
+reasoning, strict JSON output and a server-owned Secrets Manager key. The installed release
+v0.0.1-backend.216 still uses Bedrock; its model-specific inference quotas are zero in Stockholm.
+Both initial stacks deployed on 2026-11-11. The console-created operator passed all ten
+authenticated baseline checks; live translation/explanation acceptance remains blocked until
+the OpenAI replacement is released, configured and deployed. This code change does not itself
+publish a release or claim successful live OpenAI inference.
 
 The private audio pilot is Polish-only with a 300-second limit. Three native Fargate runs took
 113–124 seconds, preserving 626 words with 15 timing-review flags. The user accepted this pilot

@@ -1,13 +1,14 @@
 # First-stage private backend: prepare and publish
 
 This is the implemented operator assembly. It does not require Apple IDs, App Store products,
-certificates, subscription policy or an OpenAI key. Regional resources are fixed to eu-north-1.
+certificates or subscription policy. It requires a server OpenAI API key in Secrets Manager.
+Regional AWS resources are fixed to eu-north-1; selected text is sent to the external OpenAI API.
 The existing subscription assembly remains the second-stage option.
 
 ## What is included
 
 - `ForeignLanguageLearnerOperator-prod`: Cognito password/SRP client, protected HTTP API, direct
-  Bedrock Qwen3 235B Instruct requests, a DynamoDB request/idempotency table, logs and alarms/SNS.
+  OpenAI Responses API requests using GPT-5 mini, a DynamoDB request/idempotency table, logs and alarms/SNS.
 - `ForeignLanguageLearnerOperatorAlignment-prod`: the same protected API's alignment routes,
   private versioned S3 storage, job/admission table, immutable worker image, Fargate/Step Functions,
   finalizer/reconciliation and monitoring. This is included by default, with real image/measurement
@@ -20,12 +21,19 @@ the operator table. Other pool users and recreated usernames cannot adopt that a
 Changing the operator requires an explicit migration of this binding, never deleting it to bypass
 ownership checks. Runtime roles have resource-scoped access and do not receive AWS admin access.
 
-The model path has no SQS: it runs one Converse call with SDK retries disabled, bounded output and
-an 18-second network read timeout inside a 28-second Lambda/30-second HTTP integration. AWS JSON
-grammar compilation can take about 90 seconds on first use, so this path asks for JSON and applies
-the existing strict server validator instead of enabling that incompatible cold compilation path.
-Malformed output fails the operation; no second paid repair call is made. Paid work has a configurable
-daily admission cap (default 50, max 1000) and Lambda concurrency 2. API throttling applies to all routes.
+The model path has no SQS: it makes one OpenAI Responses API POST using `gpt-5-mini`,
+`reasoning.effort: minimal`, `store: false`, strict JSON Schema and a 2048-token output cap,
+matching the app's default provider/model configuration. The server also validates the returned
+JSON against the existing contract. A configurable 18-second HTTP timeout fits within the
+28-second Lambda/30-second integration; the subscription worker keeps its existing 45-second
+provider timeout. No automatic inference retries or paid repair calls are made. A timeout or 5xx
+is an unknown outcome; a known provider rejection or invalid output fails the operation.
+The server key is loaded lazily from a JSON secret (`{"api_key":"YOUR_OPENAI_API_KEY"}`),
+cached only in the warm handler process and never fetched by health, login or audio routes.
+Only the translation API handler receives read permission for that exact secret. With a
+customer-managed KMS key, grant that handler decrypt permission separately before deployment;
+the default setup uses the Secrets Manager AWS-managed key. Paid work has a configurable daily
+admission cap (default 50, max 1000) and Lambda concurrency 2. API throttling applies to all routes.
 
 Requests require a canonical UUID `Idempotency-Key`. A DynamoDB transaction records the key and
 daily admission before model submission. POST returns 200 for known success or 202 with state for
@@ -102,18 +110,26 @@ and API checks for initial backend acceptance; a native password UI can be integ
    accept the measured result and waive listening checks; record the waiver without claiming review.
    Do not substitute smoke checks or
    synthetic infrastructure-test values. Stage two retains its six-language gate.
-5. Bedrock metadata access for Qwen is authorized, but the first actual inference was rejected
-   while AWS verifies the project. Metadata readiness cannot prove inference access or language
-   quality; finish the bounded live acceptance after verification clears. Do not change Regions.
+5. In AWS Secrets Manager in **eu-north-1**, store a secret of type **Other type of secret**
+   with the key/value `api_key` and your OpenAI project API key. Use the Secrets Manager
+   AWS-managed encryption key (`aws/secretsmanager`) for this setup, and copy only the complete
+   secret ARN into the dashboard's **ARN секрета OpenAI** field (`openaiSecretArn`). Never paste
+   the key itself into dashboard settings, source files, deployment context or chat. Disable
+   automatic rotation unless you have an actual OpenAI key rotation integration; replace/revoke
+   keys manually and recycle warm handlers when rotating the cached credential.
+   A metadata-only readiness check proves that the secret has an active version, not that its
+   JSON/key, OpenAI billing, model access or rate limit work. Run the separately confirmed live
+   acceptance only after publication. Existing deployed Bedrock releases keep their original
+   behavior until a new verified release is deployed; old unknown requests are never resubmitted.
 
 ## Publish from the dashboard
 
 1. Start `bash scripts/cloud-control.sh` and open http://127.0.0.1:8767.
 2. In **Настройка**, select **Первый этап**. Enter the project ID/profile, operator username (default
-   `operator`) and daily model limit. Keep audio enabled and provide ECR repository, sha256 digest
+   `operator`), daily model limit and OpenAI secret ARN. Keep audio enabled and provide ECR repository, sha256 digest
    and absolute benchmark path. Apple settings are hidden and ignored for this assembly.
-3. Save, then **Версии и деплой → Проверить готовность**. It reads AWS identity, CDKToolkit, Bedrock
-   access metadata, image existence and benchmark validity; it does not invoke models, publish images
+3. Save, then **Версии и деплой → Проверить готовность**. It reads AWS identity, CDKToolkit, Secrets Manager
+   secret/version metadata, image existence and benchmark validity; it does not invoke models, publish images
    or provision infrastructure. Missing artifacts are explicit failures, not dummy defaults.
 4. **Получить теги**, select a compatible verified release and **Подготовить план**. The panel archives
    that exact source, builds hash-locked Linux dependencies without Apple roots, synthesizes both
@@ -163,4 +179,4 @@ cd infra/alignment && npm ci --ignore-scripts && npm test
 
 Tests use fake/local AWS, including actual local DynamoDB for transaction concurrency; no cloud
 resources or paid inference are created. The infrastructure assertions include all operator and
-audio routes, no Apple/SQS dependency, regional scoped Bedrock permission and benchmark rejection.
+audio routes, no Apple/SQS dependency, scoped OpenAI secret permission and benchmark rejection.

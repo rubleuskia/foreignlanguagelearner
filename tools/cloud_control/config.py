@@ -118,7 +118,9 @@ def deployment_context(config):
     context = dict(config.get('context', {}))
     if is_operator(config):
         context = {k:v for k,v in context.items() if k in {
-            'operatorUsername', 'dailyModelLimit', 'operatorAlignment', 'workerRepositoryName', 'workerImageDigest'}}
+            'operatorUsername', 'dailyModelLimit', 'operatorAlignment', 'workerRepositoryName', 'workerImageDigest', 'openaiSecretArn'}}
+        if not context.get('openaiSecretArn'):
+            raise ControlError('Для переводов укажите ARN секрета OpenAI в настройках первого этапа (openaiSecretArn). Ключ хранится в Secrets Manager как JSON с полем api_key.')
         context.setdefault('operatorUsername', 'operator')
         context.setdefault('dailyModelLimit', '50')
         context.setdefault('operatorAlignment', 'true')

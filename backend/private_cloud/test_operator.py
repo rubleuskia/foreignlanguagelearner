@@ -1,6 +1,8 @@
 import base64
 import copy
 import json
+import io
+import urllib.error
 import os
 import time
 import unittest
@@ -14,7 +16,7 @@ from backend.alignment.repository import MemoryRepository
 from backend.alignment.test_service import Storage, Workflow, request
 from . import api, alignment
 from .auth import authenticate
-from .provider import BedrockProvider, MODEL_ID
+from .provider import OperatorProvider, MODEL_ID
 from .repository import Repository
 
 ENV = {'JWT_ISSUER': 'https://issuer.example', 'JWT_CLIENT_ID': 'client',
@@ -171,19 +173,56 @@ class OperatorTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
-    def test_one_bounded_converse_call_validated_result_and_token_usage(self):
-        client = Mock(); client.converse.return_value = {'stopReason': 'end_turn',
-            'output': {'message': {'content': [{'text': json.dumps(RESULT)}]}},
-            'usage': {'inputTokens': 12, 'outputTokens': 34}}
-        result, tokens = BedrockProvider(client).run('context', PAYLOAD)
-        self.assertEqual(result, RESULT); self.assertEqual(tokens['output_tokens'], 34)
-        client.converse.assert_called_once()
-        self.assertEqual(client.converse.call_args.kwargs['modelId'], MODEL_ID)
-        self.assertEqual(client.converse.call_args.kwargs['inferenceConfig']['maxTokens'], 2048)
+    def make_provider(self, opener):
+        secrets = Mock()
+        secrets.get_secret_value.return_value = {'SecretString': json.dumps({'api_key': 'test-server-key'})}
+        return OperatorProvider(secrets, 'test-secret-arn', opener), secrets
 
-    def test_malformed_schema_or_incomplete_output_is_rejected_without_retry(self):
-        for reason, text in [('max_tokens', '{}'), ('end_turn', '{}'), ('end_turn', '```json\n{}\n```')]:
-            client = Mock(); client.converse.return_value = {'stopReason': reason,
-                'output': {'message': {'content': [{'text': text}]}}}
-            with self.assertRaises(ProviderFailure): BedrockProvider(client).run('context', PAYLOAD)
-            client.converse.assert_called_once()
+    def model_response(self, text=None, status='completed'):
+        return io.BytesIO(json.dumps({'status': status,
+            'output': [{'content': [{'type': 'output_text', 'text': text or json.dumps(RESULT)}]}],
+            'usage': {'input_tokens': 12, 'output_tokens': 34}}).encode())
+
+    def test_lazy_secret_one_bounded_openai_call_and_cache(self):
+        opener = Mock(side_effect=lambda *args, **kwargs: self.model_response())
+        provider, secrets = self.make_provider(opener)
+        secrets.get_secret_value.assert_not_called()
+        result, tokens = provider.run('context', PAYLOAD)
+        self.assertEqual(result, RESULT); self.assertEqual(tokens['output_tokens'], 34)
+        opener.assert_called_once()
+        request = opener.call_args.args[0]; body = json.loads(request.data)
+        self.assertEqual(request.full_url, 'https://api.openai.com/v1/responses')
+        self.assertEqual(request.get_header('Authorization'), 'Bearer test-server-key')
+        self.assertEqual(body['model'], MODEL_ID)
+        self.assertEqual(body['reasoning'], {'effort': 'minimal'})
+        self.assertEqual(body['max_output_tokens'], 2048)
+        self.assertFalse(body['store']); self.assertTrue(body['text']['format']['strict'])
+        self.assertEqual(opener.call_args.kwargs['timeout'], 18)
+        provider.run('context', PAYLOAD)
+        secrets.get_secret_value.assert_called_once_with(SecretId='test-secret-arn')
+
+    def test_malformed_or_incomplete_output_is_rejected_without_retry(self):
+        for status, text in [('incomplete', '{}'), ('completed', '{}'), ('completed', '```json\n{}\n```')]:
+            opener = Mock(return_value=self.model_response(text, status))
+            provider, _ = self.make_provider(opener)
+            with self.assertRaises(ProviderFailure) as error: provider.run('context', PAYLOAD)
+            self.assertFalse(error.exception.unknown)
+            opener.assert_called_once()
+
+    def test_secret_failure_prevents_submission_and_is_not_unknown(self):
+        for secret in ['not json', '{}', '{"api_key": ""}', '{"api_key": 123}']:
+            opener = Mock(); provider, secrets = self.make_provider(opener)
+            secrets.get_secret_value.return_value = {'SecretString': secret}
+            with self.assertRaises(ProviderFailure) as error: provider.run('context', PAYLOAD)
+            self.assertFalse(error.exception.unknown); opener.assert_not_called()
+        secrets.get_secret_value.side_effect = RuntimeError('secret-service-private-message')
+        with self.assertRaises(ProviderFailure) as error: provider.run('context', PAYLOAD)
+        self.assertNotIn('private-message', str(error.exception)); opener.assert_not_called()
+
+    def test_http_errors_and_timeout_preserve_submission_uncertainty_without_retry(self):
+        for failure, unknown in [(urllib.error.HTTPError('https://api.openai.com', 429, '', {}, None), False),
+                                 (urllib.error.HTTPError('https://api.openai.com', 503, '', {}, None), True),
+                                 (TimeoutError(), True)]:
+            opener = Mock(side_effect=failure); provider, _ = self.make_provider(opener)
+            with self.assertRaises(ProviderFailure) as error: provider.run('context', PAYLOAD)
+            self.assertEqual(error.exception.unknown, unknown); opener.assert_called_once()
