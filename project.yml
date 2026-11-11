@@ -30,16 +30,16 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: cloud-login
             CFBundleURLSchemes: [fll]
-    entitlements:
-      path: App/ForeignLanguageLearner.entitlements
-      properties:
-        com.apple.developer.applesignin: [Default]
     dependencies:
       - sdk: libsqlite3.tbd
       - sdk: Security.framework
       - package: ZIPFoundation
     settings:
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: App/PersonalTeam.entitlements
       base:
+        CODE_SIGN_ENTITLEMENTS: App/ForeignLanguageLearner.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Language Learner

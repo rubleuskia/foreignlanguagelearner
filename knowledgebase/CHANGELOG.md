@@ -1,3 +1,9 @@
+## 2026-11-11 — Personal Team device signing
+
+- Debug builds now use an empty entitlement file so local device provisioning does not request the unsupported Sign in with Apple capability. Release builds retain the native capability.
+- Documented the paid-team requirement for Release and native Apple reauthentication/recovery testing.
+- Signing configuration decision recorded in DECISIONS.md; project purpose and boundaries are unchanged, so PROJECT.md is unchanged.
+
 ## 2026-11-11 — Prepare private backend migration from Bedrock to OpenAI
 
 - Replace the operator Qwen Converse provider with the existing OpenAI Responses integration,

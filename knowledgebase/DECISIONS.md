@@ -809,3 +809,11 @@ compute releases. Catalog publication follows successful content-addressed archi
 The iOS client verifies length/SHA-256 on disk and reuses the existing ZIP import review/commit
 workflow, preserving its synchronization and vocabulary checks. Bundled configuration defaults
 to the deployed operator API; builds may override BookLibraryAPIBaseURL.
+
+
+## 2026-11-11 — Separate local and release signing entitlements
+
+Debug uses an empty PersonalTeam.entitlements file to support free Personal Team device builds.
+Release retains ForeignLanguageLearner.entitlements with Sign in with Apple for native account
+reauthentication. Native Apple recovery must be tested with the paid-team Release configuration;
+this does not bypass Apple membership or web-service configuration requirements.
