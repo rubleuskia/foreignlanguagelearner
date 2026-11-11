@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as db from "aws-cdk-lib/aws-dynamodb";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
@@ -70,11 +71,17 @@ export class OperatorStack extends cdk.Stack {
       memorySize: 256, timeout: cdk.Duration.seconds(28), reservedConcurrentExecutions: 2,
       environment: this.common, logGroup: handlerLogs,
     });
+    const libraryBucket = s3.Bucket.fromBucketName(this, "BookLibrary",
+      `fll-book-library-${this.account}-${this.region}`);
+    api.addEnvironment("BOOK_LIBRARY_BUCKET", libraryBucket.bucketName);
+    libraryBucket.grantRead(api, "library/*");
+    new cdk.CfnOutput(this, "BookLibraryBucket", { value: libraryBucket.bucketName });
     this.table.grantReadWriteData(api);
     api.addToRolePolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel"],
       resources: [`arn:${this.partition}:bedrock:${this.region}::foundation-model/${OPERATOR_MODEL}`] }));
     const integration = new HttpLambdaIntegration("OperatorIntegration", api);
-    for (const [method, path] of [[apigw.HttpMethod.GET, "/v1/health"], [apigw.HttpMethod.GET, "/v1/me"],
+    for (const [method, path] of [[apigw.HttpMethod.GET, "/v1/library/books"],
+      [apigw.HttpMethod.GET, "/v1/library/books/{id}/download"], [apigw.HttpMethod.GET, "/v1/health"], [apigw.HttpMethod.GET, "/v1/me"],
       [apigw.HttpMethod.POST, "/v1/context-analyses"], [apigw.HttpMethod.POST, "/v1/word-explanations"],
       [apigw.HttpMethod.GET, "/v1/requests/{id}"], [apigw.HttpMethod.GET, "/v1/requests/by-key/{key}"]] as const) {
       this.api.addRoutes({ path, methods: [method], authorizer: this.authorizer,

@@ -47,7 +47,7 @@ try {
     assert.equal(Object.values(template.findResources("AWS::EC2::NatGateway")).length, 0);
     assert.doesNotMatch(JSON.stringify(template.toJSON()), /secretsmanager:GetSecretValue|APPLE_API_SECRET_ARN|OPENAI_SECRET_ARN/);
   }
-  foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 6);
+  foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 8);
   audio.resourceCountIs("AWS::ApiGatewayV2::Route", 9);
   assert.match(JSON.stringify(foundation.toJSON()), /bedrock:InvokeModel/);
   assert.match(JSON.stringify(foundation.toJSON()), new RegExp(OPERATOR_MODEL.replaceAll(".", "\\.")));

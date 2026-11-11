@@ -142,3 +142,11 @@ New timed selections offer selected-word and whole-phrase audio modes with indep
 
 
 Audiobook chapters are marked read automatically at natural playback completion using the same studied-vocabulary update as manual completion. The in-reader chapter chooser restarts at the beginning and resets transcript scrolling; chapter rows in the book overview resume that chapter’s saved position. Automatic dictionary audio includes up to half a second of context on each side; saved manual boundaries remain exact. The boundary editor supports two timeline handles with 0.1-second precision. Active audio playback keeps the screen awake for reading along.
+
+## Curated audiobook library (2026-11-11)
+
+The iOS library now supports discovering and downloading complete curated book ZIPs from private
+S3 storage via the operator Cognito API. A manually supplied access token is stored in Keychain.
+Downloaded books enter the existing ZIP import workflow and become offline local books after
+review and commit. Publishing packages is an operator maintenance workflow; the app has read-only
+catalog/download access. See [Book library](../docs/BOOK_LIBRARY.md).

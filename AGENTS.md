@@ -94,5 +94,7 @@ Constraints for each level:
 - MUST flag best practices and explain trade-offs
 - MUST still execute the user's choice if they disagree with a suggestion
 
+User help_level: HIGH.
+
 Selected project Region: `eu-north-1`. AWS CLI profile: `default`. The Agent Toolkit service endpoint uses `us-east-1`.
 <!-- END AWS Agent Toolkit rules -->

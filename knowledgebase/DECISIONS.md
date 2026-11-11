@@ -778,3 +778,14 @@ with a waiver method and no claim that manual listening was performed. Raw measu
 unaltered and output review flags stay accurate. Stage-two/broader-language requirements are not
 waived. The temporary benchmark stack was deleted after retaining evidence; image/report readiness
 checks pass. CDKToolkit and the application API remain undeployed.
+
+## 2026-11-11 — Curated library uses the private operator boundary
+
+Catalog and download-link endpoints reuse JWT scope validation, live Cognito GetUser, and the
+pinned operator subject. Manually pasted access tokens use a separate device-only Keychain item;
+no credentials or refresh tokens are collected. S3 GET links live for 900 seconds and remain bearer
+credentials until expiration. A separate retained/versioned storage stack survives operator
+compute releases. Catalog publication follows successful content-addressed archive uploads.
+The iOS client verifies length/SHA-256 on disk and reuses the existing ZIP import review/commit
+workflow, preserving its synchronization and vocabulary checks. Bundled configuration defaults
+to the deployed operator API; builds may override BookLibraryAPIBaseURL.
