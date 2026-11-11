@@ -1,3 +1,12 @@
+## 2026-11-11 — Curated downloadable book library
+
+- Added an operator-authenticated catalog and short-lived S3 download links, a native library
+  screen, and a separate Keychain access-token setting. Downloaded ZIPs are size/hash checked
+  and passed to the existing complete-book import wizard.
+- Added retained private storage infrastructure and a CRC/SHA-256 catalog preparation helper
+  for complete audiobook packages. See [publishing guide](../docs/BOOK_LIBRARY.md).
+- Decisions and project overview updated for the curated-library workflow.
+
 # Project changelog
 
 

@@ -8,6 +8,7 @@ import uuid
 from backend.cloud.errors import CloudError
 from backend.translation.contract import canonical, validate_input
 from backend.translation.provider import ProviderFailure
+from . import library
 from .auth import authenticate
 from .repository import Repository
 from .provider import BedrockProvider
@@ -50,6 +51,8 @@ def handler(event, context):
         cognito, repo, provider = runtime()
         owner = authenticate(event, cognito, repo)
         route = event.get('routeKey')
+        if route in {'GET /v1/library/books', 'GET /v1/library/books/{id}/download'}:
+            return response(200, library.handle(route, event.get('pathParameters') or {}))
         if route == 'GET /v1/me':
             return response(200, {'schema_version': 1, 'user_id': owner, 'role': 'operator',
                 'features': {'translations': True, 'alignment': os.environ.get('OPERATOR_ALIGNMENT', 'true') == 'true'}})

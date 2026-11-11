@@ -84,6 +84,9 @@ struct ContentView: View {
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink { BuiltinLibraryView() } label: {
+                        Label("Built-in library", systemImage: "books.vertical.fill")
+                    }
                     LibraryBackupMenu()
                     NavigationLink {
                         ContextualTranslationSettingsView()

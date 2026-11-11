@@ -20,6 +20,7 @@ struct BookImportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(ReadingVocabularyStore.self) private var vocabulary
+    var suppliedArchive: URL? = nil
     var item: LearningItem? = nil
     var action: BookResourceAction? = nil
     @State private var step = 0
@@ -249,6 +250,10 @@ struct BookImportView: View {
             .sheet(isPresented: $legacyImport) { ImportItemView() }
             .task(id: previewKey) { await countWords() }
             .onAppear {
+                if let suppliedArchive, step == 0 {
+                    source = .package; archiveURL = suppliedArchive; step = 1
+                    checkFiles()
+                }
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--uitesting"),
                    ProcessInfo.processInfo.arguments.contains("--cover-import-fixture"), item == nil, step == 0 {

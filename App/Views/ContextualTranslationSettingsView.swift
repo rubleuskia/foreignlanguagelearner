@@ -34,6 +34,7 @@ struct ContextualTranslationSettingsView: View {
             }
             OnboardingHelpSection()
             CloudAccountSection()
+            OperatorLibrarySettingsSection()
             Section("Contextual translation") {
                 Toggle("Enable cloud analysis", isOn: $cloudAnalysisEnabled)
                 Picker("Translation service", selection: $providerMode) {
