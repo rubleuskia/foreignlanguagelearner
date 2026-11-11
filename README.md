@@ -21,6 +21,8 @@ Choose **Add book** to start with a UTF-8 TXT, one audio file, audio tracks in a
 
 For a physical device, set your development team in Xcode and use a registered bundle identifier. Project settings are generated: persist changes in `project.yml`, then regenerate. The default bundle identifier is a placeholder until registered in your Apple account.
 
+Debug builds use `App/PersonalTeam.entitlements` (no restricted capabilities), so a free Personal Team can sign local device builds. Release builds retain Sign in with Apple and require an Apple Developer Program team. Native Apple reauthentication/recovery is available only in a build signed with that capability; use a paid team and the Release configuration when testing it. Browser-based cloud login still requires the separately configured Apple web service. After updating signing settings, run `bash scripts/bootstrap.sh`, reopen the project, select your team, and build again.
+
 If a newly added Swift type is reported as missing, regenerate the ignored Xcode project with `bash scripts/bootstrap.sh` before changing imports or access control. See [generated project drift prevention](docs/PREVENTING_GENERATED_PROJECT_DRIFT.md) for the diagnosis and workflow.
 
 ## Generate subtitles from a book and audio

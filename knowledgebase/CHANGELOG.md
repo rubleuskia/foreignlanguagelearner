@@ -1,3 +1,9 @@
+## 2026-11-11 — Personal Team device signing
+
+- Debug builds now use an empty entitlement file so local device provisioning does not request the unsupported Sign in with Apple capability. Release builds retain the native capability.
+- Documented the paid-team requirement for Release and native Apple reauthentication/recovery testing.
+- Signing configuration decision recorded in DECISIONS.md; project purpose and boundaries are unchanged, so PROJECT.md is unchanged.
+
 ## 2026-11-11 — Curated downloadable book library
 
 - Added an operator-authenticated catalog and short-lived S3 download links, a native library
