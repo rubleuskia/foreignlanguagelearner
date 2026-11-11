@@ -5,19 +5,20 @@
 The [two-stage rollout](../docs/CLOUD_ROLLOUT.md) prioritizes a private backend: one console-created
 Cognito username/password operator, protected API, direct translations/word explanations, audio
 alignment and monitoring. Apple accounts, StoreKit subscriptions and customer quotas move to stage
-two. Stage one now targets OpenAI Responses API with the app's default GPT-5 mini/minimal
-reasoning, strict JSON output and a server-owned Secrets Manager key. The installed release
-v0.0.1-backend.216 still uses Bedrock; its model-specific inference quotas are zero in Stockholm.
-Both initial stacks deployed on 2026-11-11. The console-created operator passed all ten
-authenticated baseline checks; live translation/explanation acceptance remains blocked until
-the OpenAI replacement is released, configured and deployed. This code change does not itself
-publish a release or claim successful live OpenAI inference.
+two. Stage one uses OpenAI Responses API with the app's default GPT-5 mini/minimal reasoning,
+strict JSON output and a server-owned Secrets Manager key. Release v0.0.1-backend.228 is deployed
+in Stockholm (2026-11-11): both stacks are UPDATE_COMPLETE. It replaces the previous Bedrock
+release, whose model-specific inference quotas were zero. All six public API boundary checks
+passed after deployment. The operator previously passed ten authenticated baseline checks;
+post-update authenticated checks need a renewed dashboard token. Live OpenAI translation/
+explanation acceptance remains pending; no successful model inference is claimed here.
 
 The private audio pilot is Polish-only with a 300-second limit. Three native Fargate runs took
 113–124 seconds, preserving 626 words with 15 timing-review flags. The user accepted this pilot
 and explicitly waived manual checks; the temporary benchmark stack was deleted. CDKToolkit v32 (same-project trust and termination protection)
-and the immutable worker image remain available. The installed iOS app is not connected to this
-operator backend. Apple/subscription and broader public alignment deployments remain pending.
+and the immutable worker image remain available. The built-in book library uses the operator backend with native username/password login and
+automatically renewed Keychain sessions in the next app release; existing access-token-only installs
+need one fresh sign-in. Private backend translations/audio are not connected to the native app. Apple/subscription and broader public alignment deployments remain pending.
 See [the operator guide](../docs/OPERATOR_CLOUD.md).
 
 ## iOS CI and verified releases
@@ -117,7 +118,8 @@ the normal app has no endpoint or purchasable subscription flow. The subscriptio
 subscription admissions default disabled; the separate private operator backend is deployed. The repository also implements account-only paid alignment routes behind
 an independent image/benchmark gate; in-app alignment UI and real release acceptance remain future work.
 
-The normal build has no configured project-operated backend endpoint or analytics. Media, saved dictionary data and reading vocabulary remain local unless the user explicitly exports a dictionary file. Ordinary Apple Translation uses installed on-device language models for explicit translation, legacy pending recovery and untranslated imports. Contextual translation is opt-in. Personal-key mode sends only selected text and bounded context directly to OpenAI using the device Keychain key and that user's provider billing. Configured subscription mode sends the same bounded excerpt through our undeployed backend, with verified account/subscription and server allowance; it never falls back to a personal key. The app no longer ships the unreachable Wiktionary lookup or its exclusive SGJP morphology pack. Existing cached definitions and historical diagnostics remain readable and exportable; contextual lemmas use the existing OpenAI analysis. The private operator alignment backend is deployed but is not connected to iOS; the broader alignment variants retain their benchmark/deployment gates before public testing. Cloud sync, lock-screen controls, in-app alignment, arbitrary track editing after import, automatic TXT chapter detection, and gapless playback remain future work or are not yet established as shipped behavior. The resource menu supports replacing the complete audio set; synchronization attachment verifies current recordings rather than generating alignment.
+The normal build has a configured private book-library backend endpoint but no analytics or
+configured subscription backend. Media, saved dictionary data and reading vocabulary remain local unless the user explicitly exports a dictionary file. Ordinary Apple Translation uses installed on-device language models for explicit translation, legacy pending recovery and untranslated imports. Contextual translation is opt-in. Personal-key mode sends only selected text and bounded context directly to OpenAI using the device Keychain key and that user's provider billing. Configured subscription mode sends the same bounded excerpt through our undeployed backend, with verified account/subscription and server allowance; it never falls back to a personal key. The app no longer ships the unreachable Wiktionary lookup or its exclusive SGJP morphology pack. Existing cached definitions and historical diagnostics remain readable and exportable; contextual lemmas use the existing OpenAI analysis. The private operator alignment backend is deployed but is not connected to iOS; the broader alignment variants retain their benchmark/deployment gates before public testing. Cloud sync, lock-screen controls, in-app alignment, arbitrary track editing after import, automatic TXT chapter detection, and gapless playback remain future work or are not yet established as shipped behavior. The resource menu supports replacing the complete audio set; synchronization attachment verifies current recordings rather than generating alignment.
 
 ## Repository map
 

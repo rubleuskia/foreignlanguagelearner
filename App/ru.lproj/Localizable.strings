@@ -736,3 +736,27 @@
 "Could not download the book. Please try again." = "Не удалось скачать книгу. Повторите попытку.";
 "The file is damaged. Download the book again." = "Файл повреждён. Скачайте книгу ещё раз.";
 "Library unavailable (%d). Please try again." = "Библиотека недоступна (%d). Повторите попытку.";
+
+"Sign in to the built-in library in Settings." = "Войдите во встроенную библиотеку в настройках.";
+
+"Incorrect library username or password, or access is denied." = "Неверный логин или пароль библиотеки либо доступ запрещён.";
+
+"Set a permanent password for this user in Cognito, then sign in again." = "Задайте постоянный пароль этому пользователю в Cognito и войдите снова.";
+
+"Library sign-in is temporarily unavailable. Please try again." = "Вход в библиотеку временно недоступен. Попробуйте ещё раз.";
+
+"Could not access the library session in Keychain." = "Не удалось открыть сессию библиотеки в Keychain.";
+
+"The library session changed. Refresh the catalog." = "Сессия библиотеки изменилась. Обновите каталог.";
+
+"Signed in as %@" = "Выполнен вход: %@";
+
+"Library username" = "Логин библиотеки";
+
+"Library password" = "Пароль библиотеки";
+
+"Sign in once with your library username and password. The session renews automatically; your password is not saved." = "Войдите с логином и паролем библиотеки. Сессия продлевается автоматически; пароль не сохраняется.";
+
+"No books available. Check your library sign-in in Settings." = "Книги недоступны. Проверьте вход в библиотеку в настройках.";
+
+"Sign in" = "Войти";

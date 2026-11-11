@@ -1,3 +1,21 @@
+## Native renewable operator session for the library (2026-11-11)
+
+The manually pasted Cognito access token cannot renew itself. Replace this temporary library UI
+with a direct public-client USER_PASSWORD_AUTH login against the existing Stockholm Cognito client.
+Keep the current backend token lifetimes. Store scoped access/refresh tokens and expiry in
+WhenUnlockedThisDeviceOnly Keychain, never the password; verify /v1/me reports operator before
+persisting. Retire the old access-only entry on successful sign-in/sign-out. Existing installs
+must sign in once; no refresh token can be recovered from an access token.
+
+Use the configured client's existing REFRESH_TOKEN_AUTH flow (rotation is not enabled on it),
+refresh 60 seconds early, deduplicate overlapping refreshes and allow only one refresh/retry after
+401 on read-only library requests. Do not refresh/retry 403 or model submissions. Clear credentials
+on definitive refresh rejection, retain them on connectivity/service failures, and gate async
+completion by session generation so logout/account changes cannot restore old credentials.
+Revoke the refresh token on sign-out after clearing local state, even if the network later fails.
+This introduces native private-library sign-in only; Apple/subscription identity, cloud translation
+provider settings, audio UI integration and local library backups keep their existing boundaries.
+
 ## OpenAI replaces Bedrock for private inference (2026-11-11)
 
 Supersede the regional Qwen provider selection for future operator releases. The selected AWS

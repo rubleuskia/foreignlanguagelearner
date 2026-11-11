@@ -24,18 +24,30 @@ actor BuiltinLibraryService {
     private struct Catalog: Decodable { let books: [LibraryBook] }
     private struct Download: Decodable { let url: URL; let bytes: Int64; let sha256: String }
 
+    private let authentication: OperatorSession
+    private let client: any ContextAnalysisHTTPClient
+    init(authentication: OperatorSession = .shared,
+         client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient(
+            session: URLSession(configuration: .ephemeral))) {
+        self.authentication = authentication; self.client = client
+    }
     private func request<T: Decodable>(_ path: String, as: T.Type) async throws -> T {
-        guard let token = try OperatorAccessTokenStore.load(), !token.isEmpty else {
-            throw failure("Add the operator access token in Settings.")
+        var lease = try await authentication.lease()
+        func send(_ token: String) async throws -> (Data, HTTPURLResponse) {
+            var request = URLRequest(url: Self.baseURL.appending(path: path))
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return try await client.data(for: request)
         }
-        var request = URLRequest(url: Self.baseURL.appending(path: path))
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw failure("No response from the library.") }
-        if http.statusCode == 401 || http.statusCode == 403 {
-            throw failure("The token has expired or access is denied. Replace the operator access token in Settings.")
+        var (data, response) = try await send(lease.token)
+        try await authentication.validate(lease)
+        if response.statusCode == 401 {
+            lease = try await authentication.lease(rejected: lease)
+            (data, response) = try await send(lease.token) // GET only; refresh/retry at most once.
+            try await authentication.validate(lease)
         }
-        guard http.statusCode == 200 else { throw failure(AppLanguage.format("Library unavailable (%d). Please try again.", http.statusCode)) }
+        if response.statusCode == 401 { throw OperatorSessionError.signInRequired }
+        if response.statusCode == 403 { throw OperatorSessionError.denied }
+        guard response.statusCode == 200 else { throw failure(AppLanguage.format("Library unavailable (%d). Please try again.", response.statusCode)) }
         return try JSONDecoder().decode(T.self, from: data)
     }
     func books() async throws -> [LibraryBook] {

@@ -185,3 +185,27 @@
 "Could not download the book. Please try again." = "Could not download the book. Please try again.";
 "The file is damaged. Download the book again." = "The file is damaged. Download the book again.";
 "Library unavailable (%d). Please try again." = "Library unavailable (%d). Please try again.";
+
+"Sign in to the built-in library in Settings." = "Sign in to the built-in library in Settings.";
+
+"Incorrect library username or password, or access is denied." = "Incorrect library username or password, or access is denied.";
+
+"Set a permanent password for this user in Cognito, then sign in again." = "Set a permanent password for this user in Cognito, then sign in again.";
+
+"Library sign-in is temporarily unavailable. Please try again." = "Library sign-in is temporarily unavailable. Please try again.";
+
+"Could not access the library session in Keychain." = "Could not access the library session in Keychain.";
+
+"The library session changed. Refresh the catalog." = "The library session changed. Refresh the catalog.";
+
+"Signed in as %@" = "Signed in as %@";
+
+"Library username" = "Library username";
+
+"Library password" = "Library password";
+
+"Sign in once with your library username and password. The session renews automatically; your password is not saved." = "Sign in once with your library username and password. The session renews automatically; your password is not saved.";
+
+"No books available. Check your library sign-in in Settings." = "No books available. Check your library sign-in in Settings.";
+
+"Sign in" = "Sign in";
