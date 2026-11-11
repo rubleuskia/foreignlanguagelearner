@@ -19,6 +19,9 @@ from .aws import AWS, clean_error, deployable
 from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks, is_operator, validate_benchmark
 from .releases import Releases
 
+COMMAND_OUTPUT_LIMIT = 500_000
+OPERATION_LOG_LIMIT = 750_000
+
 
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -75,7 +78,7 @@ class Jobs:
         text = re.sub(r'\b(?:AKIA|ASIA)[A-Z0-9]{16}\b', '[AWS KEY REDACTED]', text)
         with self.data_lock:
             value = self.get(key)
-            self.update(key, log=(value.get('log', '') + text + '\n')[-180000:])
+            self.update(key, log=(value.get('log', '') + text + '\n')[-OPERATION_LOG_LIMIT:])
 
     def execute(self, key, argv, *, cwd, env=None, timeout=1200, require_full_output=False):
         self.log(key, '→ ' + Path(argv[0]).name + ' ' + (' '.join(argv[1:3])))
@@ -94,12 +97,12 @@ class Jobs:
                 timed_out = True
             finally: self.update(key, child_pid=None)
             size = os.fstat(stream.fileno()).st_size
-            if size > 150000:
+            if size > COMMAND_OUTPUT_LIMIT:
                 self.log(key, 'Журнал команды превышает лимит; показана последняя часть.')
-            stream.seek(max(0, size - 150000))
+            stream.seek(max(0, size - COMMAND_OUTPUT_LIMIT))
             self.log(key, stream.read().decode(errors='replace'))
         if timed_out: raise ControlError('Превышено время операции. Проверьте состояние AWS; автоповтора нет.')
-        if size > 150000 and require_full_output:
+        if size > COMMAND_OUTPUT_LIMIT and require_full_output:
             raise ControlError('Изменений слишком много для просмотра в панели. План не разрешён к деплою; используйте ручную проверку.')
         if status: raise ControlError('Команда завершилась с ошибкой; подробности в журнале операции.')
 
@@ -232,11 +235,12 @@ class Jobs:
             '--lookups=false', '--output', str(area / 'assembly'),
             *[arg for k, v in sorted(context.items()) for arg in ['--context', f'{k}={v}']]], cwd=infra, env=env)
         manifest = json.loads((area / 'assembly/manifest.json').read_text())
-        stacks = [a for a in manifest['artifacts'].values() if a['type'] == 'aws:cloudformation:stack']
-        if sorted(a['properties']['stackName'] for a in stacks) != sorted(expected_stacks(config)) or any(
-                a['environment'] != f"aws://{config['account_id']}/{config['region']}" for a in stacks):
+        stacks = {name:a for name,a in manifest['artifacts'].items() if a['type'] == 'aws:cloudformation:stack'}
+        # CDK omits stackName when the physical name is the artifact ID.
+        if sorted(a['properties'].get('stackName') or name for name,a in stacks.items()) != sorted(expected_stacks(config)) or any(
+                a['environment'] != f"aws://{config['account_id']}/{config['region']}" for a in stacks.values()):
             raise ControlError('Состав или окружение стеков не совпадает с ожидаемым prod.')
-        for artifact in stacks:
+        for artifact in stacks.values():
             template = json.loads((area / 'assembly' / artifact['properties']['templateFile']).read_text())
             if any(r['Type'] == 'AWS::ApiGatewayV2::Route' and r['Properties'].get('AuthorizationType') != 'JWT'
                    and not r['Properties'].get('RouteKey', '').startswith('POST /v1/webhooks/')

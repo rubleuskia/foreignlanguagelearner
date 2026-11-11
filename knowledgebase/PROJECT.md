@@ -13,7 +13,8 @@ and 5-minute recordings, with three real measured runs and quality review before
 The private native Fargate benchmark has completed: three runs took 113–124 seconds for 5-minute
 audio, with 15 of 626 words flagged for timing review. The user accepted the private pilot and
 explicitly waived manual checks. The image/report checks pass; the temporary measurement stack
-was deleted. Application CDK bootstrap/deployment remain separate.
+was deleted. CDKToolkit v32 has been created in Stockholm after explicit authorization, with same-project trust
+and termination protection. Application deployment remains pending.
 The cloud functionality
 described below remains undeployed. See [the operator guide](../docs/OPERATOR_CLOUD.md).
 

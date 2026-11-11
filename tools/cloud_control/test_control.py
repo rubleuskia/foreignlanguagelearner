@@ -15,7 +15,7 @@ from http.server import ThreadingHTTPServer
 from .aws import AWS, api_url, deployable
 from .config import Configuration, ControlError, digest, validate, deployment_context, expected_stacks, validate_benchmark
 from .health import run
-from .jobs import Jobs, atomic_json, tree_digest
+from .jobs import Jobs, atomic_json, tree_digest, COMMAND_OUTPUT_LIMIT, OPERATION_LOG_LIMIT
 from .releases import Releases, parse_tag
 from .server import Application, Handler
 
@@ -38,6 +38,27 @@ class ControlTests(unittest.TestCase):
         path=Path(self.tmp.name)/'token'
         path.write_text('test-access-token-not-an-actual-jwt');path.chmod(0o600)
         return {**CONFIG,'access_token_file':str(path)}
+
+    def test_full_initial_deployment_diff_over_old_limit_is_retained_and_redacted(self):
+        import sys
+        jobs=Jobs(ROOT,self.config);key='a'*32
+        atomic_json(jobs.directory/(key+'.json'),{'id':key,'log':'','state':'running'})
+        jwt='eyJfake.payload.signature';aws_key='AKIA'+'X'*16
+        script=f"print('BEGIN {jwt} {aws_key} '+ 'x'*200000 + ' END')"
+        jobs.execute(key,[sys.executable,'-c',script],cwd=ROOT,require_full_output=True)
+        log=jobs.get(key)['log']
+        self.assertIn('BEGIN',log);self.assertIn(' END',log)
+        self.assertNotIn(jwt,log);self.assertNotIn(aws_key,log)
+        self.assertNotIn('показана последняя часть',log)
+
+    def test_oversized_required_diff_still_blocks_deployment(self):
+        import sys
+        jobs=Jobs(ROOT,self.config);key='b'*32
+        atomic_json(jobs.directory/(key+'.json'),{'id':key,'log':'','state':'running'})
+        with self.assertRaisesRegex(ControlError,'План не разрешён к деплою'):
+            jobs.execute(key,[sys.executable,'-c',f"print('x'*{COMMAND_OUTPUT_LIMIT})"],
+                         cwd=ROOT,require_full_output=True)
+        self.assertLessEqual(len(jobs.get(key)['log']),OPERATION_LOG_LIMIT)
 
     def test_config_refuses_email_unknown_secret_fields_wrong_region_and_secret_contents(self):
         for value in [{**CONFIG,'account_id':'sweexxik@gmail.com'}, {**CONFIG,'secret_access_key':'secret'},
@@ -156,6 +177,33 @@ class ControlTests(unittest.TestCase):
         synth=next(c for c in commands if 'synth' in c)
         self.assertIn('node_modules/.bin/ts-node bin/operator.ts',synth)
         self.assertFalse(any('deploy' in c for c in commands))
+
+    def test_prepare_accepts_default_cdk_stack_names_without_weakening_scope_checks(self):
+        config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        self.config.save(config)
+        aws=Mock();aws.snapshot.return_value=[]
+        release=Mock();release.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
+        jobs=Jobs(ROOT,self.config,aws_factory=lambda _:aws,releases=release)
+        mode=['default']
+        def execute(key,argv,**kwargs):
+            if argv[:2]==['git','archive']:
+                with tarfile.open(argv[4],'w') as bundle:
+                    for name in ['scripts/build-cloud.py','infra/alignment/bin/cloud.ts','infra/alignment/bin/operator.ts']:
+                        info=tarfile.TarInfo(name);info.size=1;bundle.addfile(info,io.BytesIO(b'x'))
+            if 'synth' in argv:
+                area=jobs.plans/key/'assembly';area.mkdir()
+                (area/'template.json').write_text(json.dumps({'Resources':{}}))
+                properties={'templateFile':'template.json'}
+                if mode[0]=='wrong-name': properties['stackName']='UnexpectedStack'
+                artifact={'type':'aws:cloudformation:stack',
+                    'environment':'aws://999999999999/eu-north-1' if mode[0]=='foreign' else 'aws://123456789012/eu-north-1',
+                    'properties':properties}
+                (area/'manifest.json').write_text(json.dumps({'artifacts':{'ForeignLanguageLearnerOperator-prod':artifact}}))
+        jobs.execute=execute
+        for variant in ['default','wrong-name','foreign']:
+            mode[0]=variant
+            result=self.wait(jobs,jobs.start('prepare',{'tag':TAG})['id'])
+            self.assertEqual(result['state'],'ready' if variant=='default' else 'failed',result.get('error'))
 
     def test_operator_smoke_uses_operator_profile_without_subscription_routes(self):
         config={**self.token_config(),'deployment_mode':'operator','context':{'operatorAlignment':'false'}}

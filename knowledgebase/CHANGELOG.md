@@ -1,6 +1,24 @@
 # Project changelog
 
 
+## 2026-11-11 — Complete CDK bootstrap and accept standard manifest stack names
+
+- After explicit approval of the persistent AdministratorAccess execution role, create Stockholm
+  CDKToolkit v32 with same-project trust, AWS-managed key choice and termination protection.
+  Bootstrap must run from a neutral directory so the default alignment app is not synthesized first.
+- Fix plan validation for real CDK manifests that omit `properties.stackName`: use the artifact ID,
+  matching the pinned CDK cloud-assembly API. Keep explicit stack-name and project/Region checks.
+- Retain complete first-deployment diffs up to 500 KB with a bounded 750 KB operation log; continue
+  rejecting larger truncated plans. Keep JWT/AWS-key redaction before persistence.
+- Validation: 40 control-panel tests pass, including complete initial diffs, oversized rejection,
+  redaction, absent-name preparation and rejection of an
+  explicit unexpected stack or foreign environment. Live toolkit status is CREATE_COMPLETE and
+  all readiness checks passed after bootstrap. The final live plan retry was blocked by an expired
+  AWS login session; no ready plan or application deployment is claimed.
+- No architectural decision changed; PROJECT.md updates operational readiness and the guide records
+  the tested bootstrap invocation.
+
+
 ## 2026-11-10 — Explain missing CDK bootstrap during plan preparation
 
 - Reuse the same missing-CDKToolkit check in readiness and first-stage preparation, replacing the
