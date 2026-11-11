@@ -49,15 +49,19 @@ class Jobs:
         self.aws_factory, self.releases = aws_factory, releases or Releases(root)
         self.lock, self.data_lock = threading.Lock(), threading.RLock()
         self.active = None
-        for path in self.directory.glob('*.json'):
+        for path in self.operation_files():
             value = json.loads(path.read_text())
             if value['state'] in {'queued', 'running'}:
                 value.update(state='interrupted', error='Панель была остановлена. Проверьте реальное состояние AWS; автоповтора нет.', ended_at=now())
                 atomic_json(path, value)
 
+    def operation_files(self):
+        # CDK also writes <operation-id>.outputs.json into this directory.
+        return [p for p in self.directory.glob('*.json') if re.fullmatch(r'[a-f0-9]{32}\.json', p.name)]
+
     def list(self):
         with self.data_lock:
-            return sorted([json.loads(p.read_text()) for p in self.directory.glob('*.json')],
+            return sorted([json.loads(p.read_text()) for p in self.operation_files()],
                           key=lambda v: v['created_at'], reverse=True)[:60]
 
     def get(self, key):

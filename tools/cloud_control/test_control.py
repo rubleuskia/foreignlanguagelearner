@@ -60,6 +60,27 @@ class ControlTests(unittest.TestCase):
                          cwd=ROOT,require_full_output=True)
         self.assertLessEqual(len(jobs.get(key)['log']),OPERATION_LOG_LIMIT)
 
+    def test_cdk_output_sidecar_is_not_an_operation_during_startup_or_listing(self):
+        directory=self.config.directory/'operations';directory.mkdir()
+        key='a'*32
+        output=directory/(key+'.outputs.json')
+        contents=json.dumps({'ForeignLanguageLearnerOperator-prod':{'ApiUrl':'https://test.execute-api.eu-north-1.amazonaws.com'}})
+        output.write_text(contents)
+        atomic_json(directory/(key+'.json'),{'id':key,'action':'deploy','state':'running',
+            'created_at':'2026-11-11T17:27:18Z','log':''})
+        jobs=Jobs(ROOT,self.config)
+        self.assertEqual([row['id'] for row in jobs.list()],[key])
+        self.assertEqual(jobs.get(key)['state'],'interrupted')
+        self.assertEqual(output.read_text(),contents)
+
+    def test_operator_endpoint_skips_undeployed_subscription_foundation(self):
+        url='https://operator.execute-api.eu-north-1.amazonaws.com'
+        snapshot=[{'name':'ForeignLanguageLearnerCloudFoundation-prod','status':'NOT_DEPLOYED','outputs':{}},
+            {'name':'ForeignLanguageLearnerOperator-prod','status':'CREATE_COMPLETE','outputs':{'ApiUrl':url}}]
+        self.assertEqual(api_url(snapshot),url)
+        snapshot[1]['outputs']['ApiUrl']='https://outside.example.com'
+        with self.assertRaises(ControlError):api_url(snapshot)
+
     def test_config_refuses_email_unknown_secret_fields_wrong_region_and_secret_contents(self):
         for value in [{**CONFIG,'account_id':'sweexxik@gmail.com'}, {**CONFIG,'secret_access_key':'secret'},
                       {**CONFIG,'region':'us-east-1'}, {**CONFIG,'region':'eu-central-1'},

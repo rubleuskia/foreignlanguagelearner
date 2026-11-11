@@ -1,6 +1,19 @@
 # Project changelog
 
 
+## 2026-11-11 — Recover the dashboard after the first operator deployment
+
+- Confirm release v0.0.1-backend.216 deployed both operator stacks successfully. The post-deployment
+  warning came from selecting an empty, undeployed subscription foundation before the operator API.
+  Skip undeployed/empty endpoints while retaining HTTPS, Region and hostname validation.
+- Treat only UUID-named JSON files as operation records. CDK's `<id>.outputs.json` remains available
+  as evidence but no longer breaks startup recovery or `/api/state` sorting after deployment.
+- Validation: regression coverage for both failures; live stacks CREATE_COMPLETE and unauthenticated
+  `/v1/health` and `/v1/me` return 401. The console-created operator does not yet exist; authenticated
+  application functionality remains unverified. No repeat deployment is needed for these panel fixes.
+- No architectural decision changed. PROJECT.md records the deployed private pilot and preserves
+  the undeployed subscription/public-test and unconnected iOS boundaries.
+
 ## 2026-11-11 — Complete CDK bootstrap and accept standard manifest stack names
 
 - After explicit approval of the persistent AdministratorAccess execution role, create Stockholm

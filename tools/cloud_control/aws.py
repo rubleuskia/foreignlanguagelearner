@@ -133,7 +133,9 @@ def deployable(snapshot):
 def api_url(snapshot):
     from urllib.parse import urlparse
     base = next((s['outputs'].get('ApiUrl') for s in snapshot
-                 if s['name'].endswith(('Foundation-prod', 'Operator-prod'))), None)
+                 if s['status'] != 'NOT_DEPLOYED'
+                 and s['name'].endswith(('Foundation-prod', 'Operator-prod'))
+                 and s['outputs'].get('ApiUrl')), None)
     parsed = urlparse(base or '')
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
             or parsed.query or parsed.fragment or parsed.path not in {'', '/'}
