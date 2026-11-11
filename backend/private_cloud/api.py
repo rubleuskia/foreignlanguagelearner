@@ -11,7 +11,7 @@ from backend.translation.provider import ProviderFailure
 from . import library
 from .auth import authenticate
 from .repository import Repository
-from .provider import BedrockProvider
+from .provider import OperatorProvider
 
 _runtime = None
 
@@ -24,8 +24,8 @@ def runtime():
         options = Config(connect_timeout=2, read_timeout=3, retries={'total_max_attempts': 1})
         _runtime = (boto3.client('cognito-idp', config=options),
                     Repository(boto3.client('dynamodb', config=options), os.environ['OPERATOR_TABLE']),
-                    BedrockProvider(boto3.client('bedrock-runtime', config=Config(
-                        connect_timeout=2, read_timeout=18, retries={'total_max_attempts': 1}))))
+                    OperatorProvider(boto3.client('secretsmanager', config=options),
+                                     os.environ.get('OPENAI_SECRET_ARN')))
     return _runtime
 
 

@@ -22,6 +22,7 @@ if (app.node.tryGetContext("operatorAlignment") !== "false") {
 const foundation = new OperatorStack(app, "ForeignLanguageLearnerOperator-prod", {
   env, code: code(), operatorUsername: app.node.tryGetContext("operatorUsername") ?? "operator",
   dailyModelLimit: Number(app.node.tryGetContext("dailyModelLimit") ?? "50"),
+  openaiSecretArn: app.node.tryGetContext("openaiSecretArn") ?? "",
   alignmentEnabled: app.node.tryGetContext("operatorAlignment") !== "false",
 });
 if (app.node.tryGetContext("operatorAlignment") !== "false") {

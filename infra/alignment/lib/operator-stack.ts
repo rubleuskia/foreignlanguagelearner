@@ -10,11 +10,11 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as cw from "aws-cdk-lib/aws-cloudwatch";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
-import * as iam from "aws-cdk-lib/aws-iam";
+import * as secrets from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import { DEPLOYMENT_REGION } from "./region";
 
-export const OPERATOR_MODEL = "qwen.qwen3-235b-a22b-2507-v1:0";
+export const OPERATOR_MODEL = "gpt-5-mini";
 
 export class OperatorStack extends cdk.Stack {
   readonly api: apigw.HttpApi;
@@ -25,13 +25,16 @@ export class OperatorStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: cdk.StackProps & {
     readonly code: lambda.Code; readonly operatorUsername: string; readonly dailyModelLimit: number;
-    readonly alignmentEnabled?: boolean;
+    readonly alignmentEnabled?: boolean; readonly openaiSecretArn: string;
   }) {
     super(scope, id, props);
     if (props.env?.region !== DEPLOYMENT_REGION) throw new Error(`Operator requires ${DEPLOYMENT_REGION}`);
     if (!/^[A-Za-z0-9_.@+-]{1,64}$/.test(props.operatorUsername)) throw new Error("Invalid operatorUsername");
     if (!Number.isInteger(props.dailyModelLimit) || props.dailyModelLimit < 1 || props.dailyModelLimit > 1000) {
       throw new Error("dailyModelLimit must be 1..1000");
+    }
+    if (!new RegExp(`^arn:aws:secretsmanager:${DEPLOYMENT_REGION}:${this.account}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$`).test(props.openaiSecretArn)) {
+      throw new Error("openaiSecretArn must be a complete secret ARN in the selected project and Region");
     }
     const pool = new cognito.UserPool(this, "OperatorPool", {
       selfSignUpEnabled: false, signInAliases: { username: true }, signInCaseSensitive: true,
@@ -77,8 +80,8 @@ export class OperatorStack extends cdk.Stack {
     libraryBucket.grantRead(api, "library/*");
     new cdk.CfnOutput(this, "BookLibraryBucket", { value: libraryBucket.bucketName });
     this.table.grantReadWriteData(api);
-    api.addToRolePolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel"],
-      resources: [`arn:${this.partition}:bedrock:${this.region}::foundation-model/${OPERATOR_MODEL}`] }));
+    api.addEnvironment("OPENAI_SECRET_ARN", props.openaiSecretArn);
+    secrets.Secret.fromSecretCompleteArn(this, "OpenAIKey", props.openaiSecretArn).grantRead(api);
     const integration = new HttpLambdaIntegration("OperatorIntegration", api);
     for (const [method, path] of [[apigw.HttpMethod.GET, "/v1/library/books"],
       [apigw.HttpMethod.GET, "/v1/library/books/{id}/download"], [apigw.HttpMethod.GET, "/v1/health"], [apigw.HttpMethod.GET, "/v1/me"],
@@ -115,7 +118,7 @@ export class OperatorStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolId", { value: pool.userPoolId });
     new cdk.CfnOutput(this, "ClientId", { value: client.userPoolClientId });
     new cdk.CfnOutput(this, "OperatorUsername", { value: props.operatorUsername });
-    new cdk.CfnOutput(this, "BedrockModelId", { value: OPERATOR_MODEL });
+    new cdk.CfnOutput(this, "OpenAIModelId", { value: OPERATOR_MODEL });
     new cdk.CfnOutput(this, "AlarmTopicArn", { value: this.alarms.topicArn });
   }
 }
