@@ -1,6 +1,38 @@
 # Project changelog
 
 
+## 2026-11-11 — Recover the dashboard after the first operator deployment
+
+- Confirm release v0.0.1-backend.216 deployed both operator stacks successfully. The post-deployment
+  warning came from selecting an empty, undeployed subscription foundation before the operator API.
+  Skip undeployed/empty endpoints while retaining HTTPS, Region and hostname validation.
+- Treat only UUID-named JSON files as operation records. CDK's `<id>.outputs.json` remains available
+  as evidence but no longer breaks startup recovery or `/api/state` sorting after deployment.
+- Validation: all 42 control-panel tests pass, including both regressions. The live dashboard is
+  restored and six safe HTTPS smoke checks pass. Both stacks are CREATE_COMPLETE; unauthenticated
+  `/v1/health` and `/v1/me` return 401. The console-created operator does not yet exist; authenticated
+  application functionality remains unverified. No repeat deployment is needed for these panel fixes.
+- No architectural decision changed. PROJECT.md records the deployed private pilot and preserves
+  the undeployed subscription/public-test and unconnected iOS boundaries.
+
+## 2026-11-11 — Complete CDK bootstrap and accept standard manifest stack names
+
+- After explicit approval of the persistent AdministratorAccess execution role, create Stockholm
+  CDKToolkit v32 with same-project trust, AWS-managed key choice and termination protection.
+  Bootstrap must run from a neutral directory so the default alignment app is not synthesized first.
+- Fix plan validation for real CDK manifests that omit `properties.stackName`: use the artifact ID,
+  matching the pinned CDK cloud-assembly API. Keep explicit stack-name and project/Region checks.
+- Retain complete first-deployment diffs up to 500 KB with a bounded 750 KB operation log; continue
+  rejecting larger truncated plans. Keep JWT/AWS-key redaction before persistence.
+- Validation: 40 control-panel tests pass, including complete initial diffs, oversized rejection,
+  redaction, absent-name preparation and rejection of an
+  explicit unexpected stack or foreign environment. Live toolkit status is CREATE_COMPLETE and
+  all readiness checks passed after bootstrap. The final live plan retry was blocked by an expired
+  AWS login session; no ready plan or application deployment is claimed.
+- No architectural decision changed; PROJECT.md updates operational readiness and the guide records
+  the tested bootstrap invocation.
+
+
 ## 2026-11-10 — Explain missing CDK bootstrap during plan preparation
 
 - Reuse the same missing-CDKToolkit check in readiness and first-stage preparation, replacing the

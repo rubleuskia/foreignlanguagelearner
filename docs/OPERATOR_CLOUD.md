@@ -54,9 +54,19 @@ and API checks for initial backend acceptance; a native password UI can be integ
    ```sh
    cd infra/alignment
    npm ci --ignore-scripts
-   AWS_PROFILE=fll-control node_modules/.bin/cdk bootstrap aws://YOUR_PROJECT_ID/eu-north-1
+   CDK_BOOTSTRAP_BINARY="$PWD/node_modules/.bin/cdk"
+   CDK_BOOTSTRAP_WORKDIR="$(mktemp -d)"
+   (
+     cd "$CDK_BOOTSTRAP_WORKDIR"
+     AWS_PROFILE=fll-control "$CDK_BOOTSTRAP_BINARY" bootstrap aws://YOUR_PROJECT_ID/eu-north-1 \
+       --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
+       --no-bootstrap-customer-key --termination-protection
+   )
+   rmdir "$CDK_BOOTSTRAP_WORKDIR"
    ```
 
+   Use a neutral working directory: running bootstrap from this app directory may synthesize the
+   default alignment application and fail on missing worker-image context before bootstrap begins.
    The default bootstrap includes a CloudFormation execution role with AdministratorAccess, plus
    deployment/publishing/lookup roles and private asset stores. Review `cdk bootstrap --show-template`
    and obtain explicit authorization for this persistent privileged IAM change before running it.
