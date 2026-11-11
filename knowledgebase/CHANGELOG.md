@@ -8,7 +8,8 @@
   Skip undeployed/empty endpoints while retaining HTTPS, Region and hostname validation.
 - Treat only UUID-named JSON files as operation records. CDK's `<id>.outputs.json` remains available
   as evidence but no longer breaks startup recovery or `/api/state` sorting after deployment.
-- Validation: regression coverage for both failures; live stacks CREATE_COMPLETE and unauthenticated
+- Validation: all 42 control-panel tests pass, including both regressions. The live dashboard is
+  restored and six safe HTTPS smoke checks pass. Both stacks are CREATE_COMPLETE; unauthenticated
   `/v1/health` and `/v1/me` return 401. The console-created operator does not yet exist; authenticated
   application functionality remains unverified. No repeat deployment is needed for these panel fixes.
 - No architectural decision changed. PROJECT.md records the deployed private pilot and preserves
