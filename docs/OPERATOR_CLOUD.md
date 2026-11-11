@@ -46,8 +46,10 @@ latency, token counts and error categories are logged, not text/results/password
 
 The source language contract remains en/fr/es/de/it/pl → Russian; choosing a model that supports
 Russian → Polish does not itself add that direction to the application contract. This is a backend
-release; the existing iOS Apple login UI is not a password login client. Use the local login helper
-and API checks for initial backend acceptance; a native password UI can be integrated separately.
+release. The built-in library has a separate native operator username/password login with automatic
+refresh; it does not connect subscription/translation/audio UI to the operator backend. Existing
+access-only app installations must sign in once in library settings. The local login helper still
+saves only an access token for dashboard acceptance, so that test file must be replaced after expiry.
 
 ## Before preparation
 

@@ -1,28 +1,44 @@
 import SwiftUI
 
 struct OperatorLibrarySettingsSection: View {
-    @State private var token = ""
-    @State private var saved = false
+    @State private var username = "operator"
+    @State private var password = ""
+    @State private var signedInAs: String?
+    @State private var working = false
     @State private var message: String?
     var body: some View {
         Section("Built-in library") {
-            SecureField("Cognito operator access token", text: $token)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button(AppLanguage.text(saved ? "Replace token" : "Save token")) {
-                do { try OperatorAccessTokenStore.save(token); token = ""; saved = true; message = nil }
-                catch { message = error.localizedDescription }
-            }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if saved {
-                Text("Token saved in Keychain").font(.caption)
-                Button("Delete token", role: .destructive) {
-                    do { try OperatorAccessTokenStore.delete(); saved = false; message = nil }
-                    catch { message = error.localizedDescription }
+            if let signedInAs {
+                Text(AppLanguage.format("Signed in as %@", signedInAs))
+                Button("Sign out", role: .destructive) {
+                    working = true
+                    Task {
+                        defer { working = false; self.signedInAs = nil }
+                        do { try await OperatorSession.shared.signOut(); message = nil }
+                        catch { message = error.localizedDescription }
+                    }
                 }
+            } else {
+                TextField("Library username", text: $username)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username)
+                SecureField("Library password", text: $password).textContentType(.password)
+                Button("Sign in") {
+                    let submittedPassword = password; password = ""; working = true; message = nil
+                    Task {
+                        defer { working = false }
+                        do {
+                            try await OperatorSession.shared.signIn(username: username, password: submittedPassword)
+                            signedInAs = try await OperatorSession.shared.username()
+                        } catch { message = error.localizedDescription }
+                    }
+                }.disabled(username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
             }
-            Text("Paste the operator access token. When it expires, obtain a new token and replace it here.").font(.caption).foregroundStyle(.secondary)
+            if working { ProgressView() }
+            Text("Sign in once with your library username and password. The session renews automatically; your password is not saved.")
+                .font(.caption).foregroundStyle(.secondary)
             if let message { Text(message).foregroundStyle(.red) }
-        }.onAppear {
-            do { saved = try OperatorAccessTokenStore.load() != nil }
+        }.disabled(working).task {
+            do { signedInAs = try await OperatorSession.shared.username() }
             catch { message = error.localizedDescription }
         }
     }
@@ -41,7 +57,7 @@ struct BuiltinLibraryView: View {
         List {
             if loading { ProgressView("Loading catalog…") }
             if let error { Text(error).foregroundStyle(.red) }
-            if !loading && books.isEmpty { Text("No books available. Check your token in Settings.") }
+            if !loading && books.isEmpty { Text("No books available. Check your library sign-in in Settings.") }
             ForEach(books) { book in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(book.title).font(.headline)

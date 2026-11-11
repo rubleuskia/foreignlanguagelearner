@@ -1,3 +1,18 @@
+## 2026-11-11 — Automatically renew the built-in library session
+
+- Replace manual access-token pasting with operator username/password sign-in in library settings.
+  Confirm the backend operator profile before saving access/refresh tokens in device-only Keychain;
+  never persist the password or export session credentials in library backups.
+- Refresh before expiry and retry a library GET once after 401. Share concurrent refreshes, retain
+  credentials on transient network errors, clear revoked sessions, and prevent late refresh/login
+  responses from restoring a signed-out session. Sign-out clears locally and revokes the refresh token.
+- Existing access-only installations need one password sign-in; their old manually pasted token
+  cannot be converted into a refresh token. No backend redeployment or token lifetime change.
+- Record deployed operator release 228 and its six passing public boundary checks; authenticated
+  post-deployment/model checks remain pending. Update decisions and project workflow for native
+  private-operator library login. Apple subscription
+  sessions and personal OpenAI keys remain separate.
+
 ## 2026-11-11 — Personal Team device signing
 
 - Debug builds now use an empty entitlement file so local device provisioning does not request the unsupported Sign in with Apple capability. Release builds retain the native capability.
