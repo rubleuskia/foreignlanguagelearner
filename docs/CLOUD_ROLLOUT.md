@@ -1,6 +1,6 @@
 # Cloud rollout in two stages
 
-Updated: 2026-11-09. Status: operator assembly and dashboard implementation prepared; not deployed.
+Updated: 2026-11-11. Status: initial operator backend deployed; OpenAI replacement prepared for the next release.
 
 This rollout supersedes the Apple-first deployment order in PAID_CLOUD_BACKEND_PLAN.md.
 The existing subscription implementation remains available as stage-two code, not a prerequisite
@@ -53,45 +53,24 @@ uses an asynchronous job API because it cannot finish within one HTTP request.
 
 ### Selected provider and model
 
-The operator selected Amazon Bedrock. Use Qwen3 235B A22B Instruct 2507 as the stage-one default:
-`qwen.qwen3-235b-a22b-2507-v1:0`, `bedrock-runtime` Converse, direct eu-north-1 ON_DEMAND,
-Standard tier. Scope the Lambda role to this model; no external OpenAI key or cross-Region profile.
-Keep the provider interface and existing server-side validated input/output contracts.
+The operator switched stage one to OpenAI API on 2026-11-11 after the project showed zero
+model-specific Bedrock inference quotas in eu-north-1. Use the same default as the iOS app:
+`gpt-5-mini`, Responses API, minimal reasoning, strict structured JSON and `store: false`.
+The external provider receives only the bounded excerpt/context; AWS resources stay in Stockholm.
+The server owns its OpenAI project credential and billing, stored in a selected-project/Region
+Secrets Manager secret as `{"api_key":"..."}`. Grant only the translation API handler read access.
+This is separate from the app's personal Keychain credential. Model choice and prompt overrides
+on the personal-key iOS path do not automatically change server policy.
 
-Selection rationale: Qwen lists Polish and Russian among its supported languages; AWS documents
-regional access and structured outputs. This is an initial engineering choice, not a measured claim
-that it outperforms every alternative for Polish/Russian. Prioritize Polish → Russian context,
-idioms, inflected lemmas and natural examples. Model-level Polish ↔ Russian support does not change
-the existing application's six-source-language/Russian-target contract by itself.
+Keep the synchronous one-submission path, 2048-token cap, 18-second HTTP timeout, server output
+validation, daily admission limit and uncertain-outcome/idempotency handling. No Bedrock quota,
+model access or cross-Region inference profile is required by the new assembly. Audio, Cognito
+and second-stage Apple/subscription work retain their existing boundaries.
 
-Live checks on 2026-11-09 returned ACTIVE/ON_DEMAND and availability AUTHORIZED/AVAILABLE.
-However, the attempted six-example Converse evaluation was rejected with AccessDeniedException:
-AWS says the project is currently being verified, normally less than two hours. No model result,
-quality, JSON compliance or latency was verified. Do not bypass this with another Region. After
-verification, run the bounded Polish/Russian evaluation and deadline/schema checks before acceptance.
-
-Official AWS Price List for eu-north-1 on 2026-11-09 lists Standard on-demand rates of $0.22 per
-million input tokens and $0.88 per million output tokens. For 1,000 input + 500 output tokens this
-is $0.00066 for the model alone, excluding AWS API/compute/storage charges and tax. Recheck prices
-before deployment; no spending or throughput guarantee follows from this estimate.
-
-Read-only Bedrock discovery on 2026-11-09 in eu-north-1 returned these examples:
-
-| Access shown by the catalogue | Example text models |
-|---|---|
-| Direct ON_DEMAND | Amazon Nova Lite v1; OpenAI gpt-oss-20b/120b; Qwen3 32B/235B; DeepSeek V3/V3.2; GLM 4.7/5; Kimi K2.5; MiniMax M2.5 |
-| INFERENCE_PROFILE only | Claude Haiku/Sonnet/Opus families; Amazon Nova Pro/Nova 2 Lite; proprietary OpenAI GPT families |
-
-Catalogue presence is not proof of inference permission, quota, structured-output support or
-language quality. Listed EU/global profiles route outside the selected Region and are unsuitable
-for this project's current single-Region restriction. Do not select them simply because listing
-from eu-north-1 succeeds. Model/access discovery must be refreshed before implementation.
-
-For acceptance, evaluate the selected Qwen model on Polish/Russian first and the other supported
-source languages before claiming full existing-language coverage. Check
-meaning, contextual lemma, natural independent examples, exact JSON contract, latency and token
-cost. Preserve server-side schema validation even where the model offers structured outputs.
-The first inference attempt was refused by AWS project verification; no successful inference ran.
+This changes the next deployable release, not the already installed Bedrock release. A new
+verified main CI tag and dashboard plan/deployment are required, followed by separately authorized
+bounded OpenAI acceptance. Catalogue presence, secret metadata and mocked tests do not prove
+live model access or translation quality.
 
 ### Implementation order and acceptance
 

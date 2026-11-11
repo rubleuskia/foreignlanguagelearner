@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHA = 'a' * 40
 TAG = 'backend-123-' + SHA[:12]
 CONFIG = {'account_id':'123456789012', 'region':'eu-north-1', 'profile':'fll-prod', 'context':{}}
+SECRET_ARN = 'arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf'
 SNAPSHOT = [{'name':'ForeignLanguageLearnerCloudFoundation-prod', 'status':'UPDATE_COMPLETE',
     'outputs':{'ApiUrl':'https://test.execute-api.eu-north-1.amazonaws.com'}, 'tags':{}}]
 
@@ -110,7 +111,7 @@ class ControlTests(unittest.TestCase):
             self.assertIs(result.exception,error)
 
     def test_prepare_preserves_bootstrap_explanation_before_building_assets(self):
-        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}})
+        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}})
         aws=Mock();aws.snapshot.return_value=[]
         aws.require_bootstrap.side_effect=ControlError('CDKToolkit отсутствует. Нужна одноразовая подготовка CDK.')
         releases=Mock();releases.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
@@ -134,8 +135,24 @@ class ControlTests(unittest.TestCase):
         self.assertNotIn('KeyError',result['error'])
         aws_factory.assert_not_called(); releases.verify.assert_not_called()
 
-    def test_operator_context_requires_no_apple_and_audio_requires_real_artifacts(self):
+    def test_operator_requires_secret_and_readiness_reads_metadata_only(self):
         config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        with self.assertRaisesRegex(ControlError,'openaiSecretArn'): deployment_context(config)
+        config['context']['openaiSecretArn']=SECRET_ARN
+        self.assertEqual(deployment_context(config)['openaiSecretArn'],SECRET_ARN)
+        aws=AWS.__new__(AWS);aws.config=config
+        aws.identity=Mock(return_value=config['account_id']);aws.require_bootstrap=Mock(return_value='found')
+        secrets=Mock();secrets.describe_secret.return_value={'VersionIdsToStages':{'version':['AWSCURRENT']}}
+        aws.client=Mock(return_value=secrets)
+        self.assertTrue(aws.readiness()['ready'])
+        aws.client.assert_called_once_with('secretsmanager')
+        secrets.describe_secret.assert_called_once_with(SecretId=SECRET_ARN)
+        secrets.get_secret_value.assert_not_called()
+        secrets.describe_secret.return_value={'VersionIdsToStages':{}}
+        self.assertFalse(aws.readiness()['ready'])
+
+    def test_operator_context_requires_no_apple_and_audio_requires_real_artifacts(self):
+        config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}}
         context=deployment_context(config)
         self.assertEqual(context['operatorUsername'],'operator')
         self.assertEqual(expected_stacks(config),['ForeignLanguageLearnerOperator-prod'])
@@ -143,9 +160,9 @@ class ControlTests(unittest.TestCase):
         for extra in [{}, {'workerRepositoryName':'worker'},
                       {'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}]:
             with self.assertRaises(ControlError):
-                deployment_context({**config,'context':{'operatorAlignment':'true',**extra}})
+                deployment_context({**config,'context':{'operatorAlignment':'true','openaiSecretArn':SECRET_ARN,**extra}})
         for limit in ['0','1001','-1','1.5']:
-            with self.assertRaises(ControlError): deployment_context({**config,'context':{'dailyModelLimit':limit}})
+            with self.assertRaises(ControlError): deployment_context({**config,'context':{'dailyModelLimit':limit,'openaiSecretArn':SECRET_ARN}})
 
     def test_benchmark_rejects_unmatched_image_missing_languages_and_nonfinite_metrics(self):
         digest_value='sha256:'+'a'*64
@@ -172,7 +189,7 @@ class ControlTests(unittest.TestCase):
             with self.assertRaises(ControlError): validate_benchmark({**report,**changed},image,operator=True)
 
     def test_operator_prepare_uses_verified_source_and_operator_builder_without_apple(self):
-        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}})
+        self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}})
         aws=Mock();aws.snapshot.return_value=[]
         release=Mock();release.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
         jobs=Jobs(ROOT,self.config,aws_factory=lambda c:aws,releases=release)
@@ -200,7 +217,7 @@ class ControlTests(unittest.TestCase):
         self.assertFalse(any('deploy' in c for c in commands))
 
     def test_prepare_accepts_default_cdk_stack_names_without_weakening_scope_checks(self):
-        config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}}
         self.config.save(config)
         aws=Mock();aws.snapshot.return_value=[]
         release=Mock();release.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
@@ -227,7 +244,7 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(result['state'],'ready' if variant=='default' else 'failed',result.get('error'))
 
     def test_operator_smoke_uses_operator_profile_without_subscription_routes(self):
-        config={**self.token_config(),'deployment_mode':'operator','context':{'operatorAlignment':'false'}}
+        config={**self.token_config(),'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}}
         snapshot=[{**SNAPSHOT[0],'name':'ForeignLanguageLearnerOperator-prod'}]
         paths=[]
         def call(base,path,method='GET',body=None,token=None,key=None):

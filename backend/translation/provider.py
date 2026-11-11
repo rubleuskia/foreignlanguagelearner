@@ -29,8 +29,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class OpenAIProvider:
-    def __init__(self, api_key, opener=None):
+    def __init__(self, api_key, opener=None, *, timeout=45):
         self.api_key, self.opener = api_key, opener or urllib.request.build_opener(NoRedirect()).open
+        self.timeout = timeout
 
     def run(self, kind, payload, model, output_tokens):
         body = {'model': model, 'store': False, 'max_output_tokens': output_tokens,
@@ -41,7 +42,7 @@ class OpenAIProvider:
             headers={'Authorization': f'Bearer {self.api_key}', 'Content-Type': 'application/json'}, method='POST')
         tokens = {}
         try:
-            with self.opener(request, timeout=45) as response:
+            with self.opener(request, timeout=self.timeout) as response:
                 raw = response.read(131073)
             if len(raw) > 131072:
                 raise ProviderFailure()

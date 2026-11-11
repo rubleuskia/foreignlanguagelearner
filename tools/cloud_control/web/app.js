@@ -83,7 +83,7 @@ function renderState() {
   if(!initialized){fillConfig(state.configuration);initialized=true;}
 }
 async function refreshState() {try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}}
-function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и Bedrock','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
+function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и OpenAI','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
 async function refreshStatus() {
   if(statusBusy)return;statusBusy=true;
   try {
@@ -95,7 +95,7 @@ async function refreshStatus() {
       rows('stacks',[],()=>{},'Нет актуального состояния из AWS');rows('alarms',[],()=>{},'Нет актуальных данных из AWS');$('checked-at').textContent='—';return;}
     const stacks=result.stacks, installed=stacks.filter(s=>s.status!=='NOT_DEPLOYED');
     const outputs=stacks.find(s=>s.name==='ForeignLanguageLearnerOperator-prod')?.outputs || {};
-    rows('client-outputs',Object.entries(outputs).filter(([key])=>['ApiUrl','UserPoolId','ClientId','OperatorUsername','BedrockModelId','AlarmTopicArn'].includes(key)),([key,value])=>row(({ApiUrl:'Адрес API',UserPoolId:'Cognito User Pool',ClientId:'Cognito Client ID',OperatorUsername:'Создайте пользователя с логином',BedrockModelId:'Модель Bedrock',AlarmTopicArn:'Тема оповещений SNS'})[key],value),'Реквизиты появятся после деплоя первого этапа.');
+    rows('client-outputs',Object.entries(outputs).filter(([key])=>['ApiUrl','UserPoolId','ClientId','OperatorUsername','BedrockModelId','OpenAIModelId','AlarmTopicArn'].includes(key)),([key,value])=>row(({ApiUrl:'Адрес API',UserPoolId:'Cognito User Pool',ClientId:'Cognito Client ID',OperatorUsername:'Создайте пользователя с логином',BedrockModelId:'Модель Bedrock (предыдущий деплой)',OpenAIModelId:'Модель OpenAI',AlarmTopicArn:'Тема оповещений SNS'})[key],value),'Реквизиты появятся после деплоя первого этапа.');
     const unhealthy=installed.some(s=>!['CREATE_COMPLETE','UPDATE_COMPLETE','UPDATE_ROLLBACK_COMPLETE','IMPORT_COMPLETE'].includes(s.status));
     $('infra-status').textContent=!installed.length?'Не развёрнуто':unhealthy?'Требует внимания':'Стеки доступны';
     $('infra-detail').textContent=result.account_id+' · '+installed.length+' компонентов';
@@ -128,6 +128,7 @@ function fillConfig(c) {
   c=c || {account_id:'',profile:'fll-prod',region:'eu-north-1',context:{acceptTranslations:'false',paidAlignment:'false'}};
   $('deployment-mode').value=c.deployment_mode || 'subscription';
   const ctx=c.context || {};
+  $('openai-secret-arn').value=ctx.openaiSecretArn || '';
   $('operator-username').value=ctx.operatorUsername || 'operator';$('daily-model-limit').value=ctx.dailyModelLimit || '50';
   $('operator-alignment').value=ctx.operatorAlignment || 'true';$('worker-repository').value=ctx.workerRepositoryName || '';
   $('worker-digest').value=ctx.workerImageDigest || '';$('benchmark-file').value=c.alignment_benchmark_file || '';updateMode();
@@ -138,7 +139,7 @@ function fillConfig(c) {
 $('config-form').onsubmit=async event=>{event.preventDefault();try{
   const extra=JSON.parse($('deploy-config').value), c={...extra,account_id:$('account-id').value.trim(),profile:$('profile').value.trim(),region:$('region').value};
   c.deployment_mode=$('deployment-mode').value;
-  if(c.deployment_mode==='operator'){c.context={operatorUsername:$('operator-username').value.trim(),dailyModelLimit:$('daily-model-limit').value,operatorAlignment:$('operator-alignment').value};
+  if(c.deployment_mode==='operator'){c.context={openaiSecretArn:$('openai-secret-arn').value.trim(),operatorUsername:$('operator-username').value.trim(),dailyModelLimit:$('daily-model-limit').value,operatorAlignment:$('operator-alignment').value};
     if($('worker-repository').value.trim())c.context.workerRepositoryName=$('worker-repository').value.trim();
     if($('worker-digest').value.trim())c.context.workerImageDigest=$('worker-digest').value.trim();
     delete c.apple_roots;delete c.root_sha256;delete c.policy_file;delete c.alignment_benchmark_file;

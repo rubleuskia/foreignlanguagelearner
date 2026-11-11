@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as cdk from "aws-cdk-lib";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import { Template } from "aws-cdk-lib/assertions";
+import { Match, Template } from "aws-cdk-lib/assertions";
 import { OperatorStack, OPERATOR_MODEL } from "../lib/operator-stack";
 import { AlignmentStack } from "../lib/alignment-stack";
 
@@ -16,7 +16,8 @@ try {
   const env = { account: "123456789012", region: "eu-north-1" };
   app.node.setContext("availability-zones:account=123456789012:region=eu-north-1", ["eu-north-1a", "eu-north-1b"]);
   const operator = new OperatorStack(app, "Operator", { env, code: lambda.Code.fromAsset(area),
-    operatorUsername: "operator", dailyModelLimit: 50 });
+    operatorUsername: "operator", dailyModelLimit: 50,
+    openaiSecretArn: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" });
   const report = { workerImageDigest: digest, scope: "operator-pl-300-v1", maxAudioSeconds: 300, maxJobCostUsd: 1,
     languages: Object.fromEntries(["pl"].map(language =>
       [language, { qualityAccepted: true, audioSeconds: 300, runs: 3, runtimeSeconds: 300, peakMemoryMiB: 1024, costUsd: 0.1 }])) };
@@ -45,13 +46,23 @@ try {
       assert.deepEqual(route.Properties.AuthorizationScopes, ["aws.cognito.signin.user.admin"]);
     }
     assert.equal(Object.values(template.findResources("AWS::EC2::NatGateway")).length, 0);
-    assert.doesNotMatch(JSON.stringify(template.toJSON()), /secretsmanager:GetSecretValue|APPLE_API_SECRET_ARN|OPENAI_SECRET_ARN/);
+    assert.doesNotMatch(JSON.stringify(template.toJSON()), /APPLE_API_SECRET_ARN/);
   }
   foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 8);
   audio.resourceCountIs("AWS::ApiGatewayV2::Route", 9);
-  assert.match(JSON.stringify(foundation.toJSON()), /bedrock:InvokeModel/);
+  foundation.hasResourceProperties("AWS::IAM::Policy", { PolicyDocument: { Statement: Match.arrayWith([
+    Match.objectLike({ Effect: "Allow", Action: ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+      Resource: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" }),
+  ]) } });
+  foundation.hasResourceProperties("AWS::Lambda::Function", {
+    Handler: "backend.private_cloud.api.handler",
+    Environment: { Variables: { OPENAI_SECRET_ARN: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" } },
+  });
+  assert.match(JSON.stringify(foundation.toJSON()), /secretsmanager:GetSecretValue/);
+  assert.match(JSON.stringify(foundation.toJSON()), /openai-AbCdEf/);
+  assert.doesNotMatch(JSON.stringify(audio.toJSON()), /OPENAI_SECRET_ARN|secretsmanager:GetSecretValue/);
   assert.match(JSON.stringify(foundation.toJSON()), new RegExp(OPERATOR_MODEL.replaceAll(".", "\\.")));
-  assert.doesNotMatch(JSON.stringify(foundation.toJSON()), /bedrock:\*/);
+  assert.doesNotMatch(JSON.stringify(foundation.toJSON()), /bedrock:/);
   audio.hasResourceProperties("AWS::Lambda::Function", { Handler: "backend.private_cloud.alignment.handler" });
   audio.hasResourceProperties("AWS::Lambda::Function", {
     Handler: "backend.private_cloud.alignment.handler",
@@ -64,10 +75,11 @@ try {
   assert.deepEqual(app.synth().manifest.missing ?? [], []);
   const badApp = new cdk.App({ context: { workerRepositoryName: "worker", workerImageDigest: digest } });
   const badOperator = new OperatorStack(badApp, "BadOperator", { env, code: lambda.Code.fromAsset(area),
-    operatorUsername: "operator", dailyModelLimit: 50 });
+    operatorUsername: "operator", dailyModelLimit: 50,
+    openaiSecretArn: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" });
   assert.throws(() => new AlignmentStack(badApp, "BadAlignment", { env, operatorFoundation: badOperator,
     cloudCode: lambda.Code.fromAsset(area), benchmarkReport: { ...report, workerImageDigest: "wrong" } }), /benchmark/);
-  console.log("operator API, regional Bedrock and authenticated alignment CDK assertions passed");
+  console.log("operator API, OpenAI secret integration and authenticated alignment CDK assertions passed");
 } finally {
   fs.rmSync(area, { recursive: true, force: true });
 }

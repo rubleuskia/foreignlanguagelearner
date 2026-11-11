@@ -80,7 +80,7 @@ class AWS:
         return 'CDKToolkit найден'
 
     def readiness(self):
-        """Metadata reads only. This does not invoke Bedrock, bootstrap or publish images."""
+        """Metadata reads only. This does not invoke model APIs, bootstrap or publish images."""
         from pathlib import Path
         cases = []
         def record(name, fn):
@@ -94,16 +94,16 @@ class AWS:
         record('Параметры выбранного этапа', lambda: (deployment_context(self.config), 'Настройки заполнены')[1])
         record('Подготовка AWS для CDK', self.require_bootstrap)
         if is_operator(self.config):
-            model = 'qwen.qwen3-235b-a22b-2507-v1:0'
-            def model_access():
-                value = self.client('bedrock').get_foundation_model_availability(modelId=model)
-                if (value.get('authorizationStatus') != 'AUTHORIZED' or value.get('regionAvailability') != 'AVAILABLE'
-                        or value.get('entitlementAvailability') != 'AVAILABLE'
-                        or value.get('agreementAvailability', {}).get('status') != 'AVAILABLE'):
-                    raise ControlError('Модель пока не разрешена проекту в Стокгольме.')
-                return 'Разрешение найдено; платный вызов и верификация проекта проверяются отдельно.'
-            record('Bedrock Qwen3: регион и разрешение', model_access)
             ctx = self.config.get('context', {})
+            def model_secret():
+                arn = ctx.get('openaiSecretArn')
+                if not arn: raise ControlError('Укажите ARN секрета OpenAI в настройках первого этапа.')
+                value = self.client('secretsmanager').describe_secret(SecretId=arn)
+                if value.get('DeletedDate') or not any('AWSCURRENT' in stages
+                        for stages in value.get('VersionIdsToStages', {}).values()):
+                    raise ControlError('У секрета OpenAI нет активной версии AWSCURRENT.')
+                return 'Секрет найден; содержимое ключа, доступ OpenAI и квота проверяются отдельно.'
+            record('OpenAI: секрет для серверного API', model_secret)
             if ctx.get('operatorAlignment', 'true') == 'true':
                 def image():
                     if not ctx.get('workerRepositoryName') or not ctx.get('workerImageDigest'):
