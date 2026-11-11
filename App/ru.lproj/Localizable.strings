@@ -715,3 +715,24 @@
 "Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support." = "Не удалось проверить вход в облачный аккаунт. Войдите заново с тем же Apple-аккаунтом или обратитесь в поддержку.";
 
 "No dictionary phrases with available audio and a saved translation." = "В словаре нет фраз с доступным аудио и сохранённым переводом.";
+
+// Curated book library
+"Built-in library" = "Встроенная библиотека";
+"Cognito operator access token" = "Access token operator Cognito";
+"Replace token" = "Заменить токен";
+"Save token" = "Сохранить токен";
+"Token saved in Keychain" = "Токен сохранён в Keychain";
+"Delete token" = "Удалить токен";
+"Paste the operator access token. When it expires, obtain a new token and replace it here." = "Вставьте access token пользователя operator. После истечения срока действия получите новый токен и замените его здесь.";
+"Loading catalog…" = "Загрузка каталога…";
+"No books available. Check your token in Settings." = "Нет доступных книг. Проверьте токен в настройках.";
+"Downloading and verifying…" = "Скачивание и проверка…";
+"Download" = "Скачать";
+"Refresh" = "Обновить";
+"Add the operator access token in Settings." = "Добавьте access token operator в настройках.";
+"No response from the library." = "Нет ответа от библиотеки.";
+"The token has expired or access is denied. Replace the operator access token in Settings." = "Токен истёк или доступ запрещён. Обновите access token operator в настройках.";
+"The catalog changed. Refresh the book list." = "Каталог изменился. Обновите список книг.";
+"Could not download the book. Please try again." = "Не удалось скачать книгу. Повторите попытку.";
+"The file is damaged. Download the book again." = "Файл повреждён. Скачайте книгу ещё раз.";
+"Library unavailable (%d). Please try again." = "Библиотека недоступна (%d). Повторите попытку.";

@@ -26,16 +26,16 @@ actor BuiltinLibraryService {
 
     private func request<T: Decodable>(_ path: String, as: T.Type) async throws -> T {
         guard let token = try OperatorAccessTokenStore.load(), !token.isEmpty else {
-            throw failure("Добавьте access token operator в настройках.")
+            throw failure("Add the operator access token in Settings.")
         }
         var request = URLRequest(url: Self.baseURL.appending(path: path))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw failure("Нет ответа от библиотеки.") }
+        guard let http = response as? HTTPURLResponse else { throw failure("No response from the library.") }
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw failure("Токен истёк или доступ запрещён. Обновите access token operator в настройках.")
+            throw failure("The token has expired or access is denied. Replace the operator access token in Settings.")
         }
-        guard http.statusCode == 200 else { throw failure("Библиотека недоступна (\(http.statusCode)). Повторите попытку.") }
+        guard http.statusCode == 200 else { throw failure(AppLanguage.format("Library unavailable (%d). Please try again.", http.statusCode)) }
         return try JSONDecoder().decode(T.self, from: data)
     }
     func books() async throws -> [LibraryBook] {
@@ -45,12 +45,12 @@ actor BuiltinLibraryService {
         let info = try await request("v1/library/books/\(book.id)/download", as: Download.self)
         guard info.url.scheme == "https", info.url.host?.hasSuffix(".amazonaws.com") == true,
               info.bytes == book.bytes, info.sha256 == book.sha256 else {
-            throw failure("Каталог изменился. Обновите список книг.")
+            throw failure("The catalog changed. Refresh the book list.")
         }
         let (temporary, response) = try await session.download(from: info.url)
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw failure("Не удалось скачать книгу. Повторите попытку.")
+            throw failure("Could not download the book. Please try again.")
         }
         let handle = try FileHandle(forReadingFrom: temporary)
         defer { try? handle.close() }
@@ -60,13 +60,13 @@ actor BuiltinLibraryService {
             hash.update(data: chunk); count += Int64(chunk.count)
         }
         guard count == book.bytes, hash.finalize().map({ String(format: "%02x", $0) }).joined() == book.sha256 else {
-            throw failure("Файл повреждён. Скачайте книгу ещё раз.")
+            throw failure("The file is damaged. Download the book again.")
         }
         let destination = FileManager.default.temporaryDirectory.appending(path: "library-\(UUID()).zip")
         try FileManager.default.moveItem(at: temporary, to: destination)
         return destination
     }
     private func failure(_ message: String) -> NSError {
-        NSError(domain: "BuiltinLibrary", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        NSError(domain: "BuiltinLibrary", code: 1, userInfo: [NSLocalizedDescriptionKey: AppLanguage.text(message)])
     }
 }

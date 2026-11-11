@@ -5,21 +5,21 @@ struct OperatorLibrarySettingsSection: View {
     @State private var saved = false
     @State private var message: String?
     var body: some View {
-        Section("Встроенная библиотека") {
-            SecureField("Access token operator Cognito", text: $token)
+        Section("Built-in library") {
+            SecureField("Cognito operator access token", text: $token)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button(saved ? "Заменить токен" : "Сохранить токен") {
+            Button(AppLanguage.text(saved ? "Replace token" : "Save token")) {
                 do { try OperatorAccessTokenStore.save(token); token = ""; saved = true; message = nil }
                 catch { message = error.localizedDescription }
             }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if saved {
-                Text("Токен сохранён в Keychain").font(.caption)
-                Button("Удалить токен", role: .destructive) {
+                Text("Token saved in Keychain").font(.caption)
+                Button("Delete token", role: .destructive) {
                     do { try OperatorAccessTokenStore.delete(); saved = false; message = nil }
                     catch { message = error.localizedDescription }
                 }
             }
-            Text("Вставьте access token пользователя operator. После истечения срока действия получите новый токен и замените его здесь.").font(.caption).foregroundStyle(.secondary)
+            Text("Paste the operator access token. When it expires, obtain a new token and replace it here.").font(.caption).foregroundStyle(.secondary)
             if let message { Text(message).foregroundStyle(.red) }
         }.onAppear {
             do { saved = try OperatorAccessTokenStore.load() != nil }
@@ -39,26 +39,26 @@ struct BuiltinLibraryView: View {
     @State private var downloadedURL: URL?
     var body: some View {
         List {
-            if loading { ProgressView("Загрузка каталога…") }
+            if loading { ProgressView("Loading catalog…") }
             if let error { Text(error).foregroundStyle(.red) }
-            if !loading && books.isEmpty { Text("Нет доступных книг. Проверьте токен в настройках.") }
+            if !loading && books.isEmpty { Text("No books available. Check your token in Settings.") }
             ForEach(books) { book in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(book.title).font(.headline)
                     Text("\(book.language.uppercased()) · \(ByteCountFormatter.string(fromByteCount: book.bytes, countStyle: .file))")
                         .font(.caption).foregroundStyle(.secondary)
                     if selected?.id == book.id {
-                        ProgressView("Скачивание и проверка…")
-                        Button("Отменить", role: .cancel) { selected = nil }
+                        ProgressView("Downloading and verifying…")
+                        Button("Cancel", role: .cancel) { selected = nil }
                     } else {
-                        Button("Скачать", systemImage: "arrow.down.circle") { selected = book }
+                        Button("Download", systemImage: "arrow.down.circle") { selected = book }
                             .disabled(selected != nil)
                     }
                 }
             }
         }
-        .navigationTitle("Встроенная библиотека")
-        .toolbar { Button("Обновить", systemImage: "arrow.clockwise") { Task { await reload() } }.disabled(loading || selected != nil) }
+        .navigationTitle("Built-in library")
+        .toolbar { Button("Refresh", systemImage: "arrow.clockwise") { Task { await reload() } }.disabled(loading || selected != nil) }
         .task { await reload() }
         .task(id: selected?.id) {
             guard let book = selected else { return }

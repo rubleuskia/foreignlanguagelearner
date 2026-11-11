@@ -163,3 +163,25 @@
 "Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support." = "Cloud sign-in could not be verified. Sign in again with the same Apple account or contact support.";
 
 "No dictionary phrases with available audio and a saved translation." = "No dictionary phrases with available audio and a saved translation.";
+
+// Curated book library
+"Built-in library" = "Built-in library";
+"Cognito operator access token" = "Cognito operator access token";
+"Replace token" = "Replace token";
+"Save token" = "Save token";
+"Token saved in Keychain" = "Token saved in Keychain";
+"Delete token" = "Delete token";
+"Paste the operator access token. When it expires, obtain a new token and replace it here." = "Paste the operator access token. When it expires, obtain a new token and replace it here.";
+"Loading catalog…" = "Loading catalog…";
+"No books available. Check your token in Settings." = "No books available. Check your token in Settings.";
+"Downloading and verifying…" = "Downloading and verifying…";
+"Cancel" = "Cancel";
+"Download" = "Download";
+"Refresh" = "Refresh";
+"Add the operator access token in Settings." = "Add the operator access token in Settings.";
+"No response from the library." = "No response from the library.";
+"The token has expired or access is denied. Replace the operator access token in Settings." = "The token has expired or access is denied. Replace the operator access token in Settings.";
+"The catalog changed. Refresh the book list." = "The catalog changed. Refresh the book list.";
+"Could not download the book. Please try again." = "Could not download the book. Please try again.";
+"The file is damaged. Download the book again." = "The file is damaged. Download the book again.";
+"Library unavailable (%d). Please try again." = "Library unavailable (%d). Please try again.";
