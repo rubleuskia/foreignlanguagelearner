@@ -205,7 +205,7 @@ private struct BookLibraryShelfContent: View {
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                             }.padding(.vertical, 8)
                         }.accessibilityIdentifier("library.book.\(item.id)")
-                        BookResourceMenu(item: item).buttonStyle(.borderless)
+                        if item.youtubeVideoID == nil { BookResourceMenu(item: item).buttonStyle(.borderless) }
                     }
                 }.onDelete { offsets in
                     let ids = Set(offsets.map { filtered[$0].id })
@@ -372,7 +372,7 @@ struct BookDetailView: View {
         .background(BookLibraryDesign.background)
         .preferredColorScheme(.dark).tint(.blue)
         .navigationTitle("About book").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { BookResourceMenu(item: item) } }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { if item.youtubeVideoID == nil { BookResourceMenu(item: item) } } }
         .navigationDestination(isPresented: $reading) {
             if item.tracks.isEmpty { ReaderView(item: item).id(item.resourceRevision) }
             else { BookReaderView(item: item).id(item.resourceRevision) }

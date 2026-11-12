@@ -3,6 +3,14 @@ import SwiftData
 import AVKit
 
 struct ReaderView: View {
+    let item: LearningItem
+    var body: some View {
+        if let videoID = item.youtubeVideoID { YouTubeReaderView(item: item, videoID: videoID) }
+        else { LocalReaderView(item: item) }
+    }
+}
+
+private struct LocalReaderView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var context

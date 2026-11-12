@@ -760,3 +760,20 @@
 "No books available. Check your library sign-in in Settings." = "Книги недоступны. Проверьте вход в библиотеку в настройках.";
 
 "Sign in" = "Войти";
+"YouTube video" = "Видео YouTube";
+"Import YouTube" = "Импорт из YouTube";
+"Paste YouTube link" = "Вставьте ссылку YouTube";
+"Open video" = "Открыть видео";
+"Get subtitles" = "Получить субтитры";
+"Add to library" = "Добавить в библиотеку";
+"YouTube · Synchronized" = "YouTube · Синхронизировано";
+"The video streams from YouTube. The transcript is saved on this device. Internet is required to watch." = "Видео воспроизводится с YouTube. Текст сохраняется на этом устройстве. Для просмотра нужен интернет.";
+"You can also open a video in Safari, enable subtitles, and share it to Language Learner." = "Также можно открыть видео в Safari, включить субтитры и выбрать Language Learner в меню «Поделиться».";
+"Play the video and enable subtitles in the desired language, then tap Get subtitles." = "Запустите видео, включите субтитры на нужном языке и нажмите «Получить субтитры».";
+"Enter a valid HTTPS YouTube video link." = "Введите корректную HTTPS-ссылку на видео YouTube.";
+"Play the video, enable subtitles in the desired language, then try again." = "Запустите видео, включите субтитры на нужном языке и повторите попытку.";
+"This video has no available subtitles, or is a live video. Choose a recorded video with subtitles." = "У видео нет доступных субтитров или это прямая трансляция. Выберите записанное видео с субтитрами.";
+"YouTube did not return subtitles. Enable subtitles and try again." = "YouTube не вернул субтитры. Включите их и повторите попытку.";
+"No timed subtitles were found. Enable subtitles and try again." = "Субтитры с таймкодами не найдены. Включите их и повторите попытку.";
+"Could not load subtitles. Play the video, enable subtitles, then try again." = "Не удалось загрузить субтитры. Запустите видео, включите субтитры и повторите попытку.";
+"Choose a supported source language before saving this transcript." = "Выберите поддерживаемый язык перед сохранением текста.";
