@@ -1,5 +1,15 @@
 # Foreign Language Learner
 
+## YouTube learning material
+
+Import captioned YouTube videos through the library's + menu or Safari Share Extension.
+Review the source language, retain timed captions locally, and watch the online embedded
+video above the native transcript with cue highlighting, translation and dictionary capture.
+Enable the desired captions on the video before capture. This best-effort integration does
+not download media or provide offline phrase audio/word-level timing. Safari handoff requires
+App Group provisioning in paid-team Release; Personal Team device Debug uses URL import.
+See [YouTube import](../docs/YOUTUBE_IMPORT.md).
+
 ## Private-first cloud rollout (2026-11-09)
 
 The [two-stage rollout](../docs/CLOUD_ROLLOUT.md) prioritizes a private backend: one console-created

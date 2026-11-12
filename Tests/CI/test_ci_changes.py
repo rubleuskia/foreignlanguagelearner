@@ -21,6 +21,7 @@ class UIScopeTests(unittest.TestCase):
 
     def test_ios_sources_resources_project_and_ui_scenarios_require_ui(self):
         paths = ['App/Views/ReaderView.swift', 'App/ru.lproj/Localizable.strings',
+                 'Shared/YouTubeCapture.js', 'YouTubeShare/ShareViewController.swift',
                  'App/Assets.xcassets/cover.imageset/image.png', 'App/Info.plist',
                  'App/ForeignLanguageLearner.entitlements', 'Tests/UI/LibraryFlowTests.swift',
                  'project.yml', 'Package.swift', 'Package.resolved', 'scripts/bootstrap.sh',

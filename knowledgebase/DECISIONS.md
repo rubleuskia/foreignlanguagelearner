@@ -1,3 +1,17 @@
+## YouTube caption import and online playback (2026-11-11)
+
+Keep YouTube video identity separate from local media filenames. Import available caption
+text and cue times in the user's page context, including the active timedtext request when
+the bare URL is insufficient. Treat this as an unofficial, recoverable integration, without
+claiming universal video support. Do not persist temporary URLs, cookies or request tokens.
+Use the official embedded player and its clock with the native transcript/dictionary UI;
+do not download source media or fabricate word timestamps/offline dictionary audio.
+
+Safari Share transfers bounded, validated payloads through a dedicated App Group inbox;
+the main app reviews and commits them idempotently. Release requires paid-team App Group
+provisioning for both identifiers. Simulator Debug enables the group; Personal Team device
+Debug retains its empty entitlements and in-app URL import. No portal changes are automatic.
+
 ## Native renewable operator session for the library (2026-11-11)
 
 The manually pasted Cognito access token cannot renew itself. Replace this temporary library UI

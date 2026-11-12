@@ -3,12 +3,16 @@ import SwiftData
 import Translation
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     @Environment(\.modelContext) private var context
     @Environment(DictionaryTranslationCoordinator.self) private var translationCoordinator
     @Query(sort: \LearningItem.createdAt, order: .reverse) private var items: [LearningItem]
     @State private var featuredReader: LearningItem?
     @State private var showingImport = false
+    @State private var showingYouTube = false
+    @State private var pendingYouTube: YouTubeImport?
+    @State private var pendingYouTubeURL: URL?
     @State private var showingBookImport = false
     @State private var errorMessage: String?
     @State private var makingExample = false
@@ -25,6 +29,8 @@ struct ContentView: View {
                 .tabItem { Label("Activity", systemImage: "chart.bar.xaxis") }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .onChange(of: scenePhase) { _, phase in if phase == .active { checkYouTubeInbox() } }
+        .task { checkYouTubeInbox() }
         .tint(.blue)
         .task {
             do {
@@ -95,14 +101,29 @@ struct ContentView: View {
                     }
                     .accessibilityIdentifier("library.settings")
 
-                    Button("Add book", systemImage: "plus") { showingBookImport = true }
-                    .accessibilityIdentifier("library.add-menu")
+                    Menu {
+                        Button("Add book", systemImage: "book") { showingBookImport = true }
+                        Button("YouTube video", systemImage: "play.rectangle") { pendingYouTube = nil; pendingYouTubeURL = nil; showingYouTube = true }
+                            .accessibilityIdentifier("library.youtube")
+                    } label: { Label("Add material", systemImage: "plus") }
+                        .accessibilityIdentifier("library.add-menu")
                 }
             }
             .navigationDestination(item: $featuredReader) { reader(for: $0) }
             .sheet(isPresented: $showingImport) { ImportItemView() }
             .sheet(isPresented: $showingBookImport) { BookImportView() }
+            .sheet(isPresented: $showingYouTube) { YouTubeImportView() }
+            .sheet(item: $pendingYouTube) { value in YouTubeImportView(incoming: value, inboxURL: pendingYouTubeURL) }
         }
+    }
+
+    private func checkYouTubeInbox() {
+        guard !showingYouTube, pendingYouTube == nil, !showingBookImport, !showingImport else { return }
+        do {
+            if let (url, payload) = try YouTubeInbox.pending().first {
+                pendingYouTubeURL = url; pendingYouTube = payload
+            }
+        } catch { errorMessage = error.localizedDescription }
     }
 
     @ViewBuilder private func reader(for item: LearningItem) -> some View {

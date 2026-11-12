@@ -145,6 +145,7 @@ struct TranscriptDocument: Sendable {
 }
 
 @Model final class LearningItem {
+    var youtubeVideoID: String? = nil
     // Defaults keep existing stores readable. Empty filenames represent absent resources.
     var resourceRevision: String = ""
     var coverFilename: String = ""
@@ -155,6 +156,7 @@ struct TranscriptDocument: Sendable {
     var hasAudio: Bool { !mediaFilename.isEmpty || !tracks.isEmpty }
     var hasText: Bool { !transcriptFilename.isEmpty || !segments.isEmpty || tracks.contains { $0.subtitleFilename != nil } }
     var resourceStatus: String {
+        if youtubeVideoID != nil { return "YouTube · Synchronized" }
         if !hasAudio { return "Text only" }
         if !hasText { return "Audio only" }
         if tracks.isEmpty { return segments.contains { $0.start != nil } ? "Synchronized" : "Without synchronization" }

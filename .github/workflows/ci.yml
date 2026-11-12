@@ -63,6 +63,7 @@ jobs:
           python -m unittest discover -s Tests/CI -p 'test_*.py' -v
           python -m compileall -q backend tools/subtitle-aligner/worker tools/cloud_control
           node --check tools/cloud_control/web/app.js
+          node --test Tests/YouTubeCapture.test.cjs
           bash -n scripts/cloud-control.sh scripts/tag-verified-main.sh
       - name: CDK type and infrastructure assertions
         working-directory: infra/alignment

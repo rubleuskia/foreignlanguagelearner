@@ -20,7 +20,11 @@ targets:
   ForeignLanguageLearner:
     type: application
     platform: iOS
-    sources: [App]
+    sources:
+      - App
+      - path: Shared/YouTubeImport.swift
+      - path: Shared/YouTubeCapture.js
+        buildPhase: resources
     info:
       path: App/Info.plist
       properties:
@@ -31,6 +35,7 @@ targets:
           - CFBundleURLName: cloud-login
             CFBundleURLSchemes: [fll]
     dependencies:
+      - target: YouTubeShare
       - sdk: libsqlite3.tbd
       - sdk: Security.framework
       - package: ZIPFoundation
@@ -38,6 +43,7 @@ targets:
       configs:
         Debug:
           CODE_SIGN_ENTITLEMENTS: App/PersonalTeam.entitlements
+          CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: Shared/YouTube.entitlements
       base:
         CODE_SIGN_ENTITLEMENTS: App/ForeignLanguageLearner.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner
@@ -47,6 +53,37 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+  YouTubeShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - YouTubeShare
+      - path: Shared/YouTubeImport.swift
+      - path: Shared/YouTubeCapture.js
+        buildPhase: resources
+    info:
+      path: YouTubeShare/Info.plist
+      properties:
+        CFBundleDisplayName: Language Learner
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionJavaScriptPreprocessingFile: YouTubeCapture
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rubleuskia.foreignlanguagelearner.youtube-share
+        CODE_SIGN_ENTITLEMENTS: Shared/YouTube.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: App/PersonalTeam.entitlements
+          CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: Shared/YouTube.entitlements
   ForeignLanguageLearnerTests:
     type: bundle.unit-test
     platform: iOS

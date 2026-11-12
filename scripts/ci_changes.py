@@ -9,7 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 IOS_PREFIXES = (
-    'App/', 'Tests/UI/', '.swiftpm/',
+    'App/', 'Shared/', 'YouTubeShare/', 'Tests/UI/', '.swiftpm/',
     'ForeignLanguageLearner.xcodeproj/', 'ForeignLanguageLearner.xcworkspace/',
 )
 IOS_FILES = {'project.yml', 'Package.swift', 'Package.resolved', 'scripts/bootstrap.sh'}

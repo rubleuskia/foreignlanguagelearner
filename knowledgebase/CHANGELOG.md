@@ -1,3 +1,19 @@
+## 2026-11-11 — YouTube import with synchronized transcripts
+
+- Add YouTube URL import and a Safari Share Extension with confirmation before library insertion.
+  Store cue text/times locally and stream video through the embedded YouTube player. Reuse
+  native reading, vocabulary indexing, translation and dictionary selection.
+- Report missing/inaccessible captions; preserve cue timing without inventing word timing or
+  offline phrase audio. Simulator Debug and paid-team Release use App Group handoff;
+  Personal Team device Debug retains in-app URL import and empty entitlements.
+- Update architectural decisions, project workflow and docs/YOUTUBE_IMPORT.md. No Apple
+  provisioning changes, release publication or deployment are included.
+- Verify both real Safari Share and in-app URL import on iPhone 17 Pro / iOS 26.5 with
+  six English cues from `jNQXAC9IVRw`, including library insertion and online playback
+  with native cue highlighting. All 283 unit tests, four extractor tests and 31 CI tests
+  pass; unsigned device Release compiles. Broader content coverage and paid-team device
+  signing remain unverified.
+
 ## 2026-11-11 — Automatically renew the built-in library session
 
 - Replace manual access-token pasting with operator username/password sign-in in library settings.
