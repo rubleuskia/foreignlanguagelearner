@@ -22,6 +22,10 @@ final class CloudAlignmentFlowTests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count))
         }
         field.typeText("Alignment draft persistence")
+        app.buttons["Done"].tap()
+        app.buttons["library.add-menu"].tap()
+        app.buttons["library.cloud-alignment"].tap()
+        XCTAssertEqual(app.textFields["alignment.title"].value as? String, "Alignment draft persistence")
         app.terminate()
         openWizard()
         XCTAssertEqual(app.textFields["alignment.title"].value as? String, "Alignment draft persistence")

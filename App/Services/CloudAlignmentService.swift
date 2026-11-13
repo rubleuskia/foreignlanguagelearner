@@ -128,9 +128,7 @@ actor CloudAlignmentService {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw CloudAlignmentFiles.invalid("Could not download the synchronized book.") }
         let package = try await Task.detached { try CloudAlignmentFiles.inspect(temporary) }.value
         guard package.bytes == info.bytes, package.sha256 == info.sha256 else { throw CloudAlignmentFiles.invalid("The downloaded book is damaged. Try again.") }
-        try CloudAlignmentFiles.initialize()
-        let result = CloudAlignmentFiles.root.appending(path: "result-\(id).zip")
-        if FileManager.default.fileExists(atPath: result.path) { try FileManager.default.removeItem(at: result) }
+        let result = FileManager.default.temporaryDirectory.appending(path: "alignment-result-\(UUID()).zip")
         try FileManager.default.moveItem(at: temporary, to: result)
         return result
     }

@@ -2,6 +2,7 @@ import Foundation
 import Observation
 
 @MainActor @Observable final class CloudAlignmentModel {
+    static let shared = CloudAlignmentModel()
     struct Draft: Codable {
         var title = ""
         var language = "pl"

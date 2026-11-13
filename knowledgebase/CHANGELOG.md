@@ -10,8 +10,8 @@
   migration; public-test/paid APIs are unchanged. Record architecture/workflow changes in
   DECISIONS.md, PROJECT.md and docs/CLOUD_BOOK_ALIGNMENT.md. A new image and normal deployment
   are required; local tests do not establish long-book acoustic quality or live AWS acceptance.
-- Local validation: 286 iOS unit tests and the wizard relaunch UI test pass; unsigned device
-  Release builds. Backend: 116 tests (2 optional skips); aligner: 31 tests; new book worker:
+- Local validation after syncing main: 291 iOS unit tests and the wizard relaunch UI test pass;
+  unsigned device Release builds. Backend: 120 tests (2 optional skips); aligner: 31 tests; new book worker:
   7 tests including a 306-second fake-engine pipeline, S3 publication and lease-loss fencing.
   All CDK assertions, 46 Cloud Control/benchmark tests and 32 CI/asset-packaging tests pass.
 

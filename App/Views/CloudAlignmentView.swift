@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct CloudAlignmentView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @State private var model = CloudAlignmentModel()
+    @State private var model = CloudAlignmentModel.shared
     @State private var choosingAudio = true
     @State private var picking = false
     @State private var confirmingReset = false
@@ -109,6 +109,7 @@ private struct CloudAlignmentStatus: View {
     @State private var error: String?
     private struct Result: Identifiable { let id = UUID(); let url: URL }
     @State private var result: Result?
+    @State private var downloadedURL: URL?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(job.statusText).accessibilityIdentifier("alignment.status")
@@ -122,7 +123,10 @@ private struct CloudAlignmentStatus: View {
                     downloading = true; error = nil
                     Task {
                         defer { downloading = false }
-                        do { result = Result(url: try await service.download(job.id)) }
+                        do {
+                            let url = try await service.download(job.id)
+                            downloadedURL = url; result = Result(url: url)
+                        }
                         catch { self.error = error.localizedDescription }
                     }
                 }.buttonStyle(.borderedProminent).disabled(downloading)
@@ -131,7 +135,10 @@ private struct CloudAlignmentStatus: View {
             if downloading { ProgressView("Downloading book…") }
             if let error { Text(error).foregroundStyle(.red) }
         }
-        .sheet(item: $result) { BookImportView(suppliedArchive: $0.url) }
+        .sheet(item: $result, onDismiss: {
+            if let downloadedURL { try? FileManager.default.removeItem(at: downloadedURL) }
+            downloadedURL = nil
+        }) { BookImportView(suppliedArchive: $0.url) }
     }
 }
 
