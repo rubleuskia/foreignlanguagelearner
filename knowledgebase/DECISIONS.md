@@ -1,3 +1,30 @@
+## Planned automatic translation for book pages (2026-11-13)
+
+The agreed [requirements](../docs/AUTO_TRANSLATION_REQUIREMENTS.md) are a future
+feature specification, not a claim about current behavior. Opt in per book for
+the app session only, through a minimal-height top strip shared with new-word
+highlighting and layout controls. On visible-page entry, snapshot new word forms
+and translate every containing full sentence, including repeated words in other
+sentences. Request phrase translation only, without word explanations.
+
+Persist successful translations outside DictionaryEntry in a shared cache keyed
+by source language, target language and case-insensitive submitted text, retaining
+punctuation and whitespace. Persist source-text anchors separately from visual
+page numbers so dotted clickable underlines survive reopening and repagination.
+Dictionary insertion remains explicit and saves the whole sentence using the
+existing result. Studied forms use existing language-global vocabulary rules;
+retain the visit's yellow highlights until leaving the page, without marking the
+chapter/book complete.
+
+Block manual page turns with an explanatory popup while the current page has
+unfinished translations; audio following continues. Toggle-off cancels unfinished
+work and rejects its late responses, retaining already committed results and
+studied words. Errors do not confer studied status or hold a completed request's
+page lock. Disable automatic mode on vertical-layout entry; retain saved
+underlines there only if the same text-anchor mechanism can be reused without
+a separate implementation. No application or backend code changes accompany
+this documentation decision.
+
 ## 2026-11-13 — Curated library identity and metadata
 
 Use the existing catalog `id` as a permanent source identity, stored separately from the local book UUID and archive SHA-256. Source directory names must remain stable on republishing. Check this identity both in the catalog UI and at import commit. Migrate old imports only on exact normalized-text/ordered-track matches, never by title; preserve existing duplicate copies and all reading data. Deletion removes the local association and allows a fresh import. Library backup carries the optional source ID and remains compatible with old documents.

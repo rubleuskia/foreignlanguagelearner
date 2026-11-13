@@ -1,3 +1,17 @@
+## 2026-11-13 — Agree paged-reader automatic translation requirements
+
+- Add [the agreed feature specification](../docs/AUTO_TRANSLATION_REQUIREMENTS.md)
+  for sentence-only automatic translation on pages with new words, a compact top
+  control strip, session-only per-book opt-in, persistent shared results/text
+  anchors, optional whole-sentence dictionary capture and delayed yellow-highlight removal.
+- Specify blocking manual page turns while translations are pending, toggle-off
+  cancellation with late-response rejection, continuing audio following, error
+  recovery, vertical-layout boundaries and acceptance scenarios.
+- Record planned product/data-lifecycle decisions in DECISIONS.md. This is a
+  documentation-only agreement, not an implemented feature. Project purpose,
+  currently supported workflows and major boundaries are unchanged; PROJECT.md
+  needs no update until implementation.
+
 ## 2026-11-13 — S3 library identity and presentation
 
 - S3 book library now uses the main library's cover-led dark rows, shows author/language/chapter count/archive size, and offers sourced author biographies for the initial nine books. Reading progress, duration and word statistics are omitted from this catalog.
