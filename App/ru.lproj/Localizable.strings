@@ -87,6 +87,9 @@
 "Source sentence" = "Предложение из книги";
 "Source context" = "Контекст книги";
 "Source" = "Источник";
+"About the author" = "Об авторе";
+"Already in library" = "Уже в библиотеке";
+"Open book" = "Открыть книгу";
 "Russian translation" = "Перевод на русский";
 "Automatic translation" = "Автоматический перевод";
 "Translation" = "Перевод";

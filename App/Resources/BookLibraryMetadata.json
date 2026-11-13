@@ -1,0 +1,110 @@
+{
+  "aleksander-dumas-trzej-muszkieterowie": {
+    "author": "Alexandre Dumas",
+    "authorInfo": {
+      "en": "French novelist and playwright, known for historical adventure novels.",
+      "ru": "Французский романист и драматург, автор исторических приключенческих романов.",
+      "pl": "Francuski powieściopisarz i dramaturg, autor historycznych powieści przygodowych."
+    },
+    "authorURL": "https://library.syracuse.edu/digital/guides/d/dumas_a.htm",
+    "coverName": "cover-leather",
+    "chapterCount": 69,
+    "contentFingerprint": "5bb211bd7a761b65b37c3def60eb5c1bd17d487c463def31a3bfc218e1bb1624"
+  },
+  "carroll-alicja-w-krainie-czarow": {
+    "author": "Lewis Carroll",
+    "authorInfo": {
+      "en": "English writer and mathematician; the pen name of Charles Lutwidge Dodgson.",
+      "ru": "Английский писатель и математик; настоящее имя — Чарльз Лютвидж Доджсон.",
+      "pl": "Angielski pisarz i matematyk; naprawdę nazywał się Charles Lutwidge Dodgson."
+    },
+    "authorURL": "https://www.simonandschuster.com/authors/Lewis-Carroll/141018570",
+    "coverName": "cover-yellow",
+    "chapterCount": 12,
+    "contentFingerprint": "7dee7857d76c1cb0c30c3da677b3074cf09fd9f994cd564569292f377da9222b"
+  },
+  "don-kichot-z-la-manchy": {
+    "author": "Miguel de Cervantes",
+    "authorInfo": {
+      "en": "Spanish writer whose Don Quixote helped establish the modern novel.",
+      "ru": "Испанский писатель, чей «Дон Кихот» стал одной из основ современного романа.",
+      "pl": "Hiszpański pisarz, którego Don Kichot współtworzył podstawy nowoczesnej powieści."
+    },
+    "authorURL": "https://cultura.cervantes.es/nuevadelhi/en/miguel-de-cervantes/139925",
+    "coverName": "cover-ornate",
+    "chapterCount": 62,
+    "contentFingerprint": "b2867ec7dfcf89361ab3680691962a8ba7c79623d46afefa5f68918fa9900f3f"
+  },
+  "doyle-czlowiek-z-blizna": {
+    "author": "Arthur Conan Doyle",
+    "authorInfo": {
+      "en": "Creator of Sherlock Holmes; his work also includes historical fiction, poetry and short stories.",
+      "ru": "Создатель Шерлока Холмса; писал также историческую прозу, стихи и рассказы.",
+      "pl": "Twórca Sherlocka Holmesa; pisał również prozę historyczną, poezję i opowiadania."
+    },
+    "authorURL": "https://www.arthurconandoyle.com/",
+    "coverName": "cover-dark",
+    "chapterCount": 1,
+    "contentFingerprint": "e4d0cb71b13f856591baaba9932093569bf1670ac2c85d7bec5210e9fd15566c"
+  },
+  "doyle-dolina-trwogi": {
+    "author": "Arthur Conan Doyle",
+    "authorInfo": {
+      "en": "Creator of Sherlock Holmes; his work also includes historical fiction, poetry and short stories.",
+      "ru": "Создатель Шерлока Холмса; писал также историческую прозу, стихи и рассказы.",
+      "pl": "Twórca Sherlocka Holmesa; pisał również prozę historyczną, poezję i opowiadania."
+    },
+    "authorURL": "https://www.arthurconandoyle.com/",
+    "coverName": "cover-dark",
+    "chapterCount": 16,
+    "contentFingerprint": "3aefb728663d3f022dca12759b3559a754a0a461f0d7d5cdd3fa5efa5febfd11"
+  },
+  "hrabia-monte-christo": {
+    "author": "Alexandre Dumas",
+    "authorInfo": {
+      "en": "French novelist and playwright, known for historical adventure novels.",
+      "ru": "Французский романист и драматург, автор исторических приключенческих романов.",
+      "pl": "Francuski powieściopisarz i dramaturg, autor historycznych powieści przygodowych."
+    },
+    "authorURL": "https://library.syracuse.edu/digital/guides/d/dumas_a.htm",
+    "coverName": "cover-leather",
+    "chapterCount": 58,
+    "contentFingerprint": "4da5850790e7682a883b2a897b09b5fb313406ed478d709c9dfd0848d3e7c7cc"
+  },
+  "lalka": {
+    "author": "Bolesław Prus",
+    "authorInfo": {
+      "en": "Polish writer and journalist (1847–1912), born Aleksander Głowacki; a representative of Polish positivism.",
+      "ru": "Польский писатель и журналист (1847–1912), настоящее имя — Александр Гловацкий; представитель польского позитивизма.",
+      "pl": "Polski pisarz i dziennikarz (1847–1912), właściwie Aleksander Głowacki; przedstawiciel polskiego pozytywizmu."
+    },
+    "authorURL": "https://culture.pl/en/artist/boleslaw-prus-aleksander-glowacki",
+    "coverName": "cover-ornate",
+    "chapterCount": 39,
+    "contentFingerprint": "cec6735d5aa4e85a4f7560817df03276ff22a7dbc8d666dded1bddb4456cc57e"
+  },
+  "robinson-crusoe": {
+    "author": "Daniel Defoe",
+    "authorInfo": {
+      "en": "English writer, journalist and author of Robinson Crusoe.",
+      "ru": "Английский писатель и журналист, автор «Робинзона Крузо».",
+      "pl": "Angielski pisarz i dziennikarz, autor Robinsona Crusoe."
+    },
+    "authorURL": "https://www.penguin.co.uk/authors/7030/daniel-defoe",
+    "coverName": "cover-white",
+    "chapterCount": 14,
+    "contentFingerprint": "e010615444a3523bb41e2520be73729f626e4b70d4ae45ab3afa445fafd87213"
+  },
+  "saint-exupery-maly-ksiaze": {
+    "author": "Antoine de Saint-Exupéry",
+    "authorInfo": {
+      "en": "French writer and aviator (1900–1944), known worldwide for The Little Prince.",
+      "ru": "Французский писатель и лётчик (1900–1944), известный во всём мире благодаря «Маленькому принцу».",
+      "pl": "Francuski pisarz i lotnik (1900–1944), znany na całym świecie dzięki Małemu Księciu."
+    },
+    "authorURL": "https://www.antoinedesaintexupery.com/wp-content/uploads/2021/03/LETTRE-dANTOINE-DE-SAINT-EXUPERY-4-OCTOBRE-2020.pdf",
+    "coverName": "cover-yellow",
+    "chapterCount": 27,
+    "contentFingerprint": "367150f0e08d74daf9b0faf56095cdca99d2a0bb8e56a48b2611b627c53e96eb"
+  }
+}
