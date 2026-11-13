@@ -64,6 +64,7 @@ final class LibraryBackupTests: XCTestCase {
         original.createdAt = Date(timeIntervalSince1970: 100)
         original.sourceLanguageCode = "pl"
         original.bundledCoverName = "cover-ornate"
+        original.builtinLibraryID = "lalka"
         original.isBookCompleted = true; original.readingVocabularyMigrationVersion = 1
         original.lastTrackID = "two"; original.lastPosition = 52
         original.lastPlayedAt = Date(timeIntervalSince1970: 1234)
@@ -118,6 +119,7 @@ final class LibraryBackupTests: XCTestCase {
         XCTAssertEqual(restoredBook.lastTrackID, "two")
         XCTAssertEqual(restoredBook.lastPlayedAt, original.lastPlayedAt)
         XCTAssertEqual(restoredBook.bundledCoverName, "cover-ornate")
+        XCTAssertEqual(restoredBook.builtinLibraryID, "lalka")
         XCTAssertTrue(restoredBook.tracks[0].isCompleted)
         XCTAssertEqual(restoredBook.tracks[1].lastPosition, 12)
         XCTAssertEqual(restoredBook.tracks[0].wordTimingsFilename, "one.words.json")

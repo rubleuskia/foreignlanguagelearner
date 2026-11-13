@@ -145,6 +145,7 @@ struct TranscriptDocument: Sendable {
 }
 
 @Model final class LearningItem {
+    var builtinLibraryID: String? = nil
     var youtubeVideoID: String? = nil
     // Defaults keep existing stores readable. Empty filenames represent absent resources.
     var resourceRevision: String = ""

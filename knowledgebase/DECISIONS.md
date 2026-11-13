@@ -1,3 +1,9 @@
+## 2026-11-13 — Curated library identity and metadata
+
+Use the existing catalog `id` as a permanent source identity, stored separately from the local book UUID and archive SHA-256. Source directory names must remain stable on republishing. Check this identity both in the catalog UI and at import commit. Migrate old imports only on exact normalized-text/ordered-track matches, never by title; preserve existing duplicate copies and all reading data. Deletion removes the local association and allows a fresh import. Library backup carries the optional source ID and remains compatible with old documents.
+
+Share the main library's cover presentation while omitting local reading statistics in the S3 catalog. Maintain author names, short localized biographies and provenance URLs as reviewed editorial metadata. Bundle metadata for the initial nine books to support older API catalogs; allow optional API metadata to override it. Reuse existing generic covers because the source ZIPs have no artwork. Publication derives chapter counts and content fingerprints from the actual package. No runtime web scraping or additional public S3 access is introduced.
+
 ## Durable queue-only cloud book alignment (2026-11-13)
 
 Build the final bounded input ZIP on iOS from audio/audio ZIP and TXT/EPUB; use the existing

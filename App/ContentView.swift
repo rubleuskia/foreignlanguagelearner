@@ -94,6 +94,7 @@ struct ContentView: View {
                     NavigationLink { BuiltinLibraryView() } label: {
                         Label("Built-in library", systemImage: "books.vertical.fill")
                     }
+                    .accessibilityIdentifier("library.builtin")
                     LibraryBackupMenu()
                     NavigationLink {
                         ContextualTranslationSettingsView()
