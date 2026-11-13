@@ -108,7 +108,11 @@ saves only an access token for dashboard acceptance, so that test file must be r
 
    The provenance file is not a benchmark/quality acceptance report. Record runtime, peak memory,
    cost and manually reviewed Polish quality using [the pilot benchmark procedure](ALIGNMENT_BENCHMARKS.md#private-operator-pilot).
-   Stage one is restricted to Polish and probed audio duration ≤300 seconds. Its report must contain
+   The retained legacy pilot is restricted to Polish and probed audio duration ≤300 seconds.
+   The next release replaces its HTTP routes with [queue-based whole-book alignment](CLOUD_BOOK_ALIGNMENT.md),
+   whose book worker has no five-minute duration admission cap. Rebuild the image and validate
+   representative full books separately; the pilot report is not full-book quality acceptance.
+   The retained pilot's report must contain
    `workerImageDigest`, `scope: "operator-pl-300-v1"`, `maxAudioSeconds: 300`, positive `maxJobCostUsd`
    and `languages.pl`: `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`,
    `runtimeSeconds` ≤13500, `peakMemoryMiB` ≤8192 and nonnegative `costUsd` ≤maxJobCostUsd.

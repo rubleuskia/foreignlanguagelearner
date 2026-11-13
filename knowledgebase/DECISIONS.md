@@ -1,3 +1,27 @@
+## Durable queue-only cloud book alignment (2026-11-13)
+
+Build the final bounded input ZIP on iOS from audio/audio ZIP and TXT/EPUB; use the existing
+server EPUB extractor, with no PDF/DOCX conversion. Keep upload confirmation separate from
+queue submission. Pin S3 version, bytes and SHA-256; never accept client-owned identity or
+arbitrary S3 pointers. Authenticated private requests currently belong to server owner `system`.
+Use owner-keyed DynamoDB records/history as authority, stream outbox plus a sparse scheduled
+recovery index, standard SQS deliveries, and conditional fenced worker leases. Acknowledge SQS
+only after durable claim; heartbeat/recovery makes compute independent of message visibility.
+
+Start with one serial Fargate service. Keep max workers at one and prepare queue-driven scale-out
+for later capacity measurement; there is currently idle worker cost and no automatic scale-in.
+Join numerically ordered input tracks into one timeline because the existing batch aligner needs
+preverified per-track text ranges, which the two-file workflow does not supply. Publish one-track
+book packages with SRT and actual word timing sidecars. Apply the 100 MB ZIP admission limit
+independently in client/API/worker, without the legacy five-minute duration restriction. Retain
+safe expanded-input, text, cue and word validation bounds. Keep S3 artifacts 30 days and database
+history persistently; persist local drafts outside exported backups and restore fresh API status.
+
+Remove legacy operator alignment HTTP routes while retaining their resources during migration.
+The old pilot benchmark remains historical evidence, not long-book quality acceptance. Rebuild the
+immutable image and deploy through normal verified releases; no deployment is part of this change.
+See [cloud book alignment](../docs/CLOUD_BOOK_ALIGNMENT.md).
+
 ## Explicit per-request inference settings and honest route labels (2026-11-13)
 
 Supersede fixed operator GPT-5 mini/minimal and subscription policy-model selection when a
