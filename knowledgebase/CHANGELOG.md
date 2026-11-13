@@ -1,3 +1,13 @@
+## 2026-11-13 — Cloud Control observability draft
+
+- Prepare local Swagger/manual relay, scoped S3 browsing, AWS cost/credit summaries, retained
+  alignment usage metrics, 5xx/error-log views and structured prepared-deployment resource changes.
+- Stop at the user's requested checkpoint and retain this work as a draft PR. Diagnostic-specific
+  tests, browser/live integration verification and reconciliation with alignment PR #95 remain.
+  See docs/CLOUD_CONTROL_OBSERVABILITY.md for the continuation checklist.
+- Record local-only/read-only diagnostics and relay decisions in DECISIONS.md; update PROJECT.md
+  with the draft status. No AWS deployment, IAM change, release tag or image publication.
+
 ## 2026-11-13 — Forward model/reasoning choices and show translation routing
 
 - Snapshot the selected provider mode, model and supported reasoning effort at the start of

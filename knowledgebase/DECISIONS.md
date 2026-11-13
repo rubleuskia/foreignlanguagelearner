@@ -1,3 +1,17 @@
+## Cloud Control diagnostic expansion — draft (2026-11-13)
+
+Keep diagnostics in the existing loopback Cloud Control server. Discover allowed resources from
+the selected project's CloudFormation stacks, plus the retained library/CDK stacks; expose bounded
+read pages with collection times, partial coverage and access failures. Cache Cost Explorer and
+keep its project-wide AWS costs separate from plan credits and direct OpenAI spending. Derive
+alignment metrics from retained records without treating missing durations/history as zero.
+
+Serve pinned Swagger UI locally and relay explicit manual requests to the selected deployed API
+to avoid changing production CORS. Do not persist bearer authorization or retry submissions.
+Summarize actual prepared/current template changes alongside the full CDK diff and preserve
+the existing verified-release/deploy authorization flow. This is a partial implementation awaiting
+focused tests and browser/live acceptance; see docs/CLOUD_CONTROL_OBSERVABILITY.md.
+
 ## Explicit per-request inference settings and honest route labels (2026-11-13)
 
 Supersede fixed operator GPT-5 mini/minimal and subscription policy-model selection when a

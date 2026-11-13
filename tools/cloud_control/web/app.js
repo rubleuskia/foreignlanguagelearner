@@ -10,7 +10,7 @@ function pill(s, text) { return element('span',text || labels[s] || s,'pill '+co
 function date(v) { return v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'; }
 function notice(text) { $('notice').textContent=text; $('notice').hidden=!text; }
 async function api(path, body) {
-  const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{},body:body ? JSON.stringify(body):undefined});
+  const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{'X-Control-Token':csrf},body:body ? JSON.stringify(body):undefined});
   const data=await response.json(); if(!response.ok)throw Error(data.error || 'Не удалось выполнить запрос.'); return data;
 }
 function tab(id) {
@@ -18,6 +18,7 @@ function tab(id) {
   document.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===id)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   $('operation-detail').hidden=true;
   window.scrollTo({top:0,behavior:'instant'});
+  window.dispatchEvent(new CustomEvent('cloud-tab',{detail:id}));
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>tab(b.dataset.goto));
@@ -39,6 +40,7 @@ function renderOperation() {
   summary.append(element('p',job.error || job.warning || (job.state==='ready' ? 'Просмотрите изменения в журнале. Деплой этого плана изменит prod.' : 'Начало: '+date(job.created_at))));
   if(job.ci_url){const a=element('a','Успешный CI ↗');a.href=job.ci_url;a.target='_blank';a.rel='noopener noreferrer';summary.append(a);}
   if(job.report)renderCases(summary,job.report);
+  if(job.resource_changes && window.renderResourceChanges)summary.append(window.renderResourceChanges(job.resource_changes));
   $('operation-log').textContent=job.log || 'Журнал ещё пуст.';
 }
 function renderCases(box,report) {
@@ -81,6 +83,7 @@ function renderState() {
   document.querySelectorAll('.operation-button').forEach(b=>b.disabled=!!state.active);
   renderOperation();
   if(!initialized){fillConfig(state.configuration);initialized=true;}
+  window.dispatchEvent(new CustomEvent('cloud-state'));
 }
 async function refreshState() {try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}}
 function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и OpenAI','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}

@@ -1,5 +1,13 @@
 # Foreign Language Learner
 
+## Cloud Control observability draft
+
+A separate draft extends the local dashboard with Swagger/manual API tests, S3 file sizes,
+AWS costs/credits, alignment usage/timing, 5xx/logs and a concrete prepared-deployment summary.
+The implementation stage is captured before diagnostic-specific tests, browser/live acceptance
+and alignment PR #95 integration. It is not deployed or ready for merge. Continue using
+[the checkpoint list](../docs/CLOUD_CONTROL_OBSERVABILITY.md).
+
 ## YouTube learning material
 
 Import captioned YouTube videos through the library's + menu or Safari Share Extension.
