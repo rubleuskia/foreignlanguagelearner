@@ -72,13 +72,15 @@ actor WordExplanationService: WordExplanationServing {
     private let cache = WordExplanationCache()
 
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
-        if CloudProviderMode.current == .subscription {
+        let settings = input.execution ?? .current
+        guard settings.mode == CloudProviderMode.current else { throw ContextAnalysisError.cancelled }
+        if settings.mode == .subscription {
             guard ContextAnalysisSettings.isCloudAnalysisEnabled() else { throw ContextAnalysisError.missingConfiguration }
-            return try await BackendWordExplanationProvider().explain(input)
+            return try await BackendWordExplanationProvider(settings: settings).explain(input)
         }
-        let model = ContextAnalysisSettings.selectedModel()
+        let model = settings.model
         let prompt = ContextAnalysisSettings.wordExplanationPrompt()
-        let effort = ContextAnalysisSettings.reasoningEffort(for: model)
+        let effort = settings.reasoningEffort
         let key = try WordExplanationCache.key(for: input, model: model, prompt: prompt, reasoningEffort: effort)
         try Task.checkCancellation()
         if let cached = await cache.value(for: key) {

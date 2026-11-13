@@ -28,6 +28,7 @@ struct SelectionTranslationView: View {
                 }
                 Section("Audio") { audioContent }
                 Section("Context explanation") {
+                    if let settings = coordinator.execution { TranslationRequestRouteView(settings: settings) }
                     analysisContent
                 }
                 Section {

@@ -132,6 +132,20 @@ class OperatorTests(unittest.TestCase):
         self.assertEqual(api.handler(event(), context)['statusCode'], 503)
         self.provider.run.assert_not_called()
 
+    def test_invalid_model_settings_rejected_before_admission_and_valid_settings_are_idempotent(self):
+        e = event()
+        for model, effort in [('arbitrary-model', 'high'), ('gpt-6.1-sol', 'minimal'),
+                              ([], 'high'), ('gpt-5-mini', {}), ('gpt-5-mini', 'max')]:
+            e['body'] = json.dumps({**PAYLOAD, 'model': model, 'reasoning_effort': effort})
+            self.assertEqual(api.handler(e, None)['statusCode'], 400)
+        self.provider.run.assert_not_called()
+        e['body'] = json.dumps({**PAYLOAD, 'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'})
+        self.assertEqual(api.handler(e, None)['statusCode'], 200)
+        self.assertEqual(api.handler(e, None)['statusCode'], 200)
+        self.provider.run.assert_called_once()
+        e['body'] = json.dumps({**PAYLOAD, 'model': 'gpt-6.1-sol', 'reasoning_effort': 'low'})
+        self.assertEqual(api.handler(e, None)['statusCode'], 409)
+
     def test_alignment_access_survives_token_refresh_but_rejects_other_subject(self):
         repo = MemoryRepository(); service = alignment.OperatorAlignmentService(repo, Storage(), Workflow(),
             bucket='bucket', state_machine_arn='state', accept_new_jobs=True, owner='owner')
@@ -200,6 +214,19 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(opener.call_args.kwargs['timeout'], 18)
         provider.run('context', PAYLOAD)
         secrets.get_secret_value.assert_called_once_with(SecretId='test-secret-arn')
+
+    def test_operator_forwards_requested_model_and_reasoning_with_server_budget(self):
+        opener = Mock(side_effect=lambda *args, **kwargs: self.model_response())
+        provider, _ = self.make_provider(opener)
+        payload = {**PAYLOAD, 'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'}
+        provider.run('context', payload)
+        body = json.loads(opener.call_args.args[0].data)
+        self.assertEqual(body['model'], 'gpt-6.1-sol')
+        self.assertEqual(body['reasoning'], {'effort': 'high'})
+        self.assertEqual(body['max_output_tokens'], 2048)
+        self.assertEqual(opener.call_args.kwargs['timeout'], 18)
+        self.assertNotIn('model', json.loads(body['input']))
+        opener.assert_called_once()
 
     def test_malformed_or_incomplete_output_is_rejected_without_retry(self):
         for status, text in [('incomplete', '{}'), ('completed', '{}'), ('completed', '```json\n{}\n```')]:

@@ -43,10 +43,9 @@ struct ContextualTranslationSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.provider-mode")
                 if providerMode == CloudProviderMode.subscription.rawValue {
-                    Text(AppLanguage.text("Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. Personal prompts and model settings apply only to personal API key mode."))
+                    Text(AppLanguage.text("Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if providerMode == CloudProviderMode.personalKey.rawValue {
                 Picker("Model", selection: selectedModelBinding) {
                     ForEach(OpenAITranslationModel.allCases) { model in
                         Text(model.displayName).tag(model)
@@ -64,6 +63,7 @@ struct ContextualTranslationSettingsView: View {
                 .onChange(of: reasoningEffortRawValue) { _, _ in keyCheckMessage = nil }
                 Text("More reasoning can improve complex answers, but takes longer and uses more tokens.")
                     .font(.caption).foregroundStyle(.secondary)
+                if providerMode == CloudProviderMode.personalKey.rawValue {
                 LabeledContent("Configuration") {
                     Text(AppLanguage.text(hasSavedAPIKey ? "API key saved" : "API key required"))
                         .foregroundStyle(hasSavedAPIKey ? Color.secondary : Color.orange)

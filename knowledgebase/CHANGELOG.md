@@ -1,3 +1,18 @@
+## 2026-11-13 — Forward model/reasoning choices and show translation routing
+
+- Snapshot the selected provider mode, model and supported reasoning effort at the start of
+  contextual translation/word explanation. Pass model and reasoning through both cloud payloads;
+  expose those settings in subscription mode while keeping personal prompts/key private.
+- Accept optional paired `model`/`reasoning_effort` fields in both backend assemblies, validate an
+  app-aligned allowlist before admission, retain them through subscription queue execution and
+  forward them unchanged to OpenAI. Preserve old-client defaults, server output/time caps,
+  admission controls, and no automatic paid retries. Settings participate in idempotency hashes.
+- Label active contextual requests in preview/dictionary/learning/word disclosure as direct
+  OpenAI or cloud backend with model/effort; label Apple translation on-device. Labels use the
+  same captured settings as the request, including when preferences change while it is running.
+- Update architecture decisions, project workflow and API/setup docs. No deployment, live model
+  inference, or operator translation-mode wiring is claimed by this change.
+
 ## 2026-11-11 — YouTube import with synchronized transcripts
 
 - Add YouTube URL import and a Safari Share Extension with confirmation before library insertion.

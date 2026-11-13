@@ -17,6 +17,7 @@ struct ContextAnalysisRequest: Equatable, Sendable {
     let sourceLanguage: String
     let targetLanguage: String
     let promptVersion: String
+    var execution: TranslationRequestSettings? = nil
 }
 
 struct ContextualPhraseResult: Equatable, Sendable {

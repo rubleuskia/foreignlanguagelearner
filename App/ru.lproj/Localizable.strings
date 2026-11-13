@@ -777,3 +777,11 @@
 "No timed subtitles were found. Enable subtitles and try again." = "Субтитры с таймкодами не найдены. Включите их и повторите попытку.";
 "Could not load subtitles. Play the video, enable subtitles, then try again." = "Не удалось загрузить субтитры. Запустите видео, включите субтитры и повторите попытку.";
 "Choose a supported source language before saving this transcript." = "Выберите поддерживаемый язык перед сохранением текста.";
+
+"Direct to OpenAI" = "Напрямую OpenAI";
+
+"Via cloud backend" = "Через сервер";
+
+"On device · Apple Translation" = "На устройстве · Apple Translation";
+
+"Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode." = "Выбранный текст и ограниченный контекст отправляются через наш сервер в OpenAI. Успешные результаты доступны 24 часа. Выбранные модель и уровень рассуждения передаются с каждым запросом. Пользовательские промпты применяются только в режиме личного API-ключа.";
