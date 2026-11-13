@@ -1,3 +1,20 @@
+## 2026-11-13 — Queue-based cloud book alignment
+
+- Add the native three-step alignment wizard for audio/audio ZIP plus UTF-8 TXT or EPUB, local
+  validation, client-built ZIP ≤100 MB, direct signed S3 upload, separate queue submission,
+  API-driven progress, durable draft/request recovery and verified book download/import.
+- Add owner-keyed DynamoDB requests/history, stream outbox + scheduled lease recovery, SQS and
+  a serial Fargate book worker. Recheck actual pinned input size/hash; prepare EPUB and joined
+  audio, align without the legacy five-minute duration cap, and publish subtitles/word timings.
+- Replace operator pilot HTTP routes with queue-only book routes. Keep legacy resources during
+  migration; public-test/paid APIs are unchanged. Record architecture/workflow changes in
+  DECISIONS.md, PROJECT.md and docs/CLOUD_BOOK_ALIGNMENT.md. A new image and normal deployment
+  are required; local tests do not establish long-book acoustic quality or live AWS acceptance.
+- Local validation: 286 iOS unit tests and the wizard relaunch UI test pass; unsigned device
+  Release builds. Backend: 116 tests (2 optional skips); aligner: 31 tests; new book worker:
+  7 tests including a 306-second fake-engine pipeline, S3 publication and lease-loss fencing.
+  All CDK assertions, 46 Cloud Control/benchmark tests and 32 CI/asset-packaging tests pass.
+
 ## 2026-11-11 — YouTube import with synchronized transcripts
 
 - Add YouTube URL import and a Safari Share Extension with confirmation before library insertion.

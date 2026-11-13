@@ -49,7 +49,19 @@ try {
     assert.doesNotMatch(JSON.stringify(template.toJSON()), /APPLE_API_SECRET_ARN/);
   }
   foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 8);
-  audio.resourceCountIs("AWS::ApiGatewayV2::Route", 9);
+  audio.resourceCountIs("AWS::ApiGatewayV2::Route", 7);
+  audio.resourceCountIs("AWS::ECS::Service", 1);
+  audio.resourceCountIs("AWS::SQS::Queue", 2);
+  audio.hasResourceProperties("AWS::ApplicationAutoScaling::ScalableTarget", { MinCapacity: 1, MaxCapacity: 1 });
+  audio.hasResourceProperties("AWS::ECS::Service", { DesiredCount: 1,
+    DeploymentConfiguration: { MaximumPercent: 100, MinimumHealthyPercent: 0 } });
+  audio.hasResourceProperties("AWS::DynamoDB::Table", { DeletionProtectionEnabled: true,
+    StreamSpecification: { StreamViewType: "NEW_AND_OLD_IMAGES" } });
+  audio.hasResourceProperties("AWS::Lambda::Function", { Handler: "backend.book_alignment.api.handler" });
+  for (const route of Object.values(audio.findResources("AWS::ApiGatewayV2::Route"))) {
+    assert.match(route.Properties.RouteKey, /\/v1\/book-alignments/);
+    assert.doesNotMatch(route.Properties.RouteKey, /\/v1\/alignments/);
+  }
   foundation.hasResourceProperties("AWS::IAM::Policy", { PolicyDocument: { Statement: Match.arrayWith([
     Match.objectLike({ Effect: "Allow", Action: ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
       Resource: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" }),
@@ -69,8 +81,12 @@ try {
     Environment: { Variables: { OPERATOR_ALIGNMENT_PILOT: "pl-300-v1" } },
   });
   for (const task of Object.values(audio.findResources("AWS::ECS::TaskDefinition"))) {
-    assert.ok(task.Properties.ContainerDefinitions[0].Environment.some(
-      (v: { Name: string; Value: string }) => v.Name === "OPERATOR_ALIGNMENT_PILOT" && v.Value === "pl-300-v1"));
+    const variables = task.Properties.ContainerDefinitions[0].Environment;
+    if (variables.some((v: { Name: string }) => v.Name === "BOOK_ALIGNMENT_QUEUE")) {
+      assert.ok(!variables.some((v: { Name: string }) => v.Name === "OPERATOR_ALIGNMENT_PILOT"));
+    } else {
+      assert.ok(variables.some((v: { Name: string; Value: string }) => v.Name === "OPERATOR_ALIGNMENT_PILOT" && v.Value === "pl-300-v1"));
+    }
   }
   assert.deepEqual(app.synth().manifest.missing ?? [], []);
   const badApp = new cdk.App({ context: { workerRepositoryName: "worker", workerImageDigest: digest } });

@@ -226,6 +226,9 @@ class Worker:
 
 
 def main() -> int:
+    if os.environ.get("BOOK_ALIGNMENT_QUEUE"):
+        from book_worker import main as book_main
+        return book_main()
     import boto3
 
     specification = json.loads(os.environ["ALIGNMENT_INPUT"])

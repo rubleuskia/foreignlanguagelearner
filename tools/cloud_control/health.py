@@ -74,7 +74,7 @@ def run(config, snapshot, mode='smoke', *, call=transport, checkpoint=lambda val
         probe(f'{method} {"/v1/requests/{id}" if "requests/" in path else path}: без входа',
               path, 401, method, {} if method == 'POST' else None)
     if operator and config.get('context', {}).get('operatorAlignment', 'true') == 'true':
-        probe('Аудио оператора: без входа', '/v1/alignments', 401, 'POST', {})
+        probe('Аудио оператора: без входа', '/v1/book-alignments', 401, 'POST', {})
     if config.get('context', {}).get('paidAlignment') == 'true':
         probe('Платное аудио: без входа', '/v2/alignments', 401, 'POST', {})
     probe('Неизвестный маршрут', '/control-nonexistent-' + str(uuid.uuid4()), 404)

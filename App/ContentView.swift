@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var pendingYouTube: YouTubeImport?
     @State private var pendingYouTubeURL: URL?
     @State private var showingBookImport = false
+    @State private var showingCloudAlignment = false
     @State private var errorMessage: String?
     @State private var makingExample = false
 
@@ -103,6 +104,8 @@ struct ContentView: View {
 
                     Menu {
                         Button("Add book", systemImage: "book") { showingBookImport = true }
+                        Button("Cloud alignment", systemImage: "cloud") { showingCloudAlignment = true }
+                            .accessibilityIdentifier("library.cloud-alignment")
                         Button("YouTube video", systemImage: "play.rectangle") { pendingYouTube = nil; pendingYouTubeURL = nil; showingYouTube = true }
                             .accessibilityIdentifier("library.youtube")
                     } label: { Label("Add material", systemImage: "plus") }
@@ -112,13 +115,14 @@ struct ContentView: View {
             .navigationDestination(item: $featuredReader) { reader(for: $0) }
             .sheet(isPresented: $showingImport) { ImportItemView() }
             .sheet(isPresented: $showingBookImport) { BookImportView() }
+            .sheet(isPresented: $showingCloudAlignment) { CloudAlignmentView() }
             .sheet(isPresented: $showingYouTube) { YouTubeImportView() }
             .sheet(item: $pendingYouTube) { value in YouTubeImportView(incoming: value, inboxURL: pendingYouTubeURL) }
         }
     }
 
     private func checkYouTubeInbox() {
-        guard !showingYouTube, pendingYouTube == nil, !showingBookImport, !showingImport else { return }
+        guard !showingYouTube, pendingYouTube == nil, !showingBookImport, !showingImport, !showingCloudAlignment else { return }
         do {
             if let (url, payload) = try YouTubeInbox.pending().first {
                 pendingYouTubeURL = url; pendingYouTube = payload
