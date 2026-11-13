@@ -50,6 +50,15 @@ commit/event so subsequent merges cannot cancel its verification; only supersede
 source/Xcode/architecture; per-shard reports expose failures and incomplete coverage. Local reproduction:
 `scripts/ci_ios.py`; execution/diagnostics: `docs/IOS_CI.md`.
 
+## Translation request configuration
+
+Contextual translation and word explanation capture model/reasoning choices per request, in both
+personal-key and configured subscription modes. Backend requests carry the selected pair and the
+server validates it against the app model allowlist; old clients retain default behavior. Server
+token/time/admission limits remain authoritative. Progress shows direct OpenAI versus cloud backend
+with the captured model/effort; ordinary Apple translation is labeled on-device. The operator library
+login does not itself route native translations to the private operator API.
+
 ## Local cloud operations
 
 `bash scripts/cloud-control.sh` opens a local-only production control panel at 127.0.0.1:8767. It uses

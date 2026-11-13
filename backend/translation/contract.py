@@ -6,6 +6,26 @@ from backend.cloud.errors import CloudError
 LANGUAGES = {'en', 'fr', 'es', 'de', 'it', 'pl'}
 POLICY_VERSION = 'cloud-v1'
 
+# Keep this allowlist aligned with OpenAITranslationModel; clients cannot choose arbitrary models.
+MODEL_REASONING = {
+    'gpt-5-mini': ('minimal', 'low', 'medium', 'high'),
+    'gpt-5-nano': ('minimal', 'low', 'medium', 'high'),
+    'gpt-6-luna': ('none', 'low', 'medium', 'high', 'xhigh', 'max'),
+    'gpt-6.1-terra': ('none', 'low', 'medium', 'high', 'xhigh', 'max'),
+    'gpt-6.1-sol': ('low', 'medium', 'high', 'xhigh', 'max'),
+}
+
+
+def inference_settings(value, default_model='gpt-5-mini'):
+    model = value.get('model', default_model)
+    if not isinstance(model, str) or model not in MODEL_REASONING:
+        raise CloudError('INVALID_MODEL')
+    default_effort = 'minimal' if model in {'gpt-5-mini', 'gpt-5-nano'} else ('none' if model == 'gpt-6-luna' else 'medium')
+    effort = value.get('reasoning_effort', default_effort)
+    if not isinstance(effort, str) or effort not in MODEL_REASONING[model]:
+        raise CloudError('INVALID_REASONING')
+    return model, effort
+
 
 def units(text):
     try:
@@ -32,8 +52,12 @@ def validate_input(kind, value):
     common = {'schema_version', 'selected_text', 'context', 'selection_location_utf16',
               'selection_length_utf16', 'source_language', 'target_language'}
     extra = {'words_to_explain'} if kind == 'context' else {'lemma'}
-    if kind not in {'context', 'word'} or not isinstance(value, dict) or set(value) != common | extra:
+    optional = {'model', 'reasoning_effort'}
+    if (kind not in {'context', 'word'} or not isinstance(value, dict)
+            or not (common | extra).issubset(value) or set(value) - (common | extra | optional)
+            or ((set(value) & optional) not in (set(), optional))):
         raise CloudError('INVALID_REQUEST')
+    inference_settings(value)
     if type(value['schema_version']) is not int or value['schema_version'] != 1:
         raise CloudError('UNSUPPORTED_SCHEMA')
     selected = text(value['selected_text'], 256)

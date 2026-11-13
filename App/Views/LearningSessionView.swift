@@ -396,7 +396,10 @@ struct LearningSessionView: View {
                 }
             }
             if contextual.status == .translatingContext {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack { ProgressView(); Text("Generating context translation…") }
+                if let settings = contextual.execution { TranslationRequestRouteView(settings: settings) }
+            }
             } else {
                 if case .failed(let message) = contextual.status {
                     Text(AppLanguage.text(message)).foregroundStyle(.red)

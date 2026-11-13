@@ -285,6 +285,9 @@ final class CloudSubscriptionTests: XCTestCase {
     }
 
     func testSubscriptionFailureHasNoPersonalKeyFallback() async throws {
+        let previous = UserDefaults.standard.string(forKey: CloudProviderMode.key)
+        UserDefaults.standard.set(CloudProviderMode.subscription.rawValue, forKey: CloudProviderMode.key)
+        defer { UserDefaults.standard.set(previous, forKey: CloudProviderMode.key) }
         let config=try configuration()
         let http=CloudTestHTTP { request in
             if request.httpMethod == "POST" { return (Self.bytes(["error":["code":"SUBSCRIPTION_REQUIRED"]]),403) }
@@ -299,10 +302,29 @@ final class CloudSubscriptionTests: XCTestCase {
         XCTAssertEqual(2,requests.count); XCTAssertTrue(requests.allSatisfy { $0.url?.host == "api.example.invalid" })
     }
 
-    func testSubscriptionPayloadNeverContainsPersonalKeyModelOrPrompt() throws {
+    func testModeChangeStopsBeforePaidBackendPOST() async throws {
+        let previous = UserDefaults.standard.string(forKey: CloudProviderMode.key)
+        UserDefaults.standard.set(CloudProviderMode.personalKey.rawValue, forKey: CloudProviderMode.key)
+        defer { UserDefaults.standard.set(previous, forKey: CloudProviderMode.key) }
+        let config = try configuration()
+        let http = CloudTestHTTP { request in
+            XCTAssertNotEqual(request.httpMethod, "POST")
+            return (Self.bytes(["policy_version": "cloud-v1"]), 200)
+        }
+        let session = CloudSession(configuration: config, store: MemoryCloudCredentials(credentials(config)), client: http)
+        let provider = BackendWordExplanationProvider(client: CloudRemoteRequestClient(session: session, ledger: CloudRequestLedger(file: nil)))
+        let input = WordExplanationInput(sourceWord: "cat", lemma: "cat", context: "cat",
+            selectionLocationUTF16: 0, selectionLengthUTF16: 3, sourceLanguage: "en", targetLanguage: "ru")
+        do { _ = try await provider.explain(input); XCTFail("A mode change must stop submission") }
+        catch { XCTAssertEqual(error as? ContextAnalysisError, .cancelled) }
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testSubscriptionPayloadCarriesSettingsWithoutPersonalKeyOrPrompt() throws {
         let input=WordExplanationInput(sourceWord:"cat",lemma:"cat",context:"cat",selectionLocationUTF16:0,selectionLengthUTF16:3,sourceLanguage:"en",targetLanguage:"ru")
-        let object=try XCTUnwrap(JSONSerialization.jsonObject(with:JSONEncoder().encode(CloudTranslationPayload(input))) as? [String:Any])
+        let object=try XCTUnwrap(JSONSerialization.jsonObject(with:JSONEncoder().encode(CloudTranslationPayload(input, settings: .init(mode: .subscription, model: .nano, reasoningEffort: "low")))) as? [String:Any])
         XCTAssertEqual("cat",object["selected_text"] as? String)
-        XCTAssertNil(object["model"]); XCTAssertNil(object["api_key"]); XCTAssertNil(object["prompt"]); XCTAssertNil(object["words_to_explain"])
+        XCTAssertEqual(object["model"] as? String, "gpt-5-nano"); XCTAssertEqual(object["reasoning_effort"] as? String, "low"); XCTAssertNil(object["api_key"]); XCTAssertNil(object["prompt"]); XCTAssertNil(object["words_to_explain"])
     }
 }

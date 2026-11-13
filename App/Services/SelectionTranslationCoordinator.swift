@@ -25,6 +25,7 @@ final class SelectionTranslationCoordinator {
     private(set) var sourceSentence: String?
     private(set) var contextUnavailable = false
     private(set) var activeToken: UUID?
+    private(set) var execution: TranslationRequestSettings?
     private var request: RequestSnapshot?
     private var task: Task<Void, Never>?
     private var revision = 0
@@ -155,7 +156,7 @@ final class SelectionTranslationCoordinator {
         sourceSentence = sentence?.text
         contextUnavailable = false
         revision += 1
-        let analysisRequest: ContextAnalysisRequest
+        var analysisRequest: ContextAnalysisRequest
         do {
             analysisRequest = try ContextAnalysisRequestBuilder.build(.init(
                 subject: .preview(preview.id), revision: revision,
@@ -171,6 +172,8 @@ final class SelectionTranslationCoordinator {
             reportFailure(ContextAnalysisError.unknown.userMessage, code: .unknown)
             return
         }
+        analysisRequest.execution = .current
+        execution = analysisRequest.execution
         let snapshot = RequestSnapshot(token: analysisRequest.requestID,
                                        previewID: preview.id, request: analysisRequest)
         activeToken = snapshot.token
@@ -223,7 +226,8 @@ final class SelectionTranslationCache {
     func coordinator(for preview: SelectionTranslationPreview) -> SelectionTranslationCoordinator {
         if let last {
             let previous = last.preview
-            if previous.selectedText == preview.selectedText,
+            if (last.execution == nil || last.execution == .current),
+               previous.selectedText == preview.selectedText,
                previous.context == preview.context,
                previous.sourceItemID == preview.sourceItemID,
                previous.sourceLanguageCode == preview.sourceLanguageCode,

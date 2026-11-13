@@ -29,6 +29,7 @@ struct WordExplanationInput: Codable, Hashable, Sendable {
     let selectionLengthUTF16: Int
     let sourceLanguage: String
     let targetLanguage: String
+    var execution: TranslationRequestSettings? = nil
 }
 
 struct ContextWordRow: Identifiable, Equatable, Sendable {

@@ -83,6 +83,7 @@ final class ContextualTranslationCoordinator {
     }
 
     private(set) var status: ContextualTranslationStatus = .idle
+    private(set) var execution: TranslationRequestSettings?
     private var request: Request?
     private var modelContext: ModelContext?
     private var contextTask: Task<Void, Never>?
@@ -104,7 +105,7 @@ final class ContextualTranslationCoordinator {
         entry.contextAnalysisRevision += 1
         try? context.save()
         let snapshot = Request(entryID: entry.id, revision: entry.contextAnalysisRevision)
-        let analysisRequest: ContextAnalysisRequest
+        var analysisRequest: ContextAnalysisRequest
         do {
             analysisRequest = try ContextAnalysisRequestBuilder.build(.init(
                 subject: .dictionaryEntry(entry.id), revision: snapshot.revision,
@@ -122,6 +123,8 @@ final class ContextualTranslationCoordinator {
             status = .failed(ContextAnalysisError.unknown.userMessage)
             return
         }
+        analysisRequest.execution = .current
+        execution = analysisRequest.execution
         request = snapshot
         status = .translatingContext
         contextTask = Task { [weak self] in

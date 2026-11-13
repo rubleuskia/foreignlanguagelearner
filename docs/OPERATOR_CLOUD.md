@@ -23,7 +23,12 @@ ownership checks. Runtime roles have resource-scoped access and do not receive A
 
 The model path has no SQS: it makes one OpenAI Responses API POST using `gpt-5-mini`,
 `reasoning.effort: minimal`, `store: false`, strict JSON Schema and a 2048-token output cap,
-matching the app's default provider/model configuration. The server also validates the returned
+matching the app's default provider/model configuration for legacy clients. New clients may
+send paired `model` and `reasoning_effort` fields. Both are validated against the app model list
+and passed unchanged to OpenAI; they enter the idempotency fingerprint. The 2048-token cap and
+18-second timeout remain server-owned even for higher reasoning settings, so a request may fail
+or remain unknown if it cannot finish within those bounds. There is no automatic model fallback
+or paid retry. The server also validates the returned
 JSON against the existing contract. A configurable 18-second HTTP timeout fits within the
 28-second Lambda/30-second integration; the subscription worker keeps its existing 45-second
 provider timeout. No automatic inference retries or paid repair calls are made. A timeout or 5xx

@@ -11,18 +11,25 @@ struct CloudTranslationPayload: Encodable, Sendable {
     let targetLanguage: String
     let wordsToExplain: [String]?
     let lemma: String?
+    let model: String
+    let reasoningEffort: String
     enum CodingKeys: String, CodingKey {
+        case model, reasoningEffort = "reasoning_effort"
         case schemaVersion = "schema_version", selectedText = "selected_text", context
         case selectionLocationUTF16 = "selection_location_utf16", selectionLengthUTF16 = "selection_length_utf16"
         case sourceLanguage = "source_language", targetLanguage = "target_language", wordsToExplain = "words_to_explain", lemma
     }
-    init(_ request: ContextAnalysisRequest) {
+    init(_ request: ContextAnalysisRequest, settings: TranslationRequestSettings? = nil) {
+        let settings = settings ?? request.execution ?? .current
+        model = settings.model.rawValue; reasoningEffort = settings.reasoningEffort
         selectedText = request.selectedText; context = request.contextFragment
         selectionLocationUTF16 = request.selectionLocationUTF16; selectionLengthUTF16 = request.selectionLengthUTF16
         sourceLanguage = SourceLanguage.canonical(request.sourceLanguage); targetLanguage = request.targetLanguage
         wordsToExplain = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage); lemma = nil
     }
-    init(_ input: WordExplanationInput) {
+    init(_ input: WordExplanationInput, settings: TranslationRequestSettings? = nil) {
+        let settings = settings ?? input.execution ?? .current
+        model = settings.model.rawValue; reasoningEffort = settings.reasoningEffort
         selectedText = input.sourceWord; context = input.context
         selectionLocationUTF16 = input.selectionLocationUTF16; selectionLengthUTF16 = input.selectionLengthUTF16
         sourceLanguage = SourceLanguage.canonical(input.sourceLanguage); targetLanguage = input.targetLanguage; lemma = input.lemma; wordsToExplain = nil
@@ -90,7 +97,14 @@ actor CloudRequestLedger {
         guard !loadFailed else { throw ContextAnalysisError.persistence }
         return entries.filter { $0.scopeID == lease.scopeID && $0.owner == lease.userID }
     }
-    func entry(_ lease: CloudSession.Lease, fingerprint: String, kind: String, policyVersion: String = "cloud-v1") throws -> Entry {
+    func entry(_ lease: CloudSession.Lease, fingerprint: String, kind: String, policyVersion: String = "cloud-v1",
+               legacyFingerprint: String? = nil) throws -> Entry {
+        if let legacyFingerprint, try list(lease).contains(where: {
+            $0.fingerprint == legacyFingerprint && ($0.state == nil || ["accepted", "running", "outcome_unknown"].contains($0.state ?? ""))
+        }) {
+            // Old ledgers did not record model settings. Do not silently create another paid intent.
+            throw ContextAnalysisError.cloudOutcomeUnknown
+        }
         if let existing = try list(lease).last(where: {
             $0.fingerprint == fingerprint && ($0.state != "succeeded" || $0.policyVersion == policyVersion)
         }) { return existing }
@@ -133,8 +147,16 @@ actor CloudRemoteRequestClient {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let body = try encoder.encode(payload)
         let digest = SHA256.hash(data: Data("\(kind)|".utf8) + body).map { String(format: "%02x", $0) }.joined()
-        let entry = try await ledger.entry(lease, fingerprint: digest, kind: kind, policyVersion: policy.policy_version)
+        guard var legacy = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            throw ContextAnalysisError.invalidOutput
+        }
+        legacy.removeValue(forKey: "model"); legacy.removeValue(forKey: "reasoning_effort")
+        let legacyBody = try JSONSerialization.data(withJSONObject: legacy, options: [.sortedKeys, .withoutEscapingSlashes])
+        let legacyDigest = SHA256.hash(data: Data("\(kind)|".utf8) + legacyBody).map { String(format: "%02x", $0) }.joined()
+        let entry = try await ledger.entry(lease, fingerprint: digest, kind: kind,
+            policyVersion: policy.policy_version, legacyFingerprint: legacyDigest)
         let path = kind == "context" ? "v1/context-analyses" : "v1/word-explanations"
+        guard CloudProviderMode.current == .subscription else { throw CloudAPIError(code: "ACCOUNT_CHANGED") }
         let data = try await session.send(path, method: "POST", body: body, idempotencyKey: entry.idempotencyKey, expected: lease)
         var envelope = try JSONDecoder().decode(CloudRequestEnvelope.self, from: data)
         let deadline = Date().addingTimeInterval(180)
@@ -188,9 +210,10 @@ actor CloudRemoteRequestClient {
 
 struct BackendContextAnalysisProvider: ContextAnalysisProvider {
     var client: CloudRemoteRequestClient = .shared
+    var settings: TranslationRequestSettings? = nil
     func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
         do {
-            let response = try await client.run(kind: "context", payload: .init(request))
+            let response = try await client.run(kind: "context", payload: .init(request, settings: settings))
             guard response.schema_version == 1, response.kind == "context", let result = response.result,
                   let translation = result.phrase_translation, !translation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   translation.utf16.count <= 512, let rows = result.word_explanations else { throw ContextAnalysisError.invalidOutput }
@@ -212,9 +235,10 @@ struct BackendContextAnalysisProvider: ContextAnalysisProvider {
 
 struct BackendWordExplanationProvider: Sendable {
     var client: CloudRemoteRequestClient = .shared
+    var settings: TranslationRequestSettings? = nil
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
         do {
-            let response = try await client.run(kind: "word", payload: .init(input))
+            let response = try await client.run(kind: "word", payload: .init(input, settings: settings))
             guard response.schema_version == 1, response.kind == "word", let value = response.result,
                   let definition = value.definition, let meaning = value.meaningInContext, let examples = value.examples else { throw ContextAnalysisError.invalidOutput }
             return try WordExplanation(definition: definition, meaningInContext: meaning, examples: examples).validated()

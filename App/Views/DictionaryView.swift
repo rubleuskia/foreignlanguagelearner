@@ -412,6 +412,8 @@ struct DictionaryEntryDetailView: View {
                         Button("Retry Translation", systemImage: "arrow.clockwise") { coordinator.retry(entry, context: context) }
                     }
                     if entry.translationStatus == .translating {
+                        Label("On device · Apple Translation", systemImage: "iphone")
+                            .font(.caption).foregroundStyle(.secondary)
                         Label("Translating now — this may take a moment.", systemImage: "hourglass")
                             .foregroundStyle(.secondary)
                     }
@@ -491,7 +493,10 @@ struct DictionaryEntryDetailView: View {
     @ViewBuilder private var contextProgress: some View {
         switch contextual.status {
         case .translatingContext:
+            VStack(alignment: .leading, spacing: 6) {
             HStack { ProgressView(); Text("Translating selection and sentence…") }
+                if let settings = contextual.execution { TranslationRequestRouteView(settings: settings) }
+            }
         default:
             EmptyView()
         }

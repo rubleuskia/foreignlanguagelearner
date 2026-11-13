@@ -71,6 +71,37 @@ class TranslationTests(unittest.TestCase):
     def submit(self, value=None, key=None):
         return self.service.submit('alice', 'context', value or payload(), key or str(uuid4()))
 
+    def test_requested_model_and_reasoning_survive_queue_and_conflict_on_same_key(self):
+        value = {**payload(), 'model': 'gpt-6.1-terra', 'reasoning_effort': 'high'}
+        key = str(uuid4())
+        request = self.submit(value, key)
+        stored = self.repo.request(request['request_id'])
+        self.assertEqual(stored['model'], value['model'])
+        self.assertEqual(stored['reasoning_effort'], 'high')
+        self.service.execute(request['request_id'])
+        self.assertEqual(self.provider.run.call_args.args[2:],
+                         ('gpt-6.1-terra', self.service.policy.output_tokens, 'high'))
+        self.assertEqual(self.submit(value, key)['state'], 'succeeded')
+        with self.assertRaises(CloudError):
+            self.submit({**value, 'reasoning_effort': 'low'}, key)
+        self.provider.run.assert_called_once()
+
+    def test_model_settings_require_both_fields_and_valid_combination_for_both_request_kinds(self):
+        from backend.translation.contract import validate_input, inference_settings
+        for kind in ['context', 'word']:
+            value = payload()
+            if kind == 'word':
+                value.pop('words_to_explain'); value['lemma'] = value['selected_text']
+            for fields in [{'model': 'gpt-5-mini'}, {'reasoning_effort': 'low'},
+                           {'model': 'gpt-6.1-sol', 'reasoning_effort': 'none'},
+                           {'model': 'unknown', 'reasoning_effort': 'high'},
+                           {'model': None, 'reasoning_effort': 'minimal'}]:
+                with self.assertRaises(CloudError): validate_input(kind, {**value, **fields})
+            selected = validate_input(kind, {**value, 'model': 'gpt-5-nano', 'reasoning_effort': 'low'})
+            self.assertEqual(inference_settings(selected), ('gpt-5-nano', 'low'))
+            self.assertEqual(inference_settings(validate_input(kind, value), 'gpt-5-nano'),
+                             ('gpt-5-nano', 'minimal'))
+
     def test_purchase_catalogue_requires_enabled_configured_products(self):
         from backend.billing import api as billing_api
         from backend.billing.service import BillingService
