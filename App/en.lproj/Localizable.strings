@@ -209,3 +209,11 @@
 "No books available. Check your library sign-in in Settings." = "No books available. Check your library sign-in in Settings.";
 
 "Sign in" = "Sign in";
+
+"Direct to OpenAI" = "Direct to OpenAI";
+
+"Via cloud backend" = "Via cloud backend";
+
+"On device · Apple Translation" = "On device · Apple Translation";
+
+"Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode." = "Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode.";

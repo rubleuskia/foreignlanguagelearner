@@ -1,7 +1,7 @@
 import time
 import uuid
 from backend.cloud.errors import CloudError
-from .contract import fingerprint, validate_input, validate_output
+from .contract import fingerprint, validate_input, validate_output, inference_settings
 from .policy import period
 from .provider import ProviderFailure
 
@@ -27,13 +27,14 @@ class TranslationService:
             if existing['fingerprint'] != digest: raise CloudError('IDEMPOTENCY_CONFLICT', 409)
             return self.status(owner, request_id)
         if not self.policy.enabled: raise CloudError('NEW_TRANSLATIONS_DISABLED', 503)
+        model, effort = inference_settings(payload, self.policy.model)
         now = int(self.clock())
         subscription, allowance = self.policy.access(account, self.billing.subscriptions(account), now)
         period_id, reset_at = period(now)
         record = {'request_id': request_id, 'user_id': owner, 'kind': kind, 'feature': 'translations',
             'state': 'accepted', 'revision': 1, 'fingerprint': digest, 'created_at': now, 'deadline': now + 600,
             'period_id': period_id, 'reset_at': reset_at, 'policy_version': self.policy.version,
-            'model': self.policy.model, 'output_tokens': self.policy.output_tokens,
+            'model': model, 'reasoning_effort': effort, 'output_tokens': self.policy.output_tokens,
             'delete_after': now + 90 * 86400}
         try:
             self.repo.admit(record, payload, subscription, allowance, self.policy, now)
@@ -87,7 +88,8 @@ class TranslationService:
         claimed = self.repo.claim(record, now)
         if not claimed: return
         try:
-            result, tokens = self.provider.run(record['kind'], payload, record['model'], record['output_tokens'])
+            result, tokens = self.provider.run(record['kind'], payload, record['model'], record['output_tokens'],
+                                               record.get('reasoning_effort', 'minimal'))
             validate_output(record['kind'], result, payload)
         except ProviderFailure as error:
             self.repo.finish(claimed, 'outcome_unknown' if error.unknown else 'failed', int(self.clock()), tokens=error.tokens)

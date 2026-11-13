@@ -37,17 +37,18 @@ actor ContextAnalysisService: ContextAnalysisServing {
         guard ContextAnalysisSettings.isCloudAnalysisEnabled() else {
             throw ContextAnalysisError.missingConfiguration
         }
-        let mode = CloudProviderMode.current
+        let settings = request.execution ?? .current
+        let mode = settings.mode
         let provider: any ContextAnalysisProvider
         if mode == .subscription {
-            provider = BackendContextAnalysisProvider()
+            provider = BackendContextAnalysisProvider(settings: settings)
         } else {
             guard let apiKey = try OpenAIAPIKeyStore.load(), !apiKey.isEmpty else {
                 throw ContextAnalysisError.missingConfiguration
             }
-            let model = ContextAnalysisSettings.selectedModel()
+            let model = settings.model
             provider = OpenAIContextAnalysisProvider(apiKey: apiKey, model: model, prompt: ContextAnalysisSettings.prompt(),
-                reasoningEffort: ContextAnalysisSettings.reasoningEffort(for: model))
+                reasoningEffort: settings.reasoningEffort)
         }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in

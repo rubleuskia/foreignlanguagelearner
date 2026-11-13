@@ -33,10 +33,10 @@ class OpenAIProvider:
         self.api_key, self.opener = api_key, opener or urllib.request.build_opener(NoRedirect()).open
         self.timeout = timeout
 
-    def run(self, kind, payload, model, output_tokens):
+    def run(self, kind, payload, model, output_tokens, reasoning_effort='minimal'):
         body = {'model': model, 'store': False, 'max_output_tokens': output_tokens,
-            'reasoning': {'effort': 'minimal'}, 'instructions': CONTEXT_PROMPT if kind == 'context' else WORD_PROMPT,
-            'input': canonical(payload), 'text': {'format': {'type': 'json_schema', 'strict': True,
+            'reasoning': {'effort': reasoning_effort}, 'instructions': CONTEXT_PROMPT if kind == 'context' else WORD_PROMPT,
+            'input': canonical({k: v for k, v in payload.items() if k not in {'model', 'reasoning_effort'}}), 'text': {'format': {'type': 'json_schema', 'strict': True,
                 'name': 'contextual_translation' if kind == 'context' else 'word_explanation', 'schema': output_schema(kind)}}}
         request = urllib.request.Request('https://api.openai.com/v1/responses', data=canonical(body).encode(),
             headers={'Authorization': f'Bearer {self.api_key}', 'Content-Type': 'application/json'}, method='POST')

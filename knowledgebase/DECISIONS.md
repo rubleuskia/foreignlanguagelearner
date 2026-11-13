@@ -22,6 +22,31 @@ The old pilot benchmark remains historical evidence, not long-book quality accep
 immutable image and deploy through normal verified releases; no deployment is part of this change.
 See [cloud book alignment](../docs/CLOUD_BOOK_ALIGNMENT.md).
 
+## Explicit per-request inference settings and honest route labels (2026-11-13)
+
+Supersede fixed operator GPT-5 mini/minimal and subscription policy-model selection when a
+client supplies settings. Keep schema version 1 compatible with old clients by accepting either
+both model/reasoning_effort or neither. Omitted settings use the existing assembly defaults.
+Reject arbitrary models, unsupported model/effort pairs and client-supplied budget fields before
+admission. The allowlist mirrors the app's model choices. Persist the selected pair in subscription
+request records so workers never reread changed client settings. Include the allowlist in the
+effective subscription policy version; older queued policy versions retain cancellation behavior.
+
+Models/reasoning participate in canonical payload/idempotency fingerprints. A changed pair is a
+different user intent; reusing the same key with changed settings conflicts. Unknown submissions
+are never automatically retried. Before creating a settings-bearing intent, detect unresolved legacy
+ledger fingerprints and require explicit recovery instead of silently creating another paid intent.
+Output budgets remain server-controlled (operator 2048 tokens,
+18-second HTTP timeout; subscription uses its configured cap/worker timeout). High reasoning can
+exhaust those bounds; return the existing failed/unknown state without silently changing model,
+reasoning, retrying or claiming completion. Do not raise deployment limits implicitly.
+
+The iOS request carries an immutable settings snapshot used by services and route labels. Show
+direct personal-key OpenAI separately from the cloud backend; both send selected text externally.
+Only Apple Translation is labeled on-device. Personal prompts and API keys remain outside backend
+payloads. This does not connect the native private-operator translation UI or deploy the second-stage
+subscription backend; it prepares consistent configured cloud requests and both server contracts.
+
 ## YouTube caption import and online playback (2026-11-11)
 
 Keep YouTube video identity separate from local media filenames. Import available caption

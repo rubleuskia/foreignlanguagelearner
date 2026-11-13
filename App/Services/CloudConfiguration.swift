@@ -42,7 +42,7 @@ struct CloudConfiguration: Sendable, Equatable {
     var scopeID: String { SHA256.hash(data: Data("\(apiURL)|\(loginURL)|\(clientID)|\(environment)".utf8)).map { String(format: "%02x", $0) }.joined() }
 }
 
-enum CloudProviderMode: String, CaseIterable, Identifiable {
+enum CloudProviderMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case personalKey, subscription
     static let key = "cloud.providerMode.v1"
     var id: String { rawValue }
@@ -77,6 +77,7 @@ struct CloudAPIError: Error, LocalizedError, Sendable {
         case "NOT_CONFIGURED": .missingConfiguration
         case "SIGN_IN_REQUIRED", "UNAUTHORIZED", "SESSION_REVOKED", "APPLE_IDENTITY_UNAVAILABLE": .unauthorized
         case "ACCOUNT_CHANGED": .cancelled
+        case "INVALID_MODEL", "INVALID_REASONING": .modelUnavailable
         case "INVALID_LANGUAGE": .invalidLanguage
         case "INVALID_SELECTION", "INVALID_TEXT", "INVALID_UNICODE", "INVALID_REQUEST": .invalidContext
         case "ACCOUNT_DISABLED": .forbidden

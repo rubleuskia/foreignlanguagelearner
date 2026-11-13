@@ -68,6 +68,7 @@ private struct ContextWordDisclosure: View {
     @State private var result: WordExplanation?
     @State private var error: String?
     @State private var retry = 0
+    @State private var execution: TranslationRequestSettings?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -96,6 +97,7 @@ private struct ContextWordDisclosure: View {
                     if row.sourceWord != row.lemma {
                         Text("\(row.sourceWord) → \(row.lemma)").font(.caption).foregroundStyle(.secondary)
                     }
+                    if let execution { TranslationRequestRouteView(settings: execution) }
                     if let result {
                         block("Простыми словами", text: result.definition)
                         block("Здесь", text: result.meaningInContext)
@@ -137,8 +139,10 @@ private struct ContextWordDisclosure: View {
     private func load() async {
         guard result == nil else { return }
         error = nil
+        var input = row.input
+        input.execution = .current; execution = input.execution
         do {
-            let value = try await service.explain(row.input)
+            let value = try await service.explain(input)
             try Task.checkCancellation()
             result = value
         } catch {

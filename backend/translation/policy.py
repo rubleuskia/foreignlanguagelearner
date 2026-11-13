@@ -42,8 +42,8 @@ class Policy:
             if any(type(v) is not int or v < 0 or v > 100000 for v in allowances.values()):
                 raise ValueError('Invalid product allowance')
         from .provider import CONTEXT_PROMPT, WORD_PROMPT
-        from .contract import output_schema
-        effective = json.dumps({'policy':data,'context_prompt':CONTEXT_PROMPT,'word_prompt':WORD_PROMPT,
+        from .contract import output_schema, MODEL_REASONING
+        effective = json.dumps({'policy':data,'model_settings':MODEL_REASONING,'context_prompt':CONTEXT_PROMPT,'word_prompt':WORD_PROMPT,
             'context_schema':output_schema('context'),'word_schema':output_schema('word')}, sort_keys=True, separators=(',', ':'))
         data['version'] += '-' + hashlib.sha256(effective.encode()).hexdigest()[:16]
         return cls(**data, enabled=enabled, alignment_enabled=alignment_enabled)

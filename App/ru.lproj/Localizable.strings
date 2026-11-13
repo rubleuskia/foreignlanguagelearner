@@ -847,3 +847,11 @@
 "The upload is incomplete. Upload the artifacts again." = "Загрузка не завершена. Загрузите файлы повторно.";
 "The request changed. Refresh its status." = "Задача изменилась. Обновите её статус.";
 "Cloud alignment is temporarily unavailable. Please try again." = "Облачная синхронизация временно недоступна. Повторите попытку.";
+
+"Direct to OpenAI" = "Напрямую OpenAI";
+
+"Via cloud backend" = "Через сервер";
+
+"On device · Apple Translation" = "На устройстве · Apple Translation";
+
+"Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode." = "Выбранный текст и ограниченный контекст отправляются через наш сервер в OpenAI. Успешные результаты доступны 24 часа. Выбранные модель и уровень рассуждения передаются с каждым запросом. Пользовательские промпты применяются только в режиме личного API-ключа.";
