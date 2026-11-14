@@ -34,6 +34,23 @@ Long press remains selection; a normal tap opens a ready preview and an explicit
 save inserts the whole sentence without another request. No live deployment or
 provider request is required to verify the local lifecycle.
 
+## Cloud Control diagnostics and explicit manual API calls (2026-11-14)
+
+Keep diagnostics in the existing loopback Cloud Control server. Discover allowed resources from
+the selected project's CloudFormation stacks, plus the retained library/CDK stacks; expose bounded
+read pages with collection times, partial coverage and access failures. Cache Cost Explorer and
+keep its project-wide AWS costs separate from plan credits and direct OpenAI spending. Derive
+alignment metrics from retained records without treating missing durations/history as zero.
+
+Serve pinned Swagger UI locally and relay explicit manual requests to the selected deployed API
+to avoid changing production CORS. Do not persist bearer authorization or retry submissions.
+Summarize actual prepared/current template changes alongside the full CDK diff and preserve
+the existing verified-release/deploy authorization flow. Mark stale plans invalid and distinguish
+candidate metadata from actual prepared template changes. Cache reads per configuration and
+show denied/partial data explicitly. SDK/HTTP tests and a clearly labelled offline browser fixture
+cover these boundaries; see docs/CLOUD_CONTROL_OBSERVABILITY.md. No automatic deployment or IAM
+expansion follows diagnostics.
+
 ## Planned automatic translation for book pages (2026-11-13)
 
 The agreed [requirements](../docs/AUTO_TRANSLATION_REQUIREMENTS.md) are a future

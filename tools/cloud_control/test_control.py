@@ -419,6 +419,7 @@ class ControlTests(unittest.TestCase):
         config.update(apple_roots=str(roots),root_sha256=['a'*64],policy_file=str(policy))
         self.config.save(config)
         aws=Mock();aws.snapshot.return_value=copy.deepcopy(SNAPSHOT)
+        aws.client.return_value.get_template.return_value={'TemplateBody': {'Resources': {}}}
         releases=Mock();releases.verify.return_value={'tag':TAG,'sha':SHA,'ci_url':'https://github.com/test'}
         jobs=Jobs(ROOT,self.config,aws_factory=lambda c:aws,releases=releases)
         mode=['good'];calls=[]
@@ -449,6 +450,8 @@ class ControlTests(unittest.TestCase):
         self.assertEqual((jobs.plans/result['id']/'policy.json').read_text(),policy.read_text())
         self.assertTrue(any('synth' in call and '--lookups=false' in call for call in calls))
         self.assertTrue(any('diff' in call and '--no-change-set' in call for call in calls))
+        self.assertTrue(result['resource_changes'])
+        self.assertTrue((jobs.plans/result['id']/'resource-changes.json').exists())
         self.assertFalse(any('deploy' in call for call in calls))
         policy.write_text('operator file changed after preparation')
         jobs.validate_plan(result,config,{'confirm':CONFIG['account_id']+'/'+TAG})

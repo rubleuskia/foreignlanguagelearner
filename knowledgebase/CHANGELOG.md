@@ -22,6 +22,17 @@
   45 tests with two optional local-DynamoDB concurrency skips. UI/provider tests
   use fixtures; no live paid inference, device signing or deployment was performed.
 
+## 2026-11-14 — Cloud Control diagnostics and manual API tests
+
+- Add local Swagger/manual relay, scoped S3 browsing, AWS cost/credit summaries, retained
+  alignment usage metrics, 5xx/error-log views and structured prepared-deployment resource changes.
+- Reconcile with merged queue-based alignment/library changes, validate SDK pagination, test
+  scoped/partial telemetry, relay guards and stale plans, and exercise diagnostic/Swagger screens
+  in desktop/mobile browser layouts. Cache tag discovery to avoid repeated Git scans per poll.
+  See docs/CLOUD_CONTROL_OBSERVABILITY.md for permissions and metric/validation boundaries.
+- Record local-only/read-only diagnostics and relay decisions in DECISIONS.md; update PROJECT.md
+  with the supported workflow. No AWS deployment, IAM change, release tag or image publication.
+
 ## 2026-11-13 — Agree paged-reader automatic translation requirements
 
 - Add [the agreed feature specification](../docs/AUTO_TRANSLATION_REQUIREMENTS.md)
