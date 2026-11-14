@@ -15,7 +15,11 @@ from .test_observability import CONFIG, DISCOVERY, ROOT
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--port',type=int,default=8770)
-    args=parser.parse_args();now=int(time.time());tag='v0.0.1-backend.999';identifier='a'*32
+    parser.add_argument('--delay',type=float,default=0,help='Delay local API responses to inspect loading states (seconds).')
+    parser.add_argument('--fail-source',choices=['storage','alignment','costs','errors','deployment'])
+    args=parser.parse_args()
+    if not 0 <= args.delay <= 30:parser.error('--delay must be between 0 and 30 seconds')
+    now=int(time.time());tag='v0.0.1-backend.999';identifier='a'*32
     changes=[{'stack':'ForeignLanguageLearnerOperatorAlignment-prod','logical_id':'BooksQueue','type':'AWS::SQS::Queue',
               'action':'add','changed_fields':[],'review':False}]
     plan={'id':identifier,'action':'prepare','state':'ready','account_id':CONFIG['account_id'],'region':'eu-north-1',
@@ -28,6 +32,7 @@ def main():
     group={'id':'fixture-api-log','logical_id':'AccessLogs','type':'AWS::Logs::LogGroup','stack':'ForeignLanguageLearnerOperator-prod'}
     checked=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime(now))
     def read(kind,params):
+        if kind==args.fail_source:return {'available':False,'error':'OFFLINE TEST: источник временно недоступен.'}
         if kind=='deployment':return {'available':True,**summary(releases,CONFIG,DISCOVERY,[plan],tag=params.get('tag'))}
         data={
             'storage':{'buckets':buckets,'bucket':buckets[0],'files':[{'key':'books/'+('second' if params.get('cursor') else 'first')+'.zip','bytes':12345678,'modified_at':checked,'storage_class':'STANDARD'}],
@@ -48,6 +53,10 @@ def main():
         }[kind]
         return {'available':True,'warnings':[],'checked_at':checked,**data}
     class FixtureHandler(Handler):
+        def do_GET(self):
+            if self.path.startswith('/api/'):time.sleep(args.delay)
+            super().do_GET()
+
         def send(self,status,body,content_type='application/json; charset=utf-8',**kwargs):
             if isinstance(body,bytes) and content_type.startswith('text/html'):
                 body=body.replace(b'PRODUCTION',b'OFFLINE TEST').replace('Состояние продакшена'.encode(),'Тестовые данные'.encode())

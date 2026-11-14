@@ -85,6 +85,12 @@ They never deploy or invoke paid inference. For reproducible browser QA without 
 python -m tools.cloud_control.test_web_fixture --port 8770
 ```
 
+Add `--delay 3` to inspect foreground loading indicators during tab navigation, refresh and
+pagination. `--fail-source costs` simulates a failed read to verify cleanup. The shared header
+spinner and affected buttons stay busy until foreground requests complete; routine background
+status polling is silent. A manual refresh joins an already-running status read without creating
+a duplicate request.
+
 That separate server labels every page **OFFLINE TEST**, disables operation execution and returns
 fixture telemetry/manual responses. It is not evidence of real spend or deployment health.
 Browser acceptance covers all diagnostic sections, S3 pagination, Swagger Execute 200/500 and
