@@ -1,3 +1,11 @@
+## 2026-11-14 — Weekly and monthly API error filters
+
+- Add 7-day and 30-day periods to Cloud Control's API errors/logs view alongside 1/24 hours.
+  Apply the same time range to CloudWatch request/5xx metrics and paginated error logs; disclose
+  log-retention limits. No AWS retention or resource settings change.
+- Architecture/product decisions and the project overview are unchanged; DECISIONS.md and
+  PROJECT.md need no update.
+
 ## 2026-11-14 — Automatic sentence translation on book pages
 
 - Add a compact top strip to local book readers with session-only per-book auto

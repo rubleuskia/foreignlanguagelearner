@@ -32,10 +32,11 @@ existing local server; startup never deploys AWS or submits inference. Configure
   and are cached for 15 minutes. OpenAI provider spending is separate. Denied/empty sources are
   unavailable, never presented as a zero bill. Global billing APIs use their us-east-1 endpoint;
   no Regional resources are created there.
-- **Errors and logs** shows API Gateway request/5xx sums for 1/24 hours and pages of error events
+- **Errors and logs** shows API Gateway request/5xx sums for 1/24 hours or 7/30 days and pages of error events
   from one discovered CloudWatch log group. Access logs require an actual JSON status 500–599;
   worker/function logs use an error-pattern filter. Missing metrics or empty pages do not prove
-  zero errors. Credential patterns are redacted, but this remains private operational data.
+  zero errors. Log history is limited by each group's configured retention, even when a longer
+  period is selected. Credential patterns are redacted, but this remains private operational data.
 - **Versions and deploy** compares candidate and deployed revisions, identifies missing book
   components and worker-image prerequisites, and displays resource/property/output changes from
   the actual prepared/current templates. Retain removals are labelled. An absent prepared plan

@@ -1,6 +1,6 @@
 """SDK-backed telemetry and local HTTP relay regression coverage; no live AWS calls."""
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import http.client
 import hashlib
 import json
@@ -198,6 +198,29 @@ class TelemetryTests(unittest.TestCase):
         cw.get_metric_statistics.side_effect = None; cw.get_metric_statistics.return_value = {'Datapoints': []}
         result = Monitoring(self.aws,self.discovery,NOW).errors()
         self.assertTrue(result['warnings']); self.assertIsNone(result['metrics'][0]['errors_5xx'])
+
+    def test_error_periods_apply_same_window_to_metrics_and_paginated_logs(self):
+        self.discovery['resources'] = [resource('ApiGatewayV2::Api', 'api'), resource('Logs::LogGroup', 'access', 'AccessLogs')]
+        for hours in [1, 24, 168, 720]:
+            with self.subTest(hours=hours):
+                cw, logs = Mock(), Mock()
+                cw.get_metric_statistics.return_value = {'Datapoints': [{'Sum': 2}, {'Sum': 3}]}
+                logs.filter_log_events.return_value = {'events': [], 'nextToken': 'next'}
+                self.aws.client = lambda name: {'cloudwatch': cw, 'logs': logs}[name]
+                result = Monitoring(self.aws, self.discovery, NOW).errors(hours=hours, cursor='previous')
+                start = NOW - timedelta(hours=hours)
+                self.assertEqual(result['hours'], hours)
+                self.assertEqual(result['metrics'][0]['errors_5xx'], 5)
+                self.assertEqual(result['cursor'], 'next')
+                for call in cw.get_metric_statistics.call_args_list:
+                    self.assertEqual(call.kwargs['StartTime'], start)
+                    self.assertEqual(call.kwargs['EndTime'], NOW)
+                    self.assertEqual(call.kwargs['Period'], 3600)
+                params = logs.filter_log_events.call_args.kwargs
+                self.assertEqual(params['startTime'], int(start.timestamp() * 1000))
+                self.assertEqual(params['endTime'], int(NOW.timestamp() * 1000))
+                self.assertEqual(params['nextToken'], 'previous')
+        with self.assertRaises(ControlError): Monitoring(self.aws, self.discovery, NOW).errors(hours=25)
 
     def test_missing_duration_and_common_secrets_are_not_exposed(self):
         self.assertIsNone(normalize_job({'job_id':'empty','created_at':1},'table',10)['runtime_seconds'])

@@ -203,14 +203,15 @@ class Monitoring:
         return rows
 
     def errors(self, group=None, cursor=None, hours=24):
-        if hours not in {1, 24}: raise ControlError('Период ошибок: 1 или 24 часа.')
+        if hours not in {1, 24, 168, 720}: raise ControlError('Период ошибок: 1 час, 24 часа, 7 или 30 дней.')
         start = self.now - timedelta(hours=hours)
         metrics, warnings = [], list(self.discovery['warnings'])
         for api in resources(self.discovery, 'AWS::ApiGatewayV2::Api'):
             try:
                 values = {}
+                client = self.aws.client('cloudwatch')
                 for metric in ['Count', '5xx']:
-                    points = self.aws.client('cloudwatch').get_metric_statistics(Namespace='AWS/ApiGateway',
+                    points = client.get_metric_statistics(Namespace='AWS/ApiGateway',
                         MetricName=metric, Dimensions=[{'Name': 'ApiId', 'Value': api['id']}],
                         StartTime=start, EndTime=self.now, Period=3600, Statistics=['Sum'])['Datapoints']
                     values[metric] = sum(p['Sum'] for p in points) if points else None
@@ -245,7 +246,7 @@ class Monitoring:
         return {'hours': hours, 'metrics': metrics, 'groups': groups, 'group': selected,
                 'events': sorted(events, key=lambda e: e['timestamp'], reverse=True), 'cursor': next_cursor,
                 'warnings': warnings, 'checked_at': stamp(),
-                'scope': 'Счётчики 5xx — из CloudWatch; логи — отдельная страница выбранной группы. Пустая страница или отсутствие метрики не подтверждают отсутствие ошибок.'}
+                'scope': 'Счётчики 5xx — из CloudWatch; логи — отдельная страница выбранной группы в пределах её срока хранения. Пустая страница или отсутствие метрики не подтверждают отсутствие ошибок.'}
 
 
 def normalize_job(row, table, now):

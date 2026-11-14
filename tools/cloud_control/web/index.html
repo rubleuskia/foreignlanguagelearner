@@ -66,7 +66,7 @@
       <div id="cost-metrics" class="cards"></div><article class="panel"><p id="cost-note" class="hint">Cost Explorer обновляет данные с задержкой. Запросы к нему кэшируются на 15 минут.</p><div class="two-columns"><div><h2>По сервисам</h2><div id="cost-services" class="rows empty">Нет данных.</div></div><div><h2>По дням</h2><div id="cost-daily" class="cost-chart empty">Нет данных.</div></div></div></article>
     </section>
     <section id="errors" class="page" hidden>
-      <div class="page-heading"><div><div class="eyebrow">ДИАГНОСТИКА</div><h1>Ошибки API и логи</h1><p>HTTP 5xx из CloudWatch и сообщения из журналов проекта.</p></div><div class="inline-form"><select id="error-hours" aria-label="Период ошибок"><option value="1">1 час</option><option value="24" selected>24 часа</option></select><button id="refresh-errors" class="secondary">Обновить</button></div></div>
+      <div class="page-heading"><div><div class="eyebrow">ДИАГНОСТИКА</div><h1>Ошибки API и логи</h1><p>HTTP 5xx из CloudWatch и сообщения из журналов проекта.</p></div><div class="inline-form"><select id="error-hours" aria-label="Период ошибок"><option value="1">1 час</option><option value="24" selected>24 часа</option><option value="168">7 дней</option><option value="720">30 дней</option></select><button id="refresh-errors" class="secondary">Обновить</button></div></div>
       <div id="error-metrics" class="cards"></div><article class="panel"><label>Журнал CloudWatch<select id="error-group"></select></label><p id="error-note" class="hint"></p><div id="error-events" class="rows empty">Нет данных.</div><button id="errors-more" class="secondary" hidden>Следующая страница логов</button></article>
     </section>
     <section id="settings" class="page" hidden>

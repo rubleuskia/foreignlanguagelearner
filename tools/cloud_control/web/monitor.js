@@ -65,7 +65,8 @@ function renderCosts(data){
   if(!data.daily.length)chart.append(element('p','Пока нет дневных данных.','empty'));
 }
 function renderErrors(data){
-  $('error-metrics').replaceChildren(...data.metrics.map(metric=>monitorCard('HTTP 5xx · '+metric.api_id,metric.errors_5xx==null?'Нет данных':metric.errors_5xx,metric.requests==null?'Счётчик запросов не найден':metric.requests+' запросов за '+data.hours+' ч')));
+  const period=data.hours>=168?data.hours/24+' дн.':data.hours+' ч';
+  $('error-metrics').replaceChildren(...data.metrics.map(metric=>monitorCard('HTTP 5xx · '+metric.api_id,metric.errors_5xx==null?'Нет данных':metric.errors_5xx,metric.requests==null?'Счётчик запросов не найден':metric.requests+' запросов за '+period)));
   if(!data.metrics.length)$('error-metrics').append(monitorCard('HTTP 5xx','—','API Gateway не найден'));
   monitorOptions('error-group',data.groups.map(group=>({value:group.id,label:stackName(group.stack)+' · '+group.logical_id})),data.group?.id);
   $('error-note').textContent=data.scope+' · '+date(data.checked_at)+(monitorWarnings(data)?' · '+monitorWarnings(data):'');
