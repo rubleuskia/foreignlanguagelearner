@@ -24,6 +24,9 @@ RUN test -n "$MODEL_URL" && test -n "$MODEL_SHA256" \
 
 COPY backend /app/backend
 COPY tools/subtitle-aligner /app/tools/subtitle-aligner
+ARG SOURCE_REVISION
+LABEL io.fll.worker.contracts="alignment-input-v1,book-queue-v1" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}"
 ENV PYTHONPATH=/app MODEL_DIR=/opt/models PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER 65532:65532
 ENTRYPOINT ["python", "tools/subtitle-aligner/worker/worker.py"]

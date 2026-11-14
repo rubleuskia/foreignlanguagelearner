@@ -33,12 +33,21 @@ def main():
     run = lambda argv, **kwargs: subprocess.run(argv, check=True, cwd=root, **kwargs)
     tag = 'build-' + uuid.uuid4().hex
     local = 'fll-alignment-worker:' + tag
+    revision = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    dirty = bool(run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout.strip())
+    if args.publish and dirty: parser.error('Publish from a clean checkout so the image revision identifies its source')
     run(['docker', 'build', '--platform', 'linux/amd64', '-f', 'tools/subtitle-aligner/worker/Dockerfile',
          '--build-arg', 'PYTHON_BASE_IMAGE=' + args.base_image, '--build-arg', 'FFMPEG_VERSION=' + args.ffmpeg_version,
          '--build-arg', 'MODEL_URL=' + args.model_url, '--build-arg', 'MODEL_SHA256=' + args.model_sha256,
+         '--build-arg', 'SOURCE_REVISION=' + revision,
          '-t', local, '.'])
-    report = {'source_revision': run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip(),
-              'dirty_source': bool(run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout.strip()),
+    smoke = run(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'python', local,
+                 'tools/subtitle-aligner/worker/image_contract.py'], capture_output=True, text=True)
+    contracts = json.loads(smoke.stdout)
+    if contracts != {'schema_version': 1, 'contracts': ['alignment-input-v1', 'book-queue-v1']}:
+        raise RuntimeError('Worker image did not pass the offline contract check')
+    report = {'source_revision': revision, 'worker_contracts': contracts['contracts'],
+              'dirty_source': dirty,
               'base_image': args.base_image, 'ffmpeg_version': args.ffmpeg_version,
               'model_sha256': args.model_sha256, 'local_image': local, 'region': 'eu-north-1'}
     if args.publish:
