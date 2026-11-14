@@ -2,6 +2,29 @@ import XCTest
 @testable import ForeignLanguageLearner
 
 final class OpenAIContextAnalysisProviderTests: XCTestCase {
+    func testTranslationOnlySendsEmptyWordListAndAcceptsNoBreakdown() async throws {
+        let client = ScriptedHTTPClient([.success(try successResponse(direct: "Перевод", words: []))])
+        let provider = OpenAIContextAnalysisProvider(apiKey: "test", model: .mini,
+            prompt: "Explain every word.", client: client)
+        var input = request()
+        input.translationOnly = true
+        input.execution = .init(mode: .personalKey, model: .mini)
+        let reduced = try ContextAnalysisRequestBuilder.reducing(input)
+        XCTAssertTrue(reduced.translationOnly)
+        XCTAssertEqual(reduced.execution, input.execution)
+        let payload = CloudTranslationPayload(input)
+        XCTAssertEqual(payload.wordsToExplain, [])
+        try payload.validate(kind: "context")
+        let result = try await provider.analyze(input)
+        XCTAssertEqual(result.directTranslation, "Перевод")
+        XCTAssertEqual(result.contextExplanation, "")
+        let requests = await client.requests
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
+        let encodedInput = try XCTUnwrap((body["input"] as? String)?.data(using: .utf8))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedInput) as? [String: Any])
+        XCTAssertEqual(object["words_to_explain"] as? [String], [])
+        XCTAssertFalse((body["instructions"] as? String ?? "").contains("Explain every word."))
+    }
     func testNewModelsSendSelectedReasoningAndAllowReasoningBudget() async throws {
         for model in [OpenAITranslationModel.terra, .sol] {
             let client = ScriptedHTTPClient([.success(try successResponse())])

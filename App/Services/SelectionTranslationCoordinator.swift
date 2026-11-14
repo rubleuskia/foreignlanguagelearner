@@ -12,6 +12,15 @@ enum SelectionTranslationStatus: Equatable {
 
 @MainActor @Observable
 final class SelectionTranslationCoordinator {
+    init(preview: SelectionTranslationPreview) {
+        self.preview = preview
+        if let translation = preview.cachedTranslation {
+            selectedTranslation = translation
+            contextExplanation = ""
+            sourceSentence = preview.selectedText
+            status = .ready
+        }
+    }
     struct RequestSnapshot: Sendable {
         let token: UUID
         let previewID: UUID
@@ -89,9 +98,6 @@ final class SelectionTranslationCoordinator {
         Task { await DiagnosticLog.shared.record(.init(event: "selection_translation_failed", error: code)) }
     }
 
-    init(preview: SelectionTranslationPreview) {
-        self.preview = preview
-    }
 
     func start(service: any ContextAnalysisServing) {
         guard request == nil, status == .idle else { return }
@@ -228,6 +234,7 @@ final class SelectionTranslationCache {
             let previous = last.preview
             if (last.execution == nil || last.execution == .current),
                previous.selectedText == preview.selectedText,
+               previous.cachedTranslation == preview.cachedTranslation,
                previous.context == preview.context,
                previous.sourceItemID == preview.sourceItemID,
                previous.sourceLanguageCode == preview.sourceLanguageCode,

@@ -4,6 +4,7 @@ import UIKit
 enum TranscriptSelectionAction {
     case addToDictionary
     case translateInContext
+    case showSavedTranslation
 }
 
 enum TranscriptFollowLayout {
@@ -52,6 +53,9 @@ struct TranscriptTextView: UIViewRepresentable {
     var wordStyleLanguage: String = ""
     var initialReadingOffset: Int? = nil
     var onReadingOffsetChanged: ((Int) -> Void)? = nil
+    var translatedSentences: [TranslatedBookSentence] = []
+    var autoTranslation: BookAutoTranslationCoordinator? = nil
+    var onPageVisible: ((NSRange, Bool) -> Void)? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
 
     static func makeTextView(frame: CGRect = .zero) -> LayoutAwareTextView {
@@ -93,6 +97,11 @@ struct TranscriptTextView: UIViewRepresentable {
         view.textContainer.widthTracksTextView = true
         view.accessibilityIdentifier = "reader.transcript"
         view.delegate = coordinator
+        let tap = UITapGestureRecognizer(target: coordinator, action: #selector(Coordinator.openSentence(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = coordinator
+        view.addGestureRecognizer(tap)
+        view.sentenceTap = tap
         coordinator.apply(to: view)
         view.didLayout = { [weak view, weak coordinator] in
             guard let view, let coordinator else { return }
@@ -116,6 +125,8 @@ struct TranscriptTextView: UIViewRepresentable {
     }
 
     final class LayoutAwareTextView: UITextView {
+        var sentenceTap: UITapGestureRecognizer?
+        var hasExternalSelection: () -> Bool = { false }
         var isBookPage = false
         var didLayout: (() -> Void)?
         override func layoutSubviews() {
@@ -128,7 +139,7 @@ struct TranscriptTextView: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         struct DocumentIdentity: Equatable {
             let text: String
             let ranges: [NSRange]
@@ -205,6 +216,7 @@ struct TranscriptTextView: UIViewRepresentable {
                 documentIdentity = identity
                 pendingReadingOffset = parent.initialReadingOffset
             }
+            (view.layoutManager as? TranscriptLayoutManager)?.setTranslatedSentences(parent.translatedSentences.map(\.range))
 
             if parent.followGeneration != lastFollowGeneration {
                 isApplyingProgrammaticUpdate = true
@@ -220,6 +232,32 @@ struct TranscriptTextView: UIViewRepresentable {
             updateWordStyles(in: view)
             updateHighlight(in: view)
             view.setNeedsLayout()
+        }
+
+        @objc func openSentence(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let view = gesture.view as? UITextView,
+                  view.selectedRange.length == 0 else { return }
+            let point = gesture.location(in: view)
+            let containerPoint = CGPoint(x: point.x - view.textContainerInset.left, y: point.y - view.textContainerInset.top)
+            let glyph = view.layoutManager.glyphIndex(for: containerPoint, in: view.textContainer)
+            guard glyph < view.layoutManager.numberOfGlyphs else { return }
+            let rect = view.layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: view.textContainer)
+            guard rect.insetBy(dx: -3, dy: -3).contains(containerPoint) else { return }
+            let offset = view.layoutManager.characterIndexForGlyph(at: glyph)
+            guard let sentence = parent.translatedSentences.first(where: { NSLocationInRange(offset, $0.range) }) else { return }
+            parent.onSelectionBegan()
+            let segment = parent.document.ranges.firstIndex { NSIntersectionRange($0, sentence.range).length > 0 }
+            parent.handleSelection(.showSavedTranslation, sentence.text, sentence.range, segment,
+                                   Self.context(in: parent.document.text, selection: sentence.range))
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let view = gestureRecognizer.view as? UITextView else { return false }
+            return view.selectedRange.length == 0 && !parent.translatedSentences.isEmpty
+                && (view as? LayoutAwareTextView)?.hasExternalSelection() != true
         }
 
         func applyFollow(to view: UITextView) {

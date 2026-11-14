@@ -44,6 +44,29 @@ import SwiftData
         revision += 1
     }
 
+    /// Commit the cache, anchor and vocabulary together without completing a chapter/book.
+    func learnTranslated(_ forms: Set<String>, language: String, context: ModelContext,
+                         insertTranslation: () throws -> Void) throws {
+        guard ready else { throw ReadingVocabularyError.notReady }
+        let language = try VocabularyTokenizer.groupLanguage(language)
+        let delta = forms.subtracting(known[language] ?? [])
+        let blobs = try ReadingKnowledge.encode(delta)
+        try context.save() // Preserve unrelated playback/UI changes before our transaction.
+        do {
+            try insertTranslation()
+            ReadingKnowledge.insert(blobs, language: language, context: context)
+            try commitSave(context)
+        } catch {
+            context.rollback()
+            throw error
+        }
+        guard !delta.isEmpty else { return }
+        known[language, default: []].formUnion(delta)
+        pendingKnowledge[language, default: []].formUnion(delta)
+        revision += 1
+        summariesUpdating = true
+    }
+
     /// The app's main ModelContext is the sole writer. Preparation awaits only before mutations.
     /// Flush unrelated playback changes first, then save completion + vocabulary without suspension.
     func start(context: ModelContext) async {

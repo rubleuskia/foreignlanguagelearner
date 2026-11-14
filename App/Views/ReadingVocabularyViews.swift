@@ -124,6 +124,8 @@ struct VocabularyStatisticsView: View {
 struct VocabularyTranscriptView: View {
     @AppStorage("reader.font-scale") private var fontScale = 1.0
     @Environment(ReadingVocabularyStore.self) private var vocabulary
+    @Environment(\.modelContext) private var context
+    @Environment(\.contextAnalysisService) private var contextAnalysisService
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     let document: TranscriptDocument
     let language: String
@@ -134,6 +136,9 @@ struct VocabularyTranscriptView: View {
     var onFollowAudio: (() -> Void)? = nil
     var initialReadingOffset: Int? = nil
     var onReadingOffsetChanged: ((Int) -> Void)? = nil
+    var item: LearningItem? = nil
+    var sourceScope = "main"
+    var autoTranslation: BookAutoTranslationCoordinator? = nil
     let handleSelection: (TranscriptSelectionAction, String, NSRange, Int?, SelectionContext?) -> Void
     @State private var textIndex: VocabularyTextIndex?
     @State private var indexedText: String?
@@ -151,11 +156,27 @@ struct VocabularyTranscriptView: View {
                                vocabularyIndex: indexedText == document.text && enabled && vocabulary.ready ? textIndex : nil,
                                knownForms: vocabulary.forms(for: language), wordStyleLanguage: language,
                                initialReadingOffset: initialReadingOffset, onReadingOffsetChanged: onReadingOffsetChanged,
+                               translatedSentences: autoTranslation?.translations ?? [],
+                               autoTranslation: autoTranslation,
+                               onPageVisible: { range, newVisit in
+                                   if let item {
+                                       autoTranslation?.pageVisible(range, document: document, item: item, scope: sourceScope,
+                                           vocabulary: vocabulary, context: context, service: contextAnalysisService, newVisit: newVisit)
+                                   }
+                               },
                                handleSelection: handleSelection), onFollowAudio: onFollowAudio)
-                .id(document.text)
+                .id(ReaderSourceIdentity(text: document.text, scope: sourceScope, language: language))
         }
+        .onChange(of: vocabulary.revision) { _, _ in autoTranslation?.refresh() }
         .task(id: document.text) {
             let text = document.text
+            if let item {
+                autoTranslation?.pageVisible(NSRange(location: 0, length: 0), document: document,
+                    item: item, scope: sourceScope, vocabulary: vocabulary, context: context, service: contextAnalysisService)
+                if UserDefaults.standard.string(forKey: "reader.text-layout") == ReaderTextLayout.vertical.rawValue {
+                    autoTranslation?.leavePages()
+                }
+            }
             error = nil
             let task = Task.detached(priority: .userInitiated) { try VocabularyTextIndex.load(text: text) }
             do {
@@ -166,6 +187,12 @@ struct VocabularyTranscriptView: View {
             catch { self.error = "Could not count words: \(error.localizedDescription)" }
         }
     }
+}
+
+private struct ReaderSourceIdentity: Hashable {
+    let text: String
+    let scope: String
+    let language: String
 }
 
 struct BookVocabularyBadge: View {

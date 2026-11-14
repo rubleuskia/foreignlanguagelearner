@@ -5,6 +5,7 @@ struct BookResourceMenu: View {
     var beforeUpdate: () -> Void = {}
     var onUpdatePhraseAudio: (() -> Void)? = nil
     var isUpdatingPhraseAudio = false
+    var showsReadingControls = true
     @AppStorage("reader.highlight-new-words") private var highlightsNewWords = true
     @AppStorage("reader.text-layout") private var textLayout = ReaderTextLayout.pages.rawValue
     @State private var action: BookResourceAction?
@@ -12,7 +13,7 @@ struct BookResourceMenu: View {
 
     var body: some View {
         Menu {
-            if item.hasText {
+            if item.hasText && showsReadingControls {
                 Picker("Text layout", selection: $textLayout) {
                     ForEach(ReaderTextLayout.allCases, id: \.rawValue) { layout in
                         Text(AppLanguage.text(layout.title)).tag(layout.rawValue)

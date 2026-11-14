@@ -105,9 +105,26 @@ The project also contains a standalone local subtitle-aligner utility. It extrac
 
 Book pages support selecting a phrase across page boundaries: long press, drag either selection handle to a horizontal edge and hold to turn pages. Translation, dictionary capture, copying and phrase audio use the resulting whole-chapter selection.
 
-The ⋯ menu offers a saved choice between book pages and vertical scrolling in both readers, retaining the reading position when switching.
+Local book readers expose the saved page/vertical layout and new-word highlighting
+controls in a compact top strip. The existing YouTube reader keeps these controls
+in its ⋯ menu. Switching layout retains the reading position.
 
-Reading controls automatically choose synchronized track text or full text. The ⋯ menu contains the saved New words highlighting setting; the reading canvas omits vocabulary statistics and the player omits the completion percentage to preserve text space.
+Reading controls automatically choose synchronized track text or full text. The
+reading canvas omits vocabulary statistics and the player omits completion
+percentage to preserve text space.
+
+Local book pages also offer per-book automatic sentence translation, off by default
+and remembered only for the app session. New-word sentences are translated without
+word breakdown, cached on the device and marked with clickable dotted underlines.
+Successful results atomically teach the sentence's new forms across books in that
+language; yellow remains until leaving the page. Manual page turns wait for pending
+translations or toggle-off; audio following continues. Saved translations reopen
+offline and can explicitly save the whole sentence to Dictionary without another
+request. Vertical layout disables automatic work while retaining saved underlines.
+Text anchors survive repagination; this local cache is outside portable library
+backups. Whole sentences support up to 1400 UTF-16 units (2800 for results); the
+extended cloud bound needs a backend release. See the
+[automatic translation specification](../docs/AUTO_TRANSLATION_REQUIREMENTS.md).
 
 Native page transitions retain neighboring pages throughout swipes. Timed audio phrases stay whole on one page; an oversized phrase has its own vertically scrollable page. Follow audio is available in the fixed bottom reader footer.
 

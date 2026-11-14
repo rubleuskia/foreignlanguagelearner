@@ -12,6 +12,7 @@ struct StableBookPager: UIViewControllerRepresentable {
         let follow: Int
         let following: Bool
         let underline: Bool
+        var translations: Int = 0
     }
 
     let count: Int
@@ -20,6 +21,7 @@ struct StableBookPager: UIViewControllerRepresentable {
     let makePage: (Int) -> TranscriptTextView
     let onManualStart: () -> Void
     let onSelection: (Int) -> Void
+    var allowManualTurn: () -> Bool = { true }
     var selectionDocument: TranscriptDocument? = nil
     var pageRanges: [NSRange] = []
     var selectionDisplayText = ""
@@ -36,6 +38,13 @@ struct StableBookPager: UIViewControllerRepresentable {
         controller.delegate = context.coordinator
         context.coordinator.controller = controller
         context.coordinator.showInitialPage()
+        // Let this recognizer consume blocked horizontal swipes before the pager moves.
+        let gate = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.blockedSwipe(_:)))
+        gate.delegate = context.coordinator
+        controller.view.addGestureRecognizer(gate)
+        for scroll in controller.view.subviews.compactMap({ $0 as? UIScrollView }) {
+            scroll.panGestureRecognizer.require(toFail: gate)
+        }
         if selectionDocument != nil {
             let selection = BookSelectionController(host: context.coordinator, view: controller.view)
             context.coordinator.selectionController = selection
@@ -81,7 +90,7 @@ struct StableBookPager: UIViewControllerRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
+    final class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIGestureRecognizerDelegate {
         var parent: StableBookPager
         weak var controller: UIPageViewController?
         private(set) var cached: [Int: Page] = [:]
@@ -91,6 +100,19 @@ struct StableBookPager: UIViewControllerRepresentable {
         var selectionController: BookSelectionController?
 
         init(_ parent: StableBookPager) { self.parent = parent }
+
+        @objc func blockedSwipe(_ gesture: UIPanGestureRecognizer) {}
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            !(touch.view is BookSelectionOverlay.Handle) && !(touch.view is UIControl)
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            guard abs(velocity.x) > abs(velocity.y) else { return false }
+            return !parent.allowManualTurn()
+        }
 
         func page(_ index: Int) -> Page? {
             guard (0..<parent.count).contains(index) else { return nil }
@@ -129,6 +151,7 @@ struct StableBookPager: UIViewControllerRepresentable {
 
         func turnForSelection(to index: Int, completion: @escaping () -> Void) {
             guard !transitioning, index != visible, let controller, let target = page(index) else { return }
+            guard parent.allowManualTurn() else { return }
             transitioning = true
             controller.setViewControllers([target], direction: index > visible ? .forward : .reverse,
                 animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] _ in

@@ -18,6 +18,15 @@ struct ContextAnalysisRequest: Equatable, Sendable {
     let targetLanguage: String
     let promptVersion: String
     var execution: TranslationRequestSettings? = nil
+    var translationOnly = false
+
+    var wordsToExplain: [String] {
+        translationOnly ? [] : ContextAnalysisWords.wordsToExplain(in: selectedText, language: sourceLanguage)
+    }
+
+    var maximumTranslationUTF16: Int {
+        translationOnly ? ContextAnalysisLimits.maximumSentenceTranslationUTF16 : ContextAnalysisLimits.maximumDirectTranslationUTF16
+    }
 }
 
 struct ContextualPhraseResult: Equatable, Sendable {
@@ -162,6 +171,8 @@ extension ContextAnalysisError {
 
 enum ContextAnalysisLimits {
     static let maximumSelectionUTF16 = 256
+    static let maximumSentenceUTF16 = 1_400
+    static let maximumSentenceTranslationUTF16 = 2_800
     static let maximumContextUTF16 = 1_400
     static let retryContextUTF16 = 700
     static let maximumDirectTranslationUTF16 = 512

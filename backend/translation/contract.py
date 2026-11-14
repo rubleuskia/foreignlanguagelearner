@@ -60,7 +60,8 @@ def validate_input(kind, value):
     inference_settings(value)
     if type(value['schema_version']) is not int or value['schema_version'] != 1:
         raise CloudError('UNSUPPORTED_SCHEMA')
-    selected = text(value['selected_text'], 256)
+    phrase_only = kind == 'context' and value.get('words_to_explain') == []
+    selected = text(value['selected_text'], 1400 if phrase_only else 256)
     context = text(value['context'], 1400)
     location, length = value['selection_location_utf16'], value['selection_length_utf16']
     if type(location) is not int or type(length) is not int or location < 0 or length <= 0 or length != units(selected):
@@ -107,7 +108,7 @@ def validate_output(kind, value, request):
         else:
             if set(value) != {'phrase_translation', 'word_explanations'}:
                 raise CloudError('INVALID_OUTPUT')
-            text(value['phrase_translation'], 512)
+            text(value['phrase_translation'], 2800 if request.get('words_to_explain') == [] else 512)
             rows = value['word_explanations']
             expected = request['words_to_explain']
             if not isinstance(rows, list) or len(rows) != len(expected):

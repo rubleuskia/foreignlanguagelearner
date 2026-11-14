@@ -27,7 +27,7 @@ struct SelectionTranslationView: View {
                     }
                 }
                 Section("Audio") { audioContent }
-                Section("Context explanation") {
+                Section(preview.cachedTranslation == nil ? "Context explanation" : "Translation") {
                     if let settings = coordinator.execution { TranslationRequestRouteView(settings: settings) }
                     analysisContent
                 }
@@ -44,7 +44,7 @@ struct SelectionTranslationView: View {
                     .accessibilityIdentifier("preview.add-to-dictionary")
                     if coordinator.isSaving { Text("Translating before saving…").foregroundStyle(.secondary) }
                 }
-                if let sentence = coordinator.sourceSentence {
+                if preview.cachedTranslation == nil, let sentence = coordinator.sourceSentence {
                     Section("Source sentence") {
                         CopyableContentRow(value: sentence, label: "Copy source sentence",
                                            identifier: "preview.copy-source-sentence") {
