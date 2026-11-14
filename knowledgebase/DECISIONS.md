@@ -1,3 +1,20 @@
+## Cloud Control diagnostics and explicit manual API calls (2026-11-14)
+
+Keep diagnostics in the existing loopback Cloud Control server. Discover allowed resources from
+the selected project's CloudFormation stacks, plus the retained library/CDK stacks; expose bounded
+read pages with collection times, partial coverage and access failures. Cache Cost Explorer and
+keep its project-wide AWS costs separate from plan credits and direct OpenAI spending. Derive
+alignment metrics from retained records without treating missing durations/history as zero.
+
+Serve pinned Swagger UI locally and relay explicit manual requests to the selected deployed API
+to avoid changing production CORS. Do not persist bearer authorization or retry submissions.
+Summarize actual prepared/current template changes alongside the full CDK diff and preserve
+the existing verified-release/deploy authorization flow. Mark stale plans invalid and distinguish
+candidate metadata from actual prepared template changes. Cache reads per configuration and
+show denied/partial data explicitly. SDK/HTTP tests and a clearly labelled offline browser fixture
+cover these boundaries; see docs/CLOUD_CONTROL_OBSERVABILITY.md. No automatic deployment or IAM
+expansion follows diagnostics.
+
 ## 2026-11-13 — Curated library identity and metadata
 
 Use the existing catalog `id` as a permanent source identity, stored separately from the local book UUID and archive SHA-256. Source directory names must remain stable on republishing. Check this identity both in the catalog UI and at import commit. Migrate old imports only on exact normalized-text/ordered-track matches, never by title; preserve existing duplicate copies and all reading data. Deletion removes the local association and allows a fresh import. Library backup carries the optional source ID and remains compatible with old documents.

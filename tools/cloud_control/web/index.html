@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="control-token" content="{{CONTROL_TOKEN}}">
   <title>Cloud Control · FLL</title>
-  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script><script src="/monitor.js" defer></script>
 </head>
 <body>
 <aside>
@@ -14,6 +14,11 @@
     <button data-tab="overview" aria-current="page"><span>◫</span> Обзор</button>
     <button data-tab="releases"><span>↗</span> Версии и деплой</button>
     <button data-tab="tests"><span>✓</span> Проверки API</button>
+    <a href="/swagger" target="_blank" rel="noopener"><span>↗</span> Swagger API</a>
+    <button data-tab="storage"><span>▤</span> Файлы S3</button>
+    <button data-tab="alignment"><span>≋</span> Alignment</button>
+    <button data-tab="costs"><span>$</span> Расходы AWS</button>
+    <button data-tab="errors"><span>!</span> Ошибки и логи</button>
     <button data-tab="settings"><span>⚙</span> Настройка</button>
   </nav>
   <div class="sidebar-note"><span class="dot"></span> Работает локально<p>AWS-профиль остаётся на этом компьютере.</p></div>
@@ -36,15 +41,33 @@
     </section>
     <section id="releases" class="page" hidden>
       <div class="page-heading"><div><div class="eyebrow">ВЕРСИИ</div><h1>Деплой и откат</h1><p>Выберите проверенный тег основной ветки. Сначала изучите план изменений.</p></div><button id="refresh-tags" class="secondary operation-button">↻ Получить теги</button></div>
+      <article class="panel"><div class="panel-heading"><h2>Что сейчас разворачивать</h2><button id="refresh-deployment" class="secondary">Обновить сводку</button></div><div id="deployment-summary" class="rows empty">Загрузите состояние AWS и доступные CI-теги.</div><div id="deployment-components" class="rows"></div><div id="deployment-changes"></div></article>
       <article class="panel"><div class="panel-heading"><h2>Готовность к публикации</h2><button id="check-readiness" class="secondary">Проверить готовность</button></div><p id="release-readiness" class="hint">Выберите этап в настройках. Нужен CI-тег, содержащий этот этап.</p><div id="readiness-cases" class="rows"></div></article>
       <article class="panel release-form"><div class="step">01</div><div class="grow"><h2>Подготовить версию</h2><p class="muted">Версия вида v0.0.1-backend.123 должна принадлежать main и иметь успешный CI. Подготовка не меняет ресурсы AWS.</p><div class="inline-form"><label class="grow">Версия бэкенда<select id="release-tag" aria-describedby="release-count"><option value="">Загрузка тегов…</option></select><span id="release-count" class="hint" role="status" aria-live="polite"></span></label><button id="prepare" class="primary operation-button">Подготовить план →</button></div><p class="hint">Для отката укажите старый тег. Код будет собран заново с текущей конфигурацией prod. Данные и резервные копии не откатываются.</p></div></article>
       <article class="panel"><div class="panel-heading"><h2>Подготовленные планы</h2><span class="muted">Действуют 1 час</span></div><div id="plans" class="rows empty">Подготовьте план, чтобы просмотреть изменения и запустить деплой.</div></article>
       <article class="panel"><div class="panel-heading"><h2>История операций</h2><span class="muted">Хранится на компьютере</span></div><div id="operations" class="rows empty">Операций ещё не было</div></article>
     </section>
     <section id="tests" class="page" hidden>
+      <p><a class="swagger-link" href="/swagger" target="_blank" rel="noopener">Открыть Swagger для ручных запросов ↗</a></p>
       <div class="page-heading"><div><div class="eyebrow">ДОСТУПНОСТЬ И КОНТРАКТЫ</div><h1>Проверки API прода</h1><p>Результаты реальных HTTPS-запросов к endpoint из CloudFormation.</p></div></div>
       <div class="two-columns"><article class="panel test-card"><span class="icon-block">✓</span><h2>Базовая проверка</h2><p>Защита маршрутов и профиль; для второго этапа — подписка и каталог. Без платных запросов к модели.</p><p class="hint">Без тестового access token проверяется только публичная граница доступа. Остальные проверки отмечаются как пропущенные.</p><button id="smoke-tests" class="primary operation-button">Запустить проверки</button></article><article class="panel test-card"><span class="icon-block amber">↗</span><h2>Сквозная проверка</h2><p>Контекстный перевод и объяснение слова, получение результата, проверка схемы и повтор ключа.</p><p class="hint">Две новые операции для пользователя проверки и повторы с теми же ключами. Расходует квоту и средства провайдера; после деплоя автоматически не запускается.</p><button id="inference-tests" class="secondary operation-button">Запустить с подтверждением</button></article></div>
       <article class="panel"><div class="panel-heading"><h2>Последний отчёт</h2><span id="test-report-time" class="muted">—</span></div><div id="test-report" class="rows empty">Проверки ещё не запускались</div></article>
+    </section>
+    <section id="storage" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ХРАНИЛИЩЕ</div><h1>Файлы в S3</h1><p>Bucket и файлы из выбранного проекта AWS. Только чтение.</p></div><button id="refresh-storage" class="secondary">Обновить</button></div>
+      <article class="panel"><div class="inline-form"><label class="grow">Bucket<select id="storage-bucket"></select></label><label class="grow">Префикс файлов<input id="storage-prefix" maxlength="1024" placeholder="Например, books/"></label><button id="storage-search" class="primary">Показать</button></div><p id="storage-note" class="hint"></p><div id="storage-summary" class="metric-inline"></div><div id="storage-files" class="table-scroll empty">Выберите bucket.</div><button id="storage-more" class="secondary" hidden>Показать ещё 100 файлов</button></article>
+    </section>
+    <section id="alignment" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ИСПОЛЬЗОВАНИЕ</div><h1>Запуски alignment</h1><p>Запросы и фактические запуски worker, сохранённые в DynamoDB.</p></div><div class="inline-form"><select id="alignment-days" aria-label="Период alignment"><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option></select><button id="refresh-alignment" class="secondary">Обновить</button></div></div>
+      <div id="alignment-metrics" class="cards"></div><article class="panel"><div class="panel-heading"><h2>Последние задачи</h2><span id="alignment-time" class="muted"></span></div><p id="alignment-note" class="hint"></p><div id="alignment-jobs" class="table-scroll empty">Нет данных из AWS.</div></article>
+    </section>
+    <section id="costs" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">СТОИМОСТЬ</div><h1>Расходы AWS</h1><p>Сводка за текущий месяц для выбранного проекта.</p></div><button id="refresh-costs" class="secondary">Получить расходы</button></div>
+      <div id="cost-metrics" class="cards"></div><article class="panel"><p id="cost-note" class="hint">Cost Explorer обновляет данные с задержкой. Запросы к нему кэшируются на 15 минут.</p><div class="two-columns"><div><h2>По сервисам</h2><div id="cost-services" class="rows empty">Нет данных.</div></div><div><h2>По дням</h2><div id="cost-daily" class="cost-chart empty">Нет данных.</div></div></div></article>
+    </section>
+    <section id="errors" class="page" hidden>
+      <div class="page-heading"><div><div class="eyebrow">ДИАГНОСТИКА</div><h1>Ошибки API и логи</h1><p>HTTP 5xx из CloudWatch и сообщения из журналов проекта.</p></div><div class="inline-form"><select id="error-hours" aria-label="Период ошибок"><option value="1">1 час</option><option value="24" selected>24 часа</option></select><button id="refresh-errors" class="secondary">Обновить</button></div></div>
+      <div id="error-metrics" class="cards"></div><article class="panel"><label>Журнал CloudWatch<select id="error-group"></select></label><p id="error-note" class="hint"></p><div id="error-events" class="rows empty">Нет данных.</div><button id="errors-more" class="secondary" hidden>Следующая страница логов</button></article>
     </section>
     <section id="settings" class="page" hidden>
       <div class="page-heading"><div><div class="eyebrow">ЛОКАЛЬНАЯ КОНФИГУРАЦИЯ</div><h1>Подключение к AWS</h1><p>Номер аккаунта и профиль доступа. Секретные ключи не вводятся в панель.</p></div></div>

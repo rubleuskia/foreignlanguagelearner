@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="control-token" content="{{CONTROL_TOKEN}}">
+  <title>Swagger · FLL API</title>
+  <link rel="stylesheet" href="/vendor/swagger-ui/swagger-ui.css"><link rel="stylesheet" href="/style.css">
+  <script src="/vendor/swagger-ui/swagger-ui-bundle.js" defer></script><script src="/swagger.js" defer></script>
+</head>
+<body class="swagger-page">
+  <div class="swagger-heading"><a href="/">← Cloud Control</a><h1>Swagger · ручные тесты API</h1>
+    <p>Только реально развёрнутые маршруты. Execute отправляет один запрос в AWS. Авторизация не сохраняется в браузере.</p>
+    <label><input id="saved-token" type="checkbox" checked> Использовать access token из настроенного файла, если Authorize пуст</label>
+    <p id="swagger-error" role="status"></p>
+  </div>
+  <div id="swagger-ui"></div>
+</body>
+</html>

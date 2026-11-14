@@ -9,9 +9,13 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 from .aws import AWS, clean_error
 from .config import Configuration, ControlError
 from .jobs import Jobs
+from .monitoring import Monitoring, stamp
+from .config import digest
+from . import openapi, deployment
 
 STATIC = Path(__file__).parent / 'web'
 
@@ -24,6 +28,59 @@ class Application:
         self.status_lock = threading.Lock()
         self.cached_status = None
         self.status_at = 0
+        self.read_cache, self.read_locks = {}, {}
+        self.read_lock = threading.Lock()
+
+    def cached(self, name, config, call, ttl=30):
+        key = (digest(config), name)
+        with self.read_lock:
+            lock = self.read_locks.setdefault(key, threading.Lock())
+        with lock:
+            previous = self.read_cache.get(key)
+            failed = previous and isinstance(previous[1], dict) and previous[1].get('available') is False
+            effective_ttl = min(ttl, 15) if failed else ttl
+            if previous and time.monotonic() - previous[0] < effective_ttl: return previous[1]
+            value = call()
+            with self.read_lock:
+                if len(self.read_cache) >= 64: self.read_cache.pop(next(iter(self.read_cache)))
+                self.read_cache[key] = (time.monotonic(), value)
+            return value
+
+    def discovery(self, config):
+        return self.cached('discovery', config, lambda: Monitoring(AWS(config)).discover())
+
+    def tags(self, jobs=None):
+        jobs = self.jobs.list() if jobs is None else jobs
+        refreshed = next((j['id'] for j in jobs if j.get('action') == 'refresh' and j.get('state') == 'passed'), '')
+        return self.cached('release-tags:' + refreshed, {}, lambda: {'tags': self.jobs.releases.list()})['tags']
+
+    def read(self, kind, params):
+        config = self.configuration.load()
+        def collect():
+            try:
+                aws = AWS(config)
+                if kind == 'costs':
+                    aws.identity()
+                    result = Monitoring(aws).costs()
+                else:
+                    discovery = self.discovery(config)
+                    monitor = Monitoring(aws, discovery)
+                    if kind == 'storage': result = monitor.storage(**params)
+                    elif kind == 'alignment': result = monitor.alignment(**params)
+                    elif kind == 'errors': result = monitor.errors(**params)
+                    elif kind == 'deployment': result = deployment.summary(self.jobs.releases, config, discovery, self.jobs.list(), candidates=self.tags(), **params)
+                    else: raise ControlError('Неизвестный раздел диагностики.')
+                return {'available': True, **result}
+            except Exception as error:
+                return {'available': False, 'checked_at': stamp(), 'error': str(error) if isinstance(error, ControlError)
+                        else 'Данные недоступны: ' + clean_error(error) + '. Проверьте доступ профиля к этому сервису.'}
+        return self.cached(kind + ':' + json.dumps(params, sort_keys=True), config, collect, 900 if kind == 'costs' else 15)
+
+    def api_description(self):
+        config = self.configuration.load()
+        discovery = self.discovery(config)
+        routes = self.cached('api-routes', config, lambda: Monitoring(AWS(config), discovery).routes())
+        return config, discovery, routes
 
     def status(self):
         with self.status_lock:
@@ -43,13 +100,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args): pass  # No tokens or request bodies in HTTP logs.
 
-    def send(self, status, body, content_type='application/json; charset=utf-8'):
+    def send(self, status, body, content_type='application/json; charset=utf-8', *, swagger=False):
         if not isinstance(body, bytes): body = json.dumps(body, ensure_ascii=False).encode()
         self.send_response(status)
         for key, value in {'Content-Type': content_type, 'Content-Length': str(len(body)),
             'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
             'Referrer-Policy': 'no-referrer', 'Cross-Origin-Resource-Policy': 'same-origin',
-            'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"}.items():
+            'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'" + (" 'unsafe-inline'" if swagger else '') + "; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"}.items():
             self.send_header(key, value)
         self.end_headers(); self.wfile.write(body)
 
@@ -60,18 +117,35 @@ class Handler(BaseHTTPRequestHandler):
         if not self.host_allowed(): return self.send(403, {'error': 'Недопустимый адрес панели.'})
         app = self.server.app
         try:
-            if self.path == '/':
-                page = (STATIC / 'index.html').read_text().replace('{{CONTROL_TOKEN}}', app.token)
-                return self.send(200, page.encode(), 'text/html; charset=utf-8')
-            if self.path in {'/app.js', '/style.css'}:
+            if self.path in {'/', '/swagger'}:
+                page = (STATIC / ('swagger.html' if self.path == '/swagger' else 'index.html')).read_text().replace('{{CONTROL_TOKEN}}', app.token)
+                return self.send(200, page.encode(), 'text/html; charset=utf-8', swagger=self.path == '/swagger')
+            if self.path in {'/app.js', '/monitor.js', '/swagger.js', '/style.css',
+                             '/vendor/swagger-ui/swagger-ui-bundle.js', '/vendor/swagger-ui/swagger-ui.css'}:
                 kind = 'text/javascript' if self.path.endswith('.js') else 'text/css'
                 return self.send(200, (STATIC / self.path[1:]).read_bytes(), kind + '; charset=utf-8')
+            parsed = urlsplit(self.path)
+            if parsed.path == '/api/openapi':
+                _, discovery, routes = app.api_description()
+                return self.send(200, openapi.specification(discovery, routes))
+            reads = {'/api/storage': ('storage', {'bucket', 'cursor', 'prefix'}),
+                     '/api/costs': ('costs', set()), '/api/alignment-usage': ('alignment', {'days'}),
+                     '/api/errors': ('errors', {'group', 'cursor', 'hours'}), '/api/deployment-summary': ('deployment', {'tag'})}
+            if parsed.path in reads:
+                if not secrets.compare_digest(self.headers.get('X-Control-Token', ''), app.token):
+                    return self.send(403, {'error': 'Откройте раздел из локальной панели.'})
+                kind, allowed = reads[parsed.path]
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                if set(query) - allowed or any(len(v) != 1 for v in query.values()): raise ControlError('Некорректные параметры раздела.')
+                params = {k: int(v[0]) if k in {'days', 'hours'} else v[0] for k, v in query.items()}
+                return self.send(200, app.read(kind, params))
             if self.path == '/api/status': return self.send(200, app.status())
             if self.path == '/api/readiness':
                 return self.send(200, AWS(app.configuration.load()).readiness())
             if self.path == '/api/state':
-                return self.send(200, {'jobs': app.jobs.list(), 'active': app.jobs.active,
-                    'tags': app.jobs.releases.list(), 'configuration': app.configuration.public()})
+                jobs = app.jobs.list()
+                return self.send(200, {'jobs': jobs, 'active': app.jobs.active,
+                    'tags': app.tags(jobs), 'configuration': app.configuration.public()})
             if self.path == '/api/profiles':
                 try:
                     import boto3
@@ -80,7 +154,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {'profiles': profiles})
             return self.send(404, {'error': 'Не найдено.'})
         except Exception as error:
-            self.send(400, {'error': str(error) if isinstance(error, ControlError) else 'Не удалось прочитать состояние панели.'})
+            self.send(400, {'error': str(error) if isinstance(error, ControlError) else
+                'Не удалось прочитать состояние панели: ' + clean_error(error) + '. Проверьте профиль AWS.'})
 
     def do_POST(self):
         app = self.server.app
@@ -100,11 +175,16 @@ class Handler(BaseHTTPRequestHandler):
                     app.configuration.save(value); app.status_at = 0
                 finally: app.jobs.lock.release()
                 return self.send(200, {'saved': True})
+            if self.path == '/api/manual-request':
+                config, discovery, routes = app.api_description()
+                status, result = openapi.manual(config, discovery, routes, value)
+                return self.send(status, result)
             actions = {'/api/refresh': 'refresh', '/api/prepare': 'prepare', '/api/deploy': 'deploy', '/api/tests': 'tests'}
             if self.path not in actions: return self.send(404, {'error': 'Не найдено.'})
             return self.send(202, app.jobs.start(actions[self.path], value))
         except Exception as error:
-            self.send(400, {'error': str(error) if isinstance(error, ControlError) else 'Операция не принята.'})
+            message = 'Ручной запрос не завершён: ' + clean_error(error) + '. Исход неизвестен; проверьте состояние через GET. Автоповтора нет.' if self.path == '/api/manual-request' else 'Операция не принята.'
+            self.send(400, {'error': str(error) if isinstance(error, ControlError) else message})
 
 
 def main():

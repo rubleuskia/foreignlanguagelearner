@@ -18,6 +18,7 @@ from . import health
 from .aws import AWS, clean_error, deployable
 from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks, is_operator, validate_benchmark
 from .releases import Releases
+from .deployment import prepared_changes
 
 COMMAND_OUTPUT_LIMIT = 500_000
 OPERATION_LOG_LIMIT = 750_000
@@ -252,7 +253,10 @@ class Jobs:
                 raise ControlError('План содержит незащищённый API-маршрут.')
         self.execute(key, [cdk, '--app', str(area / 'assembly'), 'diff', '--all', '--no-change-set',
                           '--profile', config['profile']], cwd=infra, env=env, require_full_output=True)
+        changes = prepared_changes(aws, area, stacks, snapshot)
+        atomic_json(area / 'resource-changes.json', changes)
         self.update(key, state='ready', prepared_at=time.time(), artifact_hash=tree_digest(area),
+            resource_changes=changes,
             config_hash=digest(config), baseline=snapshot, context=context,
             account_id=config['account_id'], region=config['region'])
 

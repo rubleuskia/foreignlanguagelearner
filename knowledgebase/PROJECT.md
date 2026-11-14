@@ -1,5 +1,13 @@
 # Foreign Language Learner
 
+## Local Cloud Control diagnostics
+
+The loopback dashboard provides Swagger/manual API tests, S3 file sizes, AWS costs/credits,
+retained alignment usage/timing, 5xx/logs and actual prepared-deployment resource changes.
+Diagnostics use the configured project's existing permissions and disclose incomplete data;
+manual API submissions and deployment remain explicit operator actions. It supports the merged
+queue-based book workflow. See [usage and coverage](../docs/CLOUD_CONTROL_OBSERVABILITY.md).
+
 ## Cloud book alignment (next operator release)
 
 Library → + → Cloud alignment accepts MP3/M4A/WAV or an audio ZIP plus matching UTF-8 TXT/EPUB.
