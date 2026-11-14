@@ -1,3 +1,41 @@
+## 2026-11-14 — Automatic sentence translation on book pages
+
+- Add a compact top strip to local book readers with session-only per-book auto
+  translation, new-word highlighting and layout controls. Translate complete
+  sentences containing the page-entry snapshot of new forms, without word analysis.
+- Persist shared case-insensitive, language-paired results and source-text anchors
+  separately from DictionaryEntry. Dotted clickable underlines survive reopening
+  and repagination; saved translations remain available in vertical layout/offline.
+  Whole-sentence dictionary insertion is explicit and reuses the saved translation.
+- Save translation, anchor and studied forms atomically. Keep yellow highlights
+  through the page visit; block manual arrows/swipes while that page has pending
+  work, allow audio following, and cancel unfinished work with late-response fencing
+  when disabled. Errors release the page lock and support explicit retry.
+- Extend only phrase-only requests to 1400/2800 UTF-16 input/output units. The
+  cloud contract change needs a normal backend release; no infrastructure changes,
+  deployment or live model inference are included. Portable library backups retain
+  studied vocabulary but do not export this local translation cache/anchors.
+- Update DECISIONS.md, PROJECT.md and the agreed specification for the implemented
+  workflow and boundaries. Project purpose is unchanged.
+- Validation: 308 iOS unit tests and 13 iPhone Simulator UI scenarios pass, as does
+  unsigned device Release. The shared translation/operator backend suite passes
+  45 tests with two optional local-DynamoDB concurrency skips. UI/provider tests
+  use fixtures; no live paid inference, device signing or deployment was performed.
+
+## 2026-11-13 — Agree paged-reader automatic translation requirements
+
+- Add [the agreed feature specification](../docs/AUTO_TRANSLATION_REQUIREMENTS.md)
+  for sentence-only automatic translation on pages with new words, a compact top
+  control strip, session-only per-book opt-in, persistent shared results/text
+  anchors, optional whole-sentence dictionary capture and delayed yellow-highlight removal.
+- Specify blocking manual page turns while translations are pending, toggle-off
+  cancellation with late-response rejection, continuing audio following, error
+  recovery, vertical-layout boundaries and acceptance scenarios.
+- Record planned product/data-lifecycle decisions in DECISIONS.md. This is a
+  documentation-only agreement, not an implemented feature. Project purpose,
+  currently supported workflows and major boundaries are unchanged; PROJECT.md
+  needs no update until implementation.
+
 ## 2026-11-13 — S3 library identity and presentation
 
 - S3 book library now uses the main library's cover-led dark rows, shows author/language/chapter count/archive size, and offers sourced author biographies for the initial nine books. Reading progress, duration and word statistics are omitted from this catalog.

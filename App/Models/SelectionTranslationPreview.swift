@@ -13,6 +13,7 @@ struct SelectionTranslationPreview: Identifiable, Equatable, Sendable {
     let sourceTrackID: String?
     let segmentIndex: Int?
     let saveOnOpen: Bool
+    var cachedTranslation: String? = nil
 
     init(id: UUID = UUID(), selectedText: String, sourceLanguageCode: String,
          targetLanguageCode: String = "ru", context: SelectionContext?,

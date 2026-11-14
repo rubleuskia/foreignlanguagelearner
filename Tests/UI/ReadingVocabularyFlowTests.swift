@@ -1,6 +1,69 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testAutoTranslationBlocksButtonsAndSwipeUntilDisabled() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture",
+                               "--auto-translation-fixture", "--slow-auto-translation-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
+        openReader(app)
+        let number = app.staticTexts["reader.page-number"]
+        XCTAssertTrue(number.waitForExistence(timeout: 10))
+        let firstPage = number.label
+        let toggle = app.switches["reader.auto-translate"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        app.buttons["Next page"].tap()
+        let alert = app.alerts["Translations in progress"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertEqual(number.label, firstPage)
+        alert.buttons["OK"].tap()
+        app.textViews["reader.transcript"].firstMatch.swipeLeft()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertEqual(number.label, firstPage)
+        alert.buttons["OK"].tap()
+        toggle.tap()
+        app.buttons["Next page"].tap()
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in number.label != firstPage }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+    }
+
+    @MainActor func testAutoTranslationOpensSavedSentenceAndAddsItToDictionary() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture", "--auto-translation-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
+        openReader(app)
+        XCTAssertTrue(app.staticTexts["reader.page-number"].waitForExistence(timeout: 10))
+        app.switches["reader.auto-translate"].tap()
+        XCTAssertEqual(app.switches["reader.auto-translate"].value as? String, "1")
+        // Wait for the first saved anchor; tap through the text's normal hit-testing path.
+        let text = app.textViews["reader.transcript"].firstMatch
+        let point = text.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 36, dy: 37))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            text.value as? String != nil && !app.progressIndicators["Translating page…"].exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Auto translation page"; screenshot.lifetime = .keepAlways
+        add(screenshot)
+        point.tap()
+        let save = app.buttons["preview.add-to-dictionary"]
+        XCTAssertTrue(app.staticTexts["Overall translation"].waitForExistence(timeout: 5))
+        for _ in 0..<4 where !save.exists || !save.isHittable { app.swipeUp() }
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        XCTAssertTrue(app.buttons["Added to Dictionary"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        // Long press still selects instead of opening the saved result.
+        point.press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["Translate in Context"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testTextLayoutSwitchKeepsReadingPlaceAndSavedChoice() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -9,7 +72,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
         openReader(app)
         func choose(_ title: String) {
-            app.buttons["book.resources"].tap()
+            app.buttons["reader.text-layout"].tap()
             if app.buttons["Text layout"].exists { app.buttons["Text layout"].tap() }
             app.buttons[title].firstMatch.tap()
         }
@@ -31,7 +94,7 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         choose("Book pages")
     }
 
-    @MainActor func testCompactReaderMovesNewWordsIntoOverflowMenu() {
+    @MainActor func testCompactReaderShowsReadingControlsInTopStrip() {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--phrase-pages-fixture"]
         app.launch()
@@ -41,8 +104,9 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         XCTAssertFalse(app.segmentedControls["Reading mode"].exists)
         XCTAssertFalse(app.buttons["reader.vocabulary-details"].exists)
         XCTAssertFalse(app.switches["reader.new-words"].exists)
-        app.buttons["book.resources"].tap()
-        let toggle = app.descendants(matching: .any)["reader.new-words"].firstMatch
+        XCTAssertTrue(app.switches["reader.auto-translate"].exists)
+        XCTAssertTrue(app.buttons["reader.text-layout"].exists)
+        let toggle = app.buttons["reader.new-words"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.tap()
     }
@@ -200,13 +264,9 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.buttons["Next page"].tap()
         let second = try offset()
         XCTAssertEqual(second, first + 1)
-        app.buttons["book.resources"].tap()
-        app.descendants(matching: .any)["reader.new-words"].firstMatch.tap()
-        app.staticTexts["reader.page-number"].tap()
+        app.buttons["reader.new-words"].tap()
         XCTAssertEqual(try offset(), second)
-        app.buttons["book.resources"].tap()
-        app.descendants(matching: .any)["reader.new-words"].firstMatch.tap()
-        app.staticTexts["reader.page-number"].tap()
+        app.buttons["reader.new-words"].tap()
         XCTAssertEqual(try offset(), second, "Refreshing paint while paused must preserve the page")
         app.buttons["Previous page"].tap()
         XCTAssertEqual(try offset(), second - 1)
@@ -281,11 +341,9 @@ final class ReadingVocabularyFlowTests: XCTestCase {
         app.buttons["reader.actions"].tap()
         XCTAssertFalse(app.buttons["reader.complete-book"].isEnabled)
         app.textViews["reader.transcript"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.9)).tap()
-        app.buttons["book.resources"].tap()
-        let toggle = app.descendants(matching: .any)["reader.new-words"].firstMatch
+        let toggle = app.buttons["reader.new-words"]
         XCTAssertTrue(toggle.exists)
         toggle.tap()
-        app.staticTexts["reader.page-number"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(story.waitForExistence(timeout: 5))
         // The featured card disappears on completion; query the remaining row

@@ -32,6 +32,7 @@ struct BookReaderView: View {
     @State private var lastSavedPosition = 0.0
     @State private var followGeneration = 0
     @State private var translationCache = SelectionTranslationCache()
+    @State private var autoTranslation = BookAutoTranslationCoordinator()
     @State private var choosingWordTimings = false
     @State private var updatingWordTimings = false
     @State private var openedRevision = ""
@@ -59,9 +60,12 @@ struct BookReaderView: View {
         }
         .safeAreaInset(edge: .bottom) { playerBar }
         .safeAreaInset(edge: .top) {
-            OnboardingTip(step: showAudioTip ? .synchronization : .reading,
-                allowed: !compactPlayer && item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
-                .id(showAudioTip)
+            VStack(spacing: 0) {
+                if item.hasText { ReaderTranslationControls(coordinator: autoTranslation) }
+                OnboardingTip(step: showAudioTip ? .synchronization : .reading,
+                    allowed: !compactPlayer && item.hasText && !selecting && selectionPreview == nil && !updatingWordTimings)
+                    .id(showAudioTip)
+            }
         }
         .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.playback.player.timeControlStatus == .playing })
         .navigationTitle(item.title)
@@ -74,7 +78,7 @@ struct BookReaderView: View {
                     ReadingActionsMenu(item: item, chapterScope: activeTrack.map { .track($0.id) })
                     BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() },
                         onUpdatePhraseAudio: { choosingWordTimings = true },
-                        isUpdatingPhraseAudio: updatingWordTimings)
+                        isUpdatingPhraseAudio: updatingWordTimings, showsReadingControls: false)
                 }
             }
         }
@@ -85,6 +89,7 @@ struct BookReaderView: View {
             }
         }
         .onAppear {
+            autoTranslation.open(itemID: item.id)
             openedRevision = item.resourceRevision
             let initial = item.tracks.first(where: { $0.id == item.lastTrackID }) ?? item.tracks.first
             mode = initial?.alignmentStatus.hasTimedTranscript == true ? .track : .full
@@ -112,7 +117,7 @@ struct BookReaderView: View {
             if value && mode == .track { showAudioTip = true }
         }
         .onChange(of: scenePhase) { _, phase in if phase != .active { savePosition() } }
-        .onDisappear { savePosition(); playback.close() }
+        .onDisappear { savePosition(); playback.close(); autoTranslation.close() }
         .sheet(item: $chapterPicker) { snapshot in
             ChapterPickerView(snapshot: snapshot) { id in
                 guard item.tracks.contains(where: { $0.id == id }) else { return }
@@ -155,7 +160,9 @@ struct BookReaderView: View {
             },
                 onFollowAudio: { followGeneration += 1; following = true },
                 initialReadingOffset: mode == .full ? item.readingCharacterOffset : nil,
-                onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } }) { action, text, selectionRange, segment, selectionContext in
+                onReadingOffsetChanged: { if mode == .full { item.readingCharacterOffset = $0 } },
+                item: item, sourceScope: mode == .full ? "full" : "track:\(trackID ?? "")",
+                autoTranslation: autoTranslation) { action, text, selectionRange, segment, selectionContext in
                 guard revision == documentRevision, trackID == (mode == .track ? playback.activeTrackID : nil) else {
                     message = "The transcript changed. Select the text again."
                     return
@@ -170,6 +177,9 @@ struct BookReaderView: View {
                     segmentIndex: mode == .track ? segment : nil,
                     saveOnOpen: action == .addToDictionary
                 )
+                if action == .showSavedTranslation {
+                    selectionPreview?.cachedTranslation = autoTranslation.translation(at: selectionRange)?.translation
+                }
                 if audio != nil {
                     selectionPreview?.phraseAudioRange = PhraseAudioTiming.sentenceRange(
                         for: selectionRange, in: document, duration: activeTrack?.duration ?? 0)

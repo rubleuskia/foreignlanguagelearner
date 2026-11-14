@@ -10,10 +10,11 @@ struct ContextAnalysisRequestBuilder {
         let sourceLanguage: String
         let targetLanguage: String
         let promptVersion: String
+        let translationOnly: Bool
 
         init(requestID: UUID = UUID(), subject: ContextAnalysisSubject, revision: Int,
              expectedSelectedText: String, context: SelectionContext?, sourceLanguage: String,
-             targetLanguage: String, promptVersion: String) {
+             targetLanguage: String, promptVersion: String, translationOnly: Bool = false) {
             self.requestID = requestID
             self.subject = subject
             self.revision = revision
@@ -22,6 +23,7 @@ struct ContextAnalysisRequestBuilder {
             self.sourceLanguage = sourceLanguage
             self.targetLanguage = targetLanguage
             self.promptVersion = promptVersion
+            self.translationOnly = translationOnly
         }
     }
 
@@ -33,7 +35,8 @@ struct ContextAnalysisRequestBuilder {
         }
 
         let validated = try validatedSelection(in: context.text, range: context.selection)
-        guard validated.lengthUTF16 <= ContextAnalysisLimits.maximumSelectionUTF16 else {
+        let maximum = input.translationOnly ? ContextAnalysisLimits.maximumSentenceUTF16 : ContextAnalysisLimits.maximumSelectionUTF16
+        guard validated.lengthUTF16 <= maximum else {
             throw ContextAnalysisError.inputTooLarge
         }
         guard ContextAnalysisText.normalized(validated.selectedText) ==
@@ -57,7 +60,8 @@ struct ContextAnalysisRequestBuilder {
             contextWasReduced: fragment.wasReduced,
             sourceLanguage: input.sourceLanguage,
             targetLanguage: input.targetLanguage,
-            promptVersion: input.promptVersion
+            promptVersion: input.promptVersion,
+            translationOnly: input.translationOnly
         )
     }
 
@@ -71,8 +75,8 @@ struct ContextAnalysisRequestBuilder {
             throw ContextAnalysisError.invalidContext
         }
         let surroundingLength = request.contextFragment.utf16.count - request.selectionLengthUTF16
-        let requestedLimit = min(maximumLengthUTF16,
-                                 request.selectionLengthUTF16 + max(0, surroundingLength / 2))
+        let requestedLimit = max(request.selectionLengthUTF16, min(maximumLengthUTF16,
+                                 request.selectionLengthUTF16 + max(0, surroundingLength / 2)))
         let fragment = try fragment(text: request.contextFragment, selectionRange: validated.range,
                                     maximumLengthUTF16: requestedLimit)
         return ContextAnalysisRequest(
@@ -86,7 +90,9 @@ struct ContextAnalysisRequestBuilder {
             contextWasReduced: request.contextWasReduced || fragment.wasReduced,
             sourceLanguage: request.sourceLanguage,
             targetLanguage: request.targetLanguage,
-            promptVersion: request.promptVersion
+            promptVersion: request.promptVersion,
+            execution: request.execution,
+            translationOnly: request.translationOnly
         )
     }
 

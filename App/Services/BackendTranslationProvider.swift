@@ -25,7 +25,7 @@ struct CloudTranslationPayload: Encodable, Sendable {
         selectedText = request.selectedText; context = request.contextFragment
         selectionLocationUTF16 = request.selectionLocationUTF16; selectionLengthUTF16 = request.selectionLengthUTF16
         sourceLanguage = SourceLanguage.canonical(request.sourceLanguage); targetLanguage = request.targetLanguage
-        wordsToExplain = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage); lemma = nil
+        wordsToExplain = request.wordsToExplain; lemma = nil
     }
     init(_ input: WordExplanationInput, settings: TranslationRequestSettings? = nil) {
         let settings = settings ?? input.execution ?? .current
@@ -37,7 +37,8 @@ struct CloudTranslationPayload: Encodable, Sendable {
     func validate(kind: String) throws {
         guard SourceLanguage.supportedCodes.contains(sourceLanguage), targetLanguage == "ru" else { throw ContextAnalysisError.invalidLanguage }
         guard !selectedText.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
-              selectedText.utf16.count <= 256, !context.isEmpty, context.utf16.count <= 1400 else { throw ContextAnalysisError.inputTooLarge }
+              selectedText.utf16.count <= (kind == "context" && wordsToExplain?.isEmpty == true ? 1400 : 256),
+              !context.isEmpty, context.utf16.count <= 1400 else { throw ContextAnalysisError.inputTooLarge }
         guard selectionLocationUTF16 >= 0, selectionLengthUTF16 == selectedText.utf16.count,
               selectionLocationUTF16 <= context.utf16.count,
               selectionLengthUTF16 <= context.utf16.count - selectionLocationUTF16,
@@ -216,8 +217,8 @@ struct BackendContextAnalysisProvider: ContextAnalysisProvider {
             let response = try await client.run(kind: "context", payload: .init(request, settings: settings))
             guard response.schema_version == 1, response.kind == "context", let result = response.result,
                   let translation = result.phrase_translation, !translation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  translation.utf16.count <= 512, let rows = result.word_explanations else { throw ContextAnalysisError.invalidOutput }
-            let expected = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage)
+                  translation.utf16.count <= request.maximumTranslationUTF16, let rows = result.word_explanations else { throw ContextAnalysisError.invalidOutput }
+            let expected = request.wordsToExplain
             guard rows.map(\.source_word) == expected, rows.allSatisfy({ !$0.lemma.isEmpty && !$0.meaning.isEmpty }) else { throw ContextAnalysisError.invalidOutput }
             let lines = rows.map { "\($0.source_word) — \($0.lemma) — \($0.meaning)" }.joined(separator: "\n\n")
             guard lines.utf16.count <= 2000 else { throw ContextAnalysisError.invalidOutput }

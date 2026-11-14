@@ -1,3 +1,66 @@
+## Automatic sentence translation storage and lifecycle (2026-11-14)
+
+Implement the agreed book-page specification below in both local readers. Keep
+the per-book opt-in only in process memory, independent of the existing saved
+layout/highlighting preferences. Move those controls into a 44-point minimum top
+strip, keeping resource/synchronization actions in the overflow menu. YouTube
+retains its existing reader controls and does not start automatic translation.
+
+Use language-aware sentence tokenization over original text and snapshot new forms
+before enqueuing any sentence on page entry. Run one serial reader worker through
+the existing provider route with an empty word-explanation list. Sentence
+detection reflows timed cue breaks without changing original UTF-16
+offsets or submitted text, so one sentence can span cues and pages. Phrase-only
+requests accept the existing 1400-unit context bound and 2800-unit translations;
+ordinary contextual analysis keeps 256/512-unit bounds. Never truncate a sentence.
+The shared backend contract must be released before its extended bounds work
+through the cloud; admission/time/output-token policies remain server-controlled.
+
+Use separate SwiftData cache and anchor models. Cache keys hash the canonical
+language pair and case-folded submitted string without changing punctuation or
+whitespace. Anchors include local book identity, text scope, whole-document digest
+and UTF-16 range, so replacement text cannot inherit stale offsets. Save cache,
+anchor and studied vocabulary in one main-context transaction, then publish the
+knowledge revision. Keep a visit-specific set of highlighted forms until leaving.
+The cache/anchors are local persistent data and are not added to portable backups.
+
+Reject blocked manual swipes before the pager moves, and apply the same check to
+buttons/cross-page selection. Do not block audio following: queued jobs retain
+their own document identity. Turning off cancels the queue and changes its
+generation; late results cannot write. Retain committed translations independently
+of the dictionary and toggle. Shared TextKit drawing/hit testing also supports
+saved dotted underlines in vertical layout, where new automatic work is disabled.
+Long press remains selection; a normal tap opens a ready preview and an explicit
+save inserts the whole sentence without another request. No live deployment or
+provider request is required to verify the local lifecycle.
+
+## Planned automatic translation for book pages (2026-11-13)
+
+The agreed [requirements](../docs/AUTO_TRANSLATION_REQUIREMENTS.md) are a future
+feature specification, not a claim about current behavior. Opt in per book for
+the app session only, through a minimal-height top strip shared with new-word
+highlighting and layout controls. On visible-page entry, snapshot new word forms
+and translate every containing full sentence, including repeated words in other
+sentences. Request phrase translation only, without word explanations.
+
+Persist successful translations outside DictionaryEntry in a shared cache keyed
+by source language, target language and case-insensitive submitted text, retaining
+punctuation and whitespace. Persist source-text anchors separately from visual
+page numbers so dotted clickable underlines survive reopening and repagination.
+Dictionary insertion remains explicit and saves the whole sentence using the
+existing result. Studied forms use existing language-global vocabulary rules;
+retain the visit's yellow highlights until leaving the page, without marking the
+chapter/book complete.
+
+Block manual page turns with an explanatory popup while the current page has
+unfinished translations; audio following continues. Toggle-off cancels unfinished
+work and rejects its late responses, retaining already committed results and
+studied words. Errors do not confer studied status or hold a completed request's
+page lock. Disable automatic mode on vertical-layout entry; retain saved
+underlines there only if the same text-anchor mechanism can be reused without
+a separate implementation. No application or backend code changes accompany
+this documentation decision.
+
 ## 2026-11-13 — Curated library identity and metadata
 
 Use the existing catalog `id` as a permanent source identity, stored separately from the local book UUID and archive SHA-256. Source directory names must remain stable on republishing. Check this identity both in the catalog UI and at import commit. Migrate old imports only on exact normalized-text/ordered-track matches, never by title; preserve existing duplicate copies and all reading data. Deletion removes the local association and allows a fresh import. Library backup carries the optional source ID and remains compatible with old documents.
