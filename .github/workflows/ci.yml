@@ -59,10 +59,12 @@ jobs:
         run: |
           PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
-          python -m unittest tools.cloud_control.test_control scripts.test_alignment_benchmark -v
+          python -m unittest tools.cloud_control.test_control tools.cloud_control.test_observability scripts.test_alignment_benchmark -v
           python -m unittest discover -s Tests/CI -p 'test_*.py' -v
           python -m compileall -q backend tools/subtitle-aligner/worker tools/cloud_control
           node --check tools/cloud_control/web/app.js
+          node --check tools/cloud_control/web/monitor.js
+          node --check tools/cloud_control/web/swagger.js
           node --test Tests/YouTubeCapture.test.cjs
           bash -n scripts/cloud-control.sh scripts/tag-verified-main.sh
       - name: CDK type and infrastructure assertions

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="control-token"]').content;
-let state = {jobs:[],tags:[]}, selectedOperation = null, initialized = false, statusBusy = false;
+let state = {jobs:[],tags:[]}, selectedOperation = null, initialized = false, statusBusy = false, stateBusy = false;
 const labels = {queued:'В очереди',running:'Выполняется',ready:'Готов к деплою',consumed:'Использован',passed:'Пройдено',failed:'Ошибка',warning:'Требует внимания',interrupted:'Прервано',skipped:'Пропущено'};
 const actions = {refresh:'Обновление тегов',prepare:'Подготовка версии',deploy:'Деплой версии',tests:'Проверки API'};
 const color = s => ({passed:'good',ready:'good',failed:'bad',warning:'warn',interrupted:'warn',running:'busy',queued:'busy'}[s] || 'neutral');
@@ -10,7 +10,7 @@ function pill(s, text) { return element('span',text || labels[s] || s,'pill '+co
 function date(v) { return v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'; }
 function notice(text) { $('notice').textContent=text; $('notice').hidden=!text; }
 async function api(path, body) {
-  const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{},body:body ? JSON.stringify(body):undefined});
+  const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{'X-Control-Token':csrf},body:body ? JSON.stringify(body):undefined});
   const data=await response.json(); if(!response.ok)throw Error(data.error || 'Не удалось выполнить запрос.'); return data;
 }
 function tab(id) {
@@ -18,6 +18,7 @@ function tab(id) {
   document.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===id)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   $('operation-detail').hidden=true;
   window.scrollTo({top:0,behavior:'instant'});
+  window.dispatchEvent(new CustomEvent('cloud-tab',{detail:id}));
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>tab(b.dataset.goto));
@@ -39,6 +40,7 @@ function renderOperation() {
   summary.append(element('p',job.error || job.warning || (job.state==='ready' ? 'Просмотрите изменения в журнале. Деплой этого плана изменит prod.' : 'Начало: '+date(job.created_at))));
   if(job.ci_url){const a=element('a','Успешный CI ↗');a.href=job.ci_url;a.target='_blank';a.rel='noopener noreferrer';summary.append(a);}
   if(job.report)renderCases(summary,job.report);
+  if(job.resource_changes && window.renderResourceChanges)summary.append(window.renderResourceChanges(job.resource_changes));
   $('operation-log').textContent=job.log || 'Журнал ещё пуст.';
 }
 function renderCases(box,report) {
@@ -62,7 +64,8 @@ function renderState() {
   rows('operations',state.jobs,operationRow,'Операций ещё не было');
   rows('plans',state.jobs.filter(j=>j.action==='prepare' && j.state==='ready'),job=>{
     const right=element('div',null,'row-actions');right.append(button('Изменения ↗',()=>showOperation(job.id)));
-    const b=button('Развернуть',()=>deploy(job),'primary operation-button');b.disabled=!!state.active;right.append(b);
+    const expired=!Number.isFinite(job.prepared_at) || Date.now()/1000-job.prepared_at>3600;
+    const b=button(expired?'План истёк':'Развернуть',()=>deploy(job),'primary operation-button');b.disabled=!!state.active || expired;b.dataset.expired=String(expired);right.append(b);
     return row(job.tag,job.account_id+' · '+date(job.created_at)+' · '+job.sha.slice(0,12),right);
   },'Нет готовых планов. Получите теги и подготовьте выбранную версию.');
   const reportJob=state.jobs.find(j=>j.report && j.account_id===state.configuration?.account_id);
@@ -78,11 +81,12 @@ function renderState() {
     $('api-status').textContent='Не запускались';$('api-detail').textContent='Для текущего аккаунта нет отчёта';
     $('test-report').textContent='Для текущего аккаунта проверок ещё не было.';$('test-report').className='rows empty';$('test-report-time').textContent='—';
   }
-  document.querySelectorAll('.operation-button').forEach(b=>b.disabled=!!state.active);
+  document.querySelectorAll('.operation-button').forEach(b=>b.disabled=!!state.active || b.dataset.expired==='true');
   renderOperation();
   if(!initialized){fillConfig(state.configuration);initialized=true;}
+  window.dispatchEvent(new CustomEvent('cloud-state'));
 }
-async function refreshState() {try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}}
+async function refreshState() {if(stateBusy)return;stateBusy=true;try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}finally{stateBusy=false;}}
 function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и OpenAI','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
 async function refreshStatus() {
   if(statusBusy)return;statusBusy=true;
