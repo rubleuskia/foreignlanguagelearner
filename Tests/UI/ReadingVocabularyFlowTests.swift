@@ -1,6 +1,29 @@
 import XCTest
 
 final class ReadingVocabularyFlowTests: XCTestCase {
+    @MainActor func testAutoTranslationPolishDialogueOpensExactlyOneSentence() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--punctuation-pages-fixture", "--auto-translation-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["library.continue"].waitForExistence(timeout: 10))
+        openReader(app)
+        XCTAssertTrue(app.staticTexts["reader.page-number"].waitForExistence(timeout: 10))
+        app.switches["reader.auto-translate"].tap()
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.progressIndicators["Translating page…"].exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Polish dialogue — only yellow words have dotted markers"
+        screenshot.lifetime = .keepAlways; add(screenshot)
+        app.textViews["reader.transcript"].firstMatch.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 36, dy: 37)).tap()
+        XCTAssertTrue(app.staticTexts["Leon począł biegać po pokoju i trząść rękoma."].waitForExistence(timeout: 5))
+        let original = XCTAttachment(screenshot: app.screenshot())
+        original.name = "Original — exactly one sentence"; original.lifetime = .keepAlways; add(original)
+    }
+
     @MainActor func testAutoTranslationBlocksButtonsAndSwipeUntilDisabled() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

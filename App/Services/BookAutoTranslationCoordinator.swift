@@ -1,5 +1,4 @@
 import Foundation
-import NaturalLanguage
 import Observation
 import SwiftData
 
@@ -8,18 +7,14 @@ import SwiftData
 }
 
 enum BookSentenceRanges {
-    static func ranges(in text: String, language: String, reflowLineBreaks: Bool = false) -> [NSRange] {
-        // Cue boundaries are not sentence boundaries. Reflow only for tokenization;
-        // one-for-one replacements retain the original document's UTF-16 anchors.
-        let tokenizationText = reflowLineBreaks
-            ? text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ") : text
-        let tokenizer = NLTokenizer(unit: .sentence)
-        tokenizer.setLanguage(NLLanguage(rawValue: SourceLanguage.canonical(language)))
-        tokenizer.string = tokenizationText
+    /// Punctuation is authoritative: linguistic sentence tokenizers can merge dialogue
+    /// across ellipses, while subtitle/newline boundaries can split an actual sentence.
+    static func ranges(in text: String) -> [NSRange] {
         let source = text as NSString
         var result: [NSRange] = []
-        tokenizer.enumerateTokens(in: tokenizationText.startIndex..<tokenizationText.endIndex) { range, _ in
-            let raw = NSRange(range, in: tokenizationText)
+        func append(from start: Int, to end: Int) {
+            guard end > start else { return }
+            let raw = NSRange(location: start, length: end - start)
             let piece = source.substring(with: raw) as NSString
             let first = piece.rangeOfCharacter(from: .whitespacesAndNewlines.inverted)
             let last = piece.rangeOfCharacter(from: .whitespacesAndNewlines.inverted, options: .backwards)
@@ -27,9 +22,27 @@ enum BookSentenceRanges {
                 result.append(NSRange(location: raw.location + first.location,
                                       length: NSMaxRange(last) - first.location))
             }
-            return true
         }
+        var start = 0, cursor = 0
+        while cursor < source.length {
+            guard isEnding(source.character(at: cursor)) else { cursor += 1; continue }
+            var end = cursor + 1
+            // Keep ?!, !..., ellipses and closing quotes with the preceding sentence.
+            while end < source.length,
+                  isEnding(source.character(at: end)) || isClosing(source.character(at: end)) { end += 1 }
+            append(from: start, to: end)
+            start = end; cursor = end
+        }
+        append(from: start, to: source.length)
         return result
+    }
+
+    private static func isEnding(_ value: unichar) -> Bool {
+        [0x002E, 0x0021, 0x003F, 0x2026, 0x3002, 0xFF01, 0xFF1F, 0x061F, 0x0964, 0x0965].contains(value)
+    }
+
+    private static func isClosing(_ value: unichar) -> Bool {
+        [0x0022, 0x0027, 0x0029, 0x005D, 0x007D, 0x00BB, 0x2019, 0x201D, 0x300D, 0x300F].contains(value)
     }
 }
 
@@ -132,8 +145,7 @@ enum BookSentenceRanges {
         environment = Environment(item: item, text: document.text, source: source,
                                   vocabulary: vocabulary, context: context, service: service)
         if changed {
-            sentenceRanges = BookSentenceRanges.ranges(in: document.text, language: source.language,
-                reflowLineBreaks: document.segments.contains { $0.start != nil })
+            sentenceRanges = BookSentenceRanges.ranges(in: document.text)
             translations = []; failures = []; storageError = nil
             restoreTranslations()
         }
@@ -225,7 +237,7 @@ enum BookSentenceRanges {
                     else {
                         var request = try ContextAnalysisRequestBuilder.build(.init(
                             subject: .preview(UUID()), revision: 1, expectedSelectedText: job.text,
-                            context: .init(text: job.environment.text, selection: job.range),
+                            context: .init(text: job.text, selection: NSRange(location: 0, length: job.text.utf16.count)),
                             sourceLanguage: job.environment.source.language, targetLanguage: "ru",
                             promptVersion: OpenAIContextAnalysisProvider.promptVersion, translationOnly: true))
                         request.translationOnly = true; request.execution = job.settings
@@ -292,9 +304,10 @@ enum BookSentenceRanges {
                 $0.itemID == id && $0.scope == scope && $0.documentDigest == digest
             }))
             let source = environment.text as NSString
+            let validRanges = Set(sentenceRanges)
             translations = try anchors.compactMap { anchor in
                 let range = NSRange(location: anchor.location, length: anchor.length)
-                guard range.location >= 0, range.length > 0, NSMaxRange(range) <= source.length,
+                guard validRanges.contains(range), range.location >= 0, range.length > 0, NSMaxRange(range) <= source.length,
                       let cached = try cached(anchor.translationKey, context: environment.context),
                       cached.sourceLanguage == environment.source.language, cached.targetLanguage == "ru" else { return nil }
                 let text = source.substring(with: range)

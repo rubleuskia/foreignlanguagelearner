@@ -1,3 +1,21 @@
+## 2026-11-15 — Strict sentence translation and word-sized dotted markers
+
+- Split automatic translation strictly at sentence-ending punctuation, including
+  ellipsis/mixed punctuation clusters and closing quotes. Ignore subtitle/line/page
+  breaks when locating the complete sentence. Send only that sentence as selection
+  and request context, with original source offsets preserved.
+- Draw translated dots only under currently yellow new words, using the exact glyph
+  ranges instead of full-line enclosing rectangles. Hide dots when highlighting is
+  disabled or words lose yellow after leaving the page; saved translations remain.
+- Ignore legacy anchors that span multiple strict sentences, preserving valid cache,
+  dictionary and studied vocabulary. Add Polish dialogue, stale-cache and pixel
+  regression coverage. Update DECISIONS.md, PROJECT.md and the feature specification
+  for the corrected behavior; project purpose is unchanged.
+- Validation: all 312 iOS unit tests and 14 reader UI scenarios pass; unsigned
+  device Release builds. Visually verify the Polish dialogue screenshot and
+  one-sentence preview; the marker pixel test also passes in an explicit light
+  appearance. Provider answers are fixtures; no backend deployment is needed.
+
 ## 2026-11-14 — Automatic sentence translation on book pages
 
 - Add a compact top strip to local book readers with session-only per-book auto
