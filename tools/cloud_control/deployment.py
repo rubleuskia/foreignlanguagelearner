@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import re
+import time
 from .config import ControlError, deployment_context, digest, expected_stacks, is_operator
 from .monitoring import resources, stamp
 
@@ -22,6 +23,7 @@ def template_changes(before, after, stack):
                         if name != 'Properties' and left.get(name) != right.get(name)]
         result.append({'stack': stack, 'logical_id': key, 'type': (right or left)['Type'],
                        'action': action, 'changed_fields': changed,
+                       'retained': action == 'remove' and left.get('DeletionPolicy') in {'Retain', 'RetainExceptOnCreate'},
                        'review': action == 'remove' or (right or left)['Type'].startswith('AWS::IAM::')})
     for section in ['Outputs', 'Parameters', 'Conditions', 'Mappings']:
         left, right = before.get(section, {}), after.get(section, {})
@@ -51,8 +53,9 @@ def prepared_changes(aws, area, artifacts, baseline):
     return result
 
 
-def summary(releases, config, discovery, operations, tag=None):
-    candidates = [r for r in releases.list() if not is_operator(config) or r.get('operator_supported')]
+def summary(releases, config, discovery, operations, tag=None, *, now=None, candidates=None):
+    now = time.time() if now is None else now
+    candidates = [r for r in (releases.list() if candidates is None else candidates) if not is_operator(config) or r.get('operator_supported')]
     selected = next((r for r in candidates if r['tag'] == tag), None) if tag else next(iter(candidates), None)
     if tag and not selected: raise ControlError('Выберите CI-тег из списка доступных версий.')
     stacks = [s for s in discovery['stacks'] if s['name'] in expected_stacks(config)]
@@ -83,14 +86,22 @@ def summary(releases, config, discovery, operations, tag=None):
         'Хранилище S3 для книг': any('BooksArtifacts' in r['logical_id'] or r['logical_id'] == 'BookAlignmentBucket' for r in resources(discovery, 'AWS::S3::Bucket')),
         'Запросы и история DynamoDB': any('BooksRequests' in r['logical_id'] for r in resources(discovery, 'AWS::DynamoDB::Table')),
         'Очередь SQS': any('BooksQueue' in r['logical_id'] for r in resources(discovery, 'AWS::SQS::Queue')),
-        'Один книжный worker ECS': any('BooksWorkers' in r['logical_id'] for r in resources(discovery, 'AWS::ECS::Service')),
+        'Сервис книжного worker ECS': any('BooksWorkers' in r['logical_id'] for r in resources(discovery, 'AWS::ECS::Service')),
     }
     if has_books and not all(deployed_books.values()):
         notes.append('Нужен новый immutable-образ с книжным consumer. Тег кода сам не пересобирает образ в ECR: проверьте digest и замеры, затем подготовьте план обоих операторских стеков.')
     plan = next((p for p in operations if p.get('action') == 'prepare' and p.get('state') == 'ready'
                  and p.get('account_id') == config['account_id'] and p.get('tag') == (selected or {}).get('tag')), None)
+    invalid = []
+    if plan:
+        if now - plan.get('prepared_at', 0) > 3600: invalid.append('План старше часа; подготовьте его заново.')
+        if plan.get('region') != config['region']: invalid.append('Регион плана не совпадает с настройками.')
+        if plan.get('config_hash') != digest(config): invalid.append('Настройки изменились после подготовки.')
+        baseline = {s['name']: digest(s) for s in plan.get('baseline', []) if s['name'] in expected_stacks(config)}
+        if baseline != {s['name']: digest(s) for s in stacks}: invalid.append('Состояние AWS изменилось после подготовки.')
     return {'selected': selected, 'deployed': deployed, 'comparisons': changes,
             'book_components': [{'name': key, 'deployed': value, 'in_selected_release': has_books} for key, value in deployed_books.items()],
             'notes': notes, 'plan': {'id': plan['id'], 'prepared_at': plan.get('prepared_at'),
+                'valid': not invalid, 'invalid_reasons': invalid, 'expires_at': plan.get('prepared_at', 0) + 3600,
                 'resource_changes': plan.get('resource_changes'), 'tag': plan['tag']} if plan else None,
             'checked_at': stamp(), 'note': 'Кандидат выбирается из локального списка CI-тегов. При подготовке снова проверяются main и успешный CI. Точные изменения ресурсов доступны только после подготовки плана.'}

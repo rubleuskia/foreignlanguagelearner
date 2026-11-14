@@ -37,7 +37,8 @@ class Application:
             lock = self.read_locks.setdefault(key, threading.Lock())
         with lock:
             previous = self.read_cache.get(key)
-            effective_ttl = min(ttl, 15) if previous and previous[1].get('available') is False else ttl
+            failed = previous and isinstance(previous[1], dict) and previous[1].get('available') is False
+            effective_ttl = min(ttl, 15) if failed else ttl
             if previous and time.monotonic() - previous[0] < effective_ttl: return previous[1]
             value = call()
             with self.read_lock:
@@ -47,6 +48,11 @@ class Application:
 
     def discovery(self, config):
         return self.cached('discovery', config, lambda: Monitoring(AWS(config)).discover())
+
+    def tags(self, jobs=None):
+        jobs = self.jobs.list() if jobs is None else jobs
+        refreshed = next((j['id'] for j in jobs if j.get('action') == 'refresh' and j.get('state') == 'passed'), '')
+        return self.cached('release-tags:' + refreshed, {}, lambda: {'tags': self.jobs.releases.list()})['tags']
 
     def read(self, kind, params):
         config = self.configuration.load()
@@ -62,7 +68,7 @@ class Application:
                     if kind == 'storage': result = monitor.storage(**params)
                     elif kind == 'alignment': result = monitor.alignment(**params)
                     elif kind == 'errors': result = monitor.errors(**params)
-                    elif kind == 'deployment': result = deployment.summary(self.jobs.releases, config, discovery, self.jobs.list(), **params)
+                    elif kind == 'deployment': result = deployment.summary(self.jobs.releases, config, discovery, self.jobs.list(), candidates=self.tags(), **params)
                     else: raise ControlError('Неизвестный раздел диагностики.')
                 return {'available': True, **result}
             except Exception as error:
@@ -137,8 +143,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == '/api/readiness':
                 return self.send(200, AWS(app.configuration.load()).readiness())
             if self.path == '/api/state':
-                return self.send(200, {'jobs': app.jobs.list(), 'active': app.jobs.active,
-                    'tags': app.jobs.releases.list(), 'configuration': app.configuration.public()})
+                jobs = app.jobs.list()
+                return self.send(200, {'jobs': jobs, 'active': app.jobs.active,
+                    'tags': app.tags(jobs), 'configuration': app.configuration.public()})
             if self.path == '/api/profiles':
                 try:
                     import boto3
@@ -147,7 +154,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {'profiles': profiles})
             return self.send(404, {'error': 'Не найдено.'})
         except Exception as error:
-            self.send(400, {'error': str(error) if isinstance(error, ControlError) else 'Не удалось прочитать состояние панели.'})
+            self.send(400, {'error': str(error) if isinstance(error, ControlError) else
+                'Не удалось прочитать состояние панели: ' + clean_error(error) + '. Проверьте профиль AWS.'})
 
     def do_POST(self):
         app = self.server.app
@@ -175,7 +183,8 @@ class Handler(BaseHTTPRequestHandler):
             if self.path not in actions: return self.send(404, {'error': 'Не найдено.'})
             return self.send(202, app.jobs.start(actions[self.path], value))
         except Exception as error:
-            self.send(400, {'error': str(error) if isinstance(error, ControlError) else 'Операция не принята.'})
+            message = 'Ручной запрос не завершён: ' + clean_error(error) + '. Исход неизвестен; проверьте состояние через GET. Автоповтора нет.' if self.path == '/api/manual-request' else 'Операция не принята.'
+            self.send(400, {'error': str(error) if isinstance(error, ControlError) else message})
 
 
 def main():

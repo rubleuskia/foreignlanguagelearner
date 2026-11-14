@@ -69,7 +69,8 @@ class Monitoring:
         return {'stacks': snapshot, 'resources': result, 'warnings': warnings, 'checked_at': stamp()}
 
     def storage(self, bucket=None, cursor=None, prefix=''):
-        buckets = resources(self.discovery, 'AWS::S3::Bucket')
+        # Imported outputs and a retained library stack can identify the same bucket.
+        buckets = list({row['id']: row for row in resources(self.discovery, 'AWS::S3::Bucket')}.values())
         selected = next((b for b in buckets if b['id'] == bucket), None) if bucket else next(iter(buckets), None)
         if bucket and selected is None:
             raise ControlError('Этот bucket не относится к ресурсам проекта.')
@@ -122,7 +123,11 @@ class Monitoring:
         start = today.replace(day=1)
         end = today + timedelta(days=1)  # CE end is exclusive; today's data may still be absent.
         client = self.aws.session.client('ce', region_name='us-east-1', config=self.aws.options)
-        paginator = client.get_paginator('get_cost_and_usage')
+        from botocore.paginate import Paginator
+        # The pinned SDK exposes this operation without a built-in paginator definition.
+        paginator = Paginator(client.get_cost_and_usage, {'input_token': 'NextPageToken',
+            'output_token': 'NextPageToken', 'result_key': 'ResultsByTime'},
+            client.meta.service_model.operation_model('GetCostAndUsage'))
         totals, daily, units = defaultdict(Decimal), defaultdict(Decimal), set()
         estimated = False
         for page in paginator.paginate(TimePeriod={'Start': start.isoformat(), 'End': end.isoformat()},

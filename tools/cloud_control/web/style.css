@@ -1,6 +1,7 @@
 :root{color-scheme:light;--ink:#1a293b;--muted:#718094;--line:#e5eaf0;--bg:#f5f7fa;--accent:#245edb;--green:#1d8563;--red:#bf4242;--amber:#a36b16}
 .table-scroll{overflow:auto}.data-table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}.data-table th{color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap}.data-table th,.data-table td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}.data-table td:first-child{overflow-wrap:anywhere;min-width:170px}.data-table small{display:block;color:var(--muted);font-size:10px}.table-scroll:has(table){padding:0;color:var(--ink)}.metric-inline{padding:20px 0}.resource-summary{margin-top:22px;overflow:auto}.log-event{padding:15px 0;border-bottom:1px solid var(--line)}.log-event pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto}.cost-day{display:grid;grid-template-columns:48px 1fr 95px;gap:12px;align-items:center;padding:8px 0;font-size:11px}.cost-day meter{width:100%;height:12px;accent-color:var(--accent)}.cost-day strong{text-align:right}.swagger-page{background:#fff}.swagger-heading{max-width:1460px;margin:auto;padding:26px 32px}.swagger-heading p{max-width:1000px}.swagger-heading input[type=checkbox]{width:auto;margin-right:8px}.swagger-page #swagger-ui{padding-bottom:60px}nav a{display:flex;gap:13px;align-items:center;color:#abbad0;text-decoration:none;padding:12px;font-weight:600;border-radius:8px}nav a:hover{background:#1e3049}nav a span{font-size:20px;width:20px}aside nav{overflow:auto}#storage-more,#errors-more{margin-top:18px}.cards:has(.metric:nth-child(4)){grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
 *{box-sizing:border-box}
+aside .nav-label{margin-top:28px}aside nav{flex:1;min-height:0;align-content:start;gap:3px}nav button,nav a{padding:8px 12px}nav button span,nav a span{font-size:18px;line-height:1}.sidebar-note{flex-shrink:0}#costs>.panel,#storage>.panel,#errors>.panel{padding:24px}
 body{margin:0;background:var(--bg);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
 button,input,select,textarea{font:inherit}
 button,a,input,summary{ -webkit-tap-highlight-color:transparent}
@@ -132,3 +133,4 @@ h1{font-size:24px}
 .form-footer{align-items:end}
 footer{font-size:9px;flex-wrap:wrap}
 }
+@media(min-width:761px){aside nav button,aside nav a{padding:8px 12px}aside nav button span,aside nav a span{font-size:18px;line-height:1}}

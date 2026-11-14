@@ -1,12 +1,13 @@
-## 2026-11-13 — Cloud Control observability draft
+## 2026-11-14 — Cloud Control diagnostics and manual API tests
 
-- Prepare local Swagger/manual relay, scoped S3 browsing, AWS cost/credit summaries, retained
+- Add local Swagger/manual relay, scoped S3 browsing, AWS cost/credit summaries, retained
   alignment usage metrics, 5xx/error-log views and structured prepared-deployment resource changes.
-- Stop at the user's requested checkpoint and retain this work as a draft PR. Diagnostic-specific
-  tests, browser/live integration verification and reconciliation with alignment PR #95 remain.
-  See docs/CLOUD_CONTROL_OBSERVABILITY.md for the continuation checklist.
+- Reconcile with merged queue-based alignment/library changes, validate SDK pagination, test
+  scoped/partial telemetry, relay guards and stale plans, and exercise diagnostic/Swagger screens
+  in desktop/mobile browser layouts. Cache tag discovery to avoid repeated Git scans per poll.
+  See docs/CLOUD_CONTROL_OBSERVABILITY.md for permissions and metric/validation boundaries.
 - Record local-only/read-only diagnostics and relay decisions in DECISIONS.md; update PROJECT.md
-  with the draft status. No AWS deployment, IAM change, release tag or image publication.
+  with the supported workflow. No AWS deployment, IAM change, release tag or image publication.
 
 ## 2026-11-13 — S3 library identity and presentation
 

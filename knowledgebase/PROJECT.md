@@ -1,12 +1,12 @@
 # Foreign Language Learner
 
-## Cloud Control observability draft
+## Local Cloud Control diagnostics
 
-A separate draft extends the local dashboard with Swagger/manual API tests, S3 file sizes,
-AWS costs/credits, alignment usage/timing, 5xx/logs and a concrete prepared-deployment summary.
-The implementation stage is captured before diagnostic-specific tests, browser/live acceptance
-and alignment PR #95 integration. It is not deployed or ready for merge. Continue using
-[the checkpoint list](../docs/CLOUD_CONTROL_OBSERVABILITY.md).
+The loopback dashboard provides Swagger/manual API tests, S3 file sizes, AWS costs/credits,
+retained alignment usage/timing, 5xx/logs and actual prepared-deployment resource changes.
+Diagnostics use the configured project's existing permissions and disclose incomplete data;
+manual API submissions and deployment remain explicit operator actions. It supports the merged
+queue-based book workflow. See [usage and coverage](../docs/CLOUD_CONTROL_OBSERVABILITY.md).
 
 ## Cloud book alignment (next operator release)
 

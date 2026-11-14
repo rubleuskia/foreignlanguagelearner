@@ -37,8 +37,11 @@ status inspection. For deployment, expand the JSON settings and fill the public 
 [config.example.json](../tools/cloud_control/config.example.json), replacing every placeholder:
 grouped Apple IDs, numeric prod appAppleId, approved product IDs, complete same-account secret ARNs,
 reviewed Apple DER root directory/fingerprints, and absolute path to the reviewed product policy.
-First-stage optional alignment is Polish-only with a 300-second probed duration limit. It needs the immutable worker image and `alignment_benchmark_file` with real reviewed
-measurements. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
+Older first-stage tags contain a Polish-only pilot with a 300-second duration limit. New tags
+containing [cloud book alignment](CLOUD_BOOK_ALIGNMENT.md) replace its HTTP routes with queue-only
+book jobs, a 100 MB input ZIP limit and no five-minute duration limit. Deploying that workflow
+requires a new immutable worker image; legacy `alignment_benchmark_file` evidence does not prove
+long-book quality. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
 approve budgets/benefits or automatically turn admissions on. Unknown/credential fields are rejected.
 Configure account-level budget notifications separately before enabling paid work; the Stockholm
 regional templates omit the unsupported `AWS::Budgets::Budget` resource. No budget is provisioned by the panel.
@@ -125,9 +128,16 @@ real media uploads and alignment quality remain separate acceptance procedures.
 
 ## Validation and operator data
 
+The dashboard includes local Swagger/manual API tests, S3 file sizes, AWS costs/credits,
+alignment usage, 5xx/logs and prepared deployment changes. See
+[diagnostics, permissions and coverage](CLOUD_CONTROL_OBSERVABILITY.md). Diagnostics are read-only;
+Swagger Execute can submit real API work and is never run automatically.
+
 ```sh
-python -m unittest tools.cloud_control.test_control -v
+python -m unittest tools.cloud_control.test_control tools.cloud_control.test_observability scripts.test_alignment_benchmark -v
 node --check tools/cloud_control/web/app.js
+node --check tools/cloud_control/web/monitor.js
+node --check tools/cloud_control/web/swagger.js
 bash -n scripts/cloud-control.sh scripts/tag-verified-main.sh
 ```
 

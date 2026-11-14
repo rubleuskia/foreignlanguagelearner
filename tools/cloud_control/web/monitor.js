@@ -3,7 +3,7 @@ const monitorState={active:null,data:{},sequence:{},configuration:null,operation
 const monitorLabels={awaiting_upload:'Ожидает загрузки',uploaded:'Файлы загружены',queued:'В очереди',starting:'Запуск',running:'Выполняется',downloading:'Получение файлов',preparing:'Подготовка',aligning:'Alignment',validating:'Проверка',publishing:'Сохранение',succeeded:'Готово',succeeded_with_review:'Нужна проверка',failed:'Ошибка',cancelled:'Отменено',expired:'Истёк срок'};
 function monitorBytes(value){if(value==null)return '—';if(value<1000)return value+' Б';const units=['КБ','МБ','ГБ','ТБ'];let n=value/1000,i=0;while(n>=1000 && i<units.length-1){n/=1000;i++;}return n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' '+units[i];}
 function monitorDuration(value){if(value==null)return '—';const seconds=Math.round(value);return seconds>=3600?Math.floor(seconds/3600)+' ч '+Math.floor(seconds%3600/60)+' мин':seconds>=60?Math.floor(seconds/60)+' мин '+seconds%60+' с':seconds+' с';}
-function monitorMoney(value,currency){return value==null?'Нет данных':Number(value).toLocaleString('ru-RU',{style:'currency',currency:currency || 'USD',maximumFractionDigits:Math.abs(Number(value))<1?4:2});}
+function monitorMoney(value,currency){if(value==null)return 'Нет данных';const amount=Number(value);return (Math.abs(amount)<.00005?0:amount).toLocaleString('ru-RU',{style:'currency',currency:currency || 'USD',maximumFractionDigits:Math.abs(amount)<1?4:2});}
 function monitorCard(label,value,detail){const box=element('article',null,'metric');box.append(element('span',label,'metric-label'),element('strong',value),element('span',detail || '','muted'));return box;}
 function monitorTable(headers,records){const table=element('table',null,'data-table'),head=element('thead'),tr=element('tr');headers.forEach(h=>tr.append(element('th',h)));head.append(tr);table.append(head);const body=element('tbody');records.forEach(values=>{const line=element('tr');values.forEach(value=>{const cell=element('td');cell.append(value instanceof Node?value:document.createTextNode(value==null?'—':String(value)));line.append(cell);});body.append(line);});table.append(body);return table;}
 function monitorWarnings(data){return (data.warnings || []).map(w=>w.source+': '+w.error).join(' · ');}
@@ -77,7 +77,7 @@ window.renderResourceChanges=function(changes){
   if(!changes.length){box.append(element('p','Изменений ресурсов в шаблонах не найдено.'));return box;}
   box.append(monitorTable(['Действие','Ресурс','Компонент','Изменяемые поля'],changes.map(change=>[
     pill(change.action==='remove'?'warning':change.action==='add'?'passed':'running',({add:'Добавить',modify:'Изменить',remove:'Удалить'})[change.action]),
-    change.type+' · '+change.logical_id,stackName(change.stack),change.changed_fields.join(', ') || '—'])));
+    change.type+' · '+change.logical_id,stackName(change.stack),change.retained?'Ресурс сохранится (Retain)':change.changed_fields.join(', ') || '—'])));
   box.append(element('p','Возможность замены ресурсов и изменения IAM проверьте в полном CDK diff в журнале плана.','hint'));return box;
 };
 function renderDeployment(data){
@@ -89,13 +89,13 @@ function renderDeployment(data){
   box.append(element('p',data.note,'hint'));
   rows('deployment-components',data.book_components,item=>row(item.name,item.in_selected_release?'Есть в выбранном теге':'В выбранном теге отсутствует',pill(item.deployed?'passed':'skipped',item.deployed?'Есть в AWS':'Нужен деплой')),'Нет данных.');
   const changes=$('deployment-changes');changes.replaceChildren();
-  if(data.plan){changes.append(button('Открыть план '+data.plan.tag,()=>showOperation(data.plan.id)));if(data.plan.resource_changes)changes.append(window.renderResourceChanges(data.plan.resource_changes));else changes.append(element('p','Старый план без сводки ресурсов: подготовьте новый план.','hint'));}
+  if(data.plan){changes.append(pill(data.plan.valid?'passed':'warning',data.plan.valid?'План актуален':'Подготовьте новый план'));for(const reason of data.plan.invalid_reasons || [])changes.append(element('p',reason,'callout'));changes.append(button('Открыть план '+data.plan.tag,()=>showOperation(data.plan.id)));if(data.plan.resource_changes)changes.append(window.renderResourceChanges(data.plan.resource_changes));else changes.append(element('p','Старый план без сводки ресурсов: подготовьте новый план.','hint'));}
   else changes.append(element('p','Выберите нужный тег и нажмите «Подготовить план», чтобы увидеть конкретные ресурсы AWS. Подготовка не разворачивает их.','hint'));
 }
 window.addEventListener('cloud-tab',event=>{monitorState.active=event.detail;const kind=event.detail==='releases'?'deployment':event.detail;if(['storage','alignment','costs','errors','deployment'].includes(kind))loadMonitor(kind);});
 window.addEventListener('cloud-state',()=>{
   const configuration=JSON.stringify(state.configuration);const operation=state.jobs[0]?.id+':'+state.jobs[0]?.state;
-  if(monitorState.configuration!==null && configuration!==monitorState.configuration){monitorState.data={};for(const key of Object.keys(monitorState.sequence))monitorState.sequence[key]++;$('storage-bucket').replaceChildren();$('error-group').replaceChildren();}
+  if(monitorState.configuration!==null && configuration!==monitorState.configuration){monitorState.data={};for(const key of Object.keys(monitorState.sequence))monitorState.sequence[key]++;$('storage-bucket').replaceChildren();$('error-group').replaceChildren();for(const kind of ['storage','alignment','costs','errors','deployment'])monitorFailure(kind,'Настройки проекта изменились. Получите актуальные данные.');const active=monitorState.active==='releases'?'deployment':monitorState.active;if(['storage','alignment','costs','errors','deployment'].includes(active))loadMonitor(active);}
   if(monitorState.active==='releases' && operation!==monitorState.operation)loadMonitor('deployment');
   monitorState.configuration=configuration;monitorState.operation=operation;
 });
