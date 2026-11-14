@@ -21,6 +21,7 @@ struct BookImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(ReadingVocabularyStore.self) private var vocabulary
     var suppliedArchive: URL? = nil
+    var libraryBook: LibraryBook? = nil
     var item: LearningItem? = nil
     var action: BookResourceAction? = nil
     @State private var step = 0
@@ -45,6 +46,7 @@ struct BookImportView: View {
     @State private var error: String?
     @State private var work: Task<Void, Never>?
     @State private var result: LearningItem?
+    @State private var alreadyImported = false
     @State private var confirming = false
     @State private var legacyImport = false
     @State private var service = BookImportService()
@@ -79,7 +81,7 @@ struct BookImportView: View {
             Form {
                 if let result {
                     Section {
-                        Label(AppLanguage.text(item == nil ? "Book added" : "Book updated"), systemImage: "checkmark.circle.fill")
+                        Label(AppLanguage.text(alreadyImported ? "Already in library" : item == nil ? "Book added" : "Book updated"), systemImage: "checkmark.circle.fill")
                         Text(AppLanguage.text(result.resourceStatus))
                         NavigationLink(result.hasText ? "Start reading" : "Start listening") {
                             if result.tracks.isEmpty { ReaderView(item: result).id(result.resourceRevision) }
@@ -304,7 +306,10 @@ struct BookImportView: View {
                 else { value = try await service.previewFiles(audio: audioURL, text: textURL) }
                 guard !Task.isCancelled else { await service.cancel(value); return }
                 preview = value; selectedTranscript = value.selectedTranscript
-                if item == nil, coverData == nil { coverSelection = value.coverFilename == nil ? "cover-books" : "archive" }
+                if item == nil, coverData == nil {
+                    let name = libraryBook?.metadata.coverName ?? "cover-books"
+                    coverSelection = value.coverFilename == nil ? (BookCoverService.bundled.contains(name) ? name : "cover-books") : "archive"
+                }
                 if item == nil { if title.isEmpty { title = value.title }; if value.isManifestPackage { language = SourceLanguage.canonical(value.sourceLanguage) } }
                 if action == .synchronization && !value.isManifestPackage { throw BookManifestError.invalid("Synchronization requires a complete package with a manifest, text and audio.") }
                 step = 2
@@ -317,7 +322,14 @@ struct BookImportView: View {
         working = true; error = nil
         work = Task {
             defer { working = false }
+            var pending: BookImportService.Prepared?
             do {
+                if let libraryBook,
+                   let existing = BuiltinLibraryIdentity.existing(bookID: libraryBook.id,
+                       items: try context.fetch(FetchDescriptor<LearningItem>())) {
+                    alreadyImported = true; result = existing
+                    return
+                }
                 _ = try VocabularyTokenizer.language(language)
                 let reviewed = try await service.vocabularyPreview(preview, transcriptPath: selectedTranscript, externalTranscript: usesArchive ? textURL : nil)
                 if hasPreviewText && action != .audio, reviewed.fingerprint != wordPreview?.fingerprint {
@@ -347,8 +359,8 @@ struct BookImportView: View {
                     let segments = prepared.tracks.isEmpty ? try TranscriptParser.parse(
                         String(contentsOf: prepared.stagedBookDirectory.appending(path: prepared.transcriptFilename), encoding: .utf8), extension: "txt").segments : []
                     try await service.movePreparedToLibrary(prepared)
-                    do { try Task.checkCancellation() }
-                    catch { await service.rollback(prepared); throw error }
+                    pending = prepared
+                    try Task.checkCancellation()
                     let added = LearningItem(id: prepared.itemID, title: prepared.title,
                         mediaKind: prepared.tracks.isEmpty ? "text" : "audio", mediaFilename: "",
                         transcriptFilename: prepared.transcriptFilename, duration: prepared.duration,
@@ -357,13 +369,22 @@ struct BookImportView: View {
                     added.coverFilename = prepared.coverFilename ?? ""
                     added.bundledCoverName = BookCoverService.bundled.contains(coverSelection) ? coverSelection : "cover-books"
                     added.readingVocabularyMigrationVersion = 1
-                    context.insert(added)
-                    do { try context.save() }
-                    catch { context.delete(added); await service.rollback(prepared); throw error }
+                    let saved = try BuiltinLibraryIdentity.commit(added, bookID: libraryBook?.id, context: context)
+                    if saved.id != added.id {
+                        await service.rollback(prepared)
+                        pending = nil
+                        await service.cancel(preview)
+                        alreadyImported = true; result = saved
+                        return
+                    }
                     await service.complete(prepared)
+                    pending = nil
                     result = added
                 }
-            } catch { self.error = error.localizedDescription }
+            } catch {
+                if let pending { await service.rollback(pending) }
+                self.error = error.localizedDescription
+            }
         }
     }
 

@@ -20,6 +20,7 @@ import { Construct } from "constructs";
 import { CloudFoundationStack } from "./cloud-stack";
 import { DEPLOYMENT_REGION } from "./region";
 import { OperatorStack } from "./operator-stack";
+import { BookAlignment } from "./book-alignment";
 
 export interface AlignmentStackProps extends cdk.StackProps {
   readonly paidFoundation?: CloudFoundationStack;
@@ -138,6 +139,10 @@ export class AlignmentStack extends cdk.Stack {
     });
     cdk.Tags.of(taskDefinition).add("Backend", backendTag);
     const workerRepository = ecr.Repository.fromRepositoryName(this, "WorkerRepository", workerRepositoryName);
+    if (operator) {
+      new BookAlignment(this, "Books", { operator, code: props!.cloudCode!, cluster, securityGroup,
+        repository: workerRepository, digest: workerImageDigest });
+    }
     const container = taskDefinition.addContainer("Worker", {
       image: ecs.ContainerImage.fromEcrRepository(workerRepository, workerImageDigest),
       environment: {
@@ -325,8 +330,8 @@ export class AlignmentStack extends cdk.Stack {
     ];
     for (const [method, routePath] of routes) {
       if (operator) {
-        new apigwv2.HttpRoute(this, `${method}${routePath}`, { httpApi, routeKey: apigwv2.HttpRouteKey.with(routePath, method),
-          authorizer: operator.authorizer, authorizationScopes: ["aws.cognito.signin.user.admin"], integration });
+        // Operator alignment is queue-only through /v1/book-alignments.
+        continue;
       } else if (paid) {
         new apigwv2.HttpRoute(this, `${method}${routePath}`, { httpApi, routeKey: apigwv2.HttpRouteKey.with(routePath.replace("/v1/", "/v2/"), method),
           authorizer: paid.authorizer, authorizationScopes: [paid.scopeName], integration });

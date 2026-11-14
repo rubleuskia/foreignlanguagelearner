@@ -1,13 +1,12 @@
 # Curated book library
 
-The library shares the existing operator API and Cognito authorization. The app stores a manually
-pasted operator **access token** in a separate device-only Keychain entry, under Settings →
-Встроенная библиотека. The operator client currently issues 15-minute access tokens. Replace the
-token when it expires; the app does not store passwords or refresh tokens.
+The library shares the existing operator API and Cognito authorization. Sign in under Settings →
+Built-in library with the operator username and password. Access and rotating refresh tokens live
+in device-only Keychain entries; the session renews automatically and the password is not saved.
 
 ## API
 
-- `GET /v1/library/books` → `{schema_version: 1, books: [{id, title, language, bytes, sha256}]}`.
+- `GET /v1/library/books` → `{schema_version: 1, books: [{id, title, language, bytes, sha256, ...metadata}]}`.
 - `GET /v1/library/books/{id}/download` → `{schema_version: 1, url, expires_in: 900, bytes, sha256}`.
 
 Both routes require the existing Cognito JWT scope and the live `operator` identity check, including
@@ -17,6 +16,33 @@ or share URLs. Downloads stream to disk, verify byte count and SHA-256, then ope
 complete ZIP import wizard. The ordinary manifest, synchronization, vocabulary, preview and commit
 validation all apply. Cancel/retry and expired-token errors are available in the library screen.
 ZIPs are removed after the import sheet closes. Imported files remain available offline.
+
+## Book identity and presentation
+
+`id` is the permanent catalog identity, independent of ZIP checksum, book title and local UUID.
+Keep the source directory name (the catalog ID) unchanged when updating a package. The importer
+persists it as `LearningItem.builtinLibraryID`, including in library backups. The catalog displays
+“Already in library” and opens the existing book. The final import commit also checks the ID and
+normalized text/ordered track IDs, preserving the original book, phrases and reading progress.
+Deleting the local book permits a new download. Existing duplicates are not deleted automatically.
+
+Older imports acquire the ID by an exact fingerprint of normalized full text plus ordered track IDs,
+without matching editable titles. Fingerprinting for catalog reconciliation runs off the main actor.
+An import with different content or a changed track layout is not automatically associated.
+
+Rows reuse the main library's dark background and 76 × 96 cover images. Metadata includes author,
+language, chapter count and ZIP size; reading progress, duration and vocabulary statistics are omitted.
+The author disclosure contains a short biography and a source link. `App/Resources/BookLibraryMetadata.json`
+contains researched English/Russian/Polish summaries, source URLs and existing bundled cover choices
+for the initial nine titles. These generic covers are not original edition artwork. Older API catalogs
+use that bundled fallback, so no backend deployment is needed for these titles.
+
+Catalog metadata fields `author`, `authorInfo` (language-code → text), `authorURL` (HTTPS), `coverName`,
+`chapterCount` and `contentFingerprint` are optional. API values override bundled fallback values.
+The publication script copies editorial author/cover fields from the bundled metadata file and computes
+chapter counts and content fingerprints directly from the source packages. Unknown titles remain
+downloadable with a generic cover and their available metadata. Add verified author information to
+the metadata file when publishing new books; the app does not scrape web pages at runtime.
 
 ## Storage and publishing
 

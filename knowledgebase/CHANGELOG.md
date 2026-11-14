@@ -8,6 +8,30 @@
 - Record local-only/read-only diagnostics and relay decisions in DECISIONS.md; update PROJECT.md
   with the draft status. No AWS deployment, IAM change, release tag or image publication.
 
+## 2026-11-13 — S3 library identity and presentation
+
+- S3 book library now uses the main library's cover-led dark rows, shows author/language/chapter count/archive size, and offers sourced author biographies for the initial nine books. Reading progress, duration and word statistics are omitted from this catalog.
+- Persist the permanent catalog ID on imported books and in backups. Already imported books open from the catalog; a final import check prevents another copy and preserves existing progress. Exact text/track fingerprints recognize older renamed imports. Existing duplicate copies remain intact; deleting a book permits reimport.
+- Catalog preparation preserves IDs across archive updates and emits author metadata, chapter counts and content fingerprints. Bundled metadata supports the existing API without an AWS deployment.
+- DECISIONS.md records catalog identity and editorial metadata. The project purpose and major boundaries are unchanged; PROJECT.md needs no update.
+
+## 2026-11-13 — Queue-based cloud book alignment
+
+- Add the native three-step alignment wizard for audio/audio ZIP plus UTF-8 TXT or EPUB, local
+  validation, client-built ZIP ≤100 MB, direct signed S3 upload, separate queue submission,
+  API-driven progress, durable draft/request recovery and verified book download/import.
+- Add owner-keyed DynamoDB requests/history, stream outbox + scheduled lease recovery, SQS and
+  a serial Fargate book worker. Recheck actual pinned input size/hash; prepare EPUB and joined
+  audio, align without the legacy five-minute duration cap, and publish subtitles/word timings.
+- Replace operator pilot HTTP routes with queue-only book routes. Keep legacy resources during
+  migration; public-test/paid APIs are unchanged. Record architecture/workflow changes in
+  DECISIONS.md, PROJECT.md and docs/CLOUD_BOOK_ALIGNMENT.md. A new image and normal deployment
+  are required; local tests do not establish long-book acoustic quality or live AWS acceptance.
+- Local validation after syncing main: 291 iOS unit tests and the wizard relaunch UI test pass;
+  unsigned device Release builds. Backend: 120 tests (2 optional skips); aligner: 31 tests; new book worker:
+  7 tests including a 306-second fake-engine pipeline, S3 publication and lease-loss fencing.
+  All CDK assertions, 46 Cloud Control/benchmark tests and 32 CI/asset-packaging tests pass.
+
 ## 2026-11-13 — Forward model/reasoning choices and show translation routing
 
 - Snapshot the selected provider mode, model and supported reasoning effort at the start of

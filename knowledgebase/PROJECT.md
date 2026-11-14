@@ -8,6 +8,17 @@ The implementation stage is captured before diagnostic-specific tests, browser/l
 and alignment PR #95 integration. It is not deployed or ready for merge. Continue using
 [the checkpoint list](../docs/CLOUD_CONTROL_OBSERVABILITY.md).
 
+## Cloud book alignment (next operator release)
+
+Library → + → Cloud alignment accepts MP3/M4A/WAV or an audio ZIP plus matching UTF-8 TXT/EPUB.
+The native wizard validates and prepares a ZIP ≤100 MB, uploads privately to S3, submits queue
+intent separately, displays API stages and restores its draft/current request after relaunch.
+The owner-keyed DynamoDB/SQS/Fargate path uses one worker and durable leases, without the legacy
+five-minute duration cap. Input tracks join into one timeline; the generated book includes SRT
+and word timings and returns through the existing import wizard. This implementation needs a
+new worker image/operator deployment and representative long-book quality acceptance. It has
+not changed the live Polish pilot. See [workflow and boundaries](../docs/CLOUD_BOOK_ALIGNMENT.md).
+
 ## YouTube learning material
 
 Import captioned YouTube videos through the library's + menu or Safari Share Extension.
@@ -36,7 +47,8 @@ The private audio pilot is Polish-only with a 300-second limit. Three native Far
 and explicitly waived manual checks; the temporary benchmark stack was deleted. CDKToolkit v32 (same-project trust and termination protection)
 and the immutable worker image remain available. The built-in book library uses the operator backend with native username/password login and
 automatically renewed Keychain sessions in the next app release; existing access-token-only installs
-need one fresh sign-in. Private backend translations/audio are not connected to the native app. Apple/subscription and broader public alignment deployments remain pending.
+need one fresh sign-in. Private backend translations remain separate; the new native cloud-book
+alignment workflow above requires its next operator release. Apple/subscription and broader public alignment deployments remain pending.
 See [the operator guide](../docs/OPERATOR_CLOUD.md).
 
 ## iOS CI and verified releases
