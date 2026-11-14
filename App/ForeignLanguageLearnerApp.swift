@@ -11,6 +11,10 @@ struct ForeignLanguageLearnerApp: App {
     private var contextAnalysisService: any ContextAnalysisServing {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           ProcessInfo.processInfo.arguments.contains("--auto-translation-fixture") {
+            return AutoTranslationUIFixture(slow: ProcessInfo.processInfo.arguments.contains("--slow-auto-translation-fixture"))
+        }
+        if ProcessInfo.processInfo.arguments.contains("--uitesting"),
            ProcessInfo.processInfo.arguments.contains("--slow-selection-translation-fixture") {
             return SlowSelectionTranslationUIFixture()
         }
@@ -29,6 +33,13 @@ struct ForeignLanguageLearnerApp: App {
     private let liveWordExplanationService = WordExplanationService()
 
     init() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           ProcessInfo.processInfo.arguments.contains("--auto-translation-fixture") {
+            UserDefaults.standard.set(ReaderTextLayout.pages.rawValue, forKey: "reader.text-layout")
+            UserDefaults.standard.set(true, forKey: "reader.highlight-new-words")
+        }
+        #endif
         if ProcessInfo.processInfo.arguments.contains("--reset-interface-language") {
             UserDefaults.standard.set("ru", forKey: AppLanguage.key)
         }
@@ -43,7 +54,7 @@ struct ForeignLanguageLearnerApp: App {
                 !ProcessInfo.processInfo.arguments.contains("--test-russian-ui")
                     ? "en" : AppLanguage.resolved(selectedLanguage)))
         }
-            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
+            .modelContainer(for: [LearningItem.self, DictionaryEntry.self, ReadVocabularyWord.self, ReadVocabularyBatch.self, UserActivityEvent.self, SentenceTranslation.self, BookSentenceTranslation.self], inMemory: ProcessInfo.processInfo.arguments.contains("--uitesting"))
             .environment(translationCoordinator)
             .environment(readingVocabulary)
             .environment(\.contextAnalysisService, contextAnalysisService)
@@ -52,6 +63,14 @@ struct ForeignLanguageLearnerApp: App {
 }
 
 #if DEBUG
+private struct AutoTranslationUIFixture: ContextAnalysisServing {
+    let slow: Bool
+    func analyze(_ request: ContextAnalysisRequest) async throws -> ContextualPhraseResult {
+        try await Task.sleep(for: .milliseconds(slow ? 60_000 : 100))
+        return .init(directTranslation: "Кот и пёс читают книгу у окна.", contextExplanation: "")
+    }
+}
+
 private struct WordExplanationUIFixture: WordExplanationServing {
     func explain(_ input: WordExplanationInput) async throws -> WordExplanation {
         try Task.checkCancellation()

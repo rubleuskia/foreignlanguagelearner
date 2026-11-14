@@ -166,8 +166,9 @@ components:
         selected_text: &id002
           type: string
           minLength: 1
-          maxLength: 256
-          description: At most 256 UTF-16 code units; whitespace-only is invalid
+          maxLength: 1400
+          description: At most 1400 UTF-16 code units with an empty words_to_explain
+            list (phrase-only); otherwise at most 256. Whitespace-only is invalid.
         context: &id003
           type: string
           minLength: 1
@@ -179,7 +180,7 @@ components:
         selection_length_utf16: &id005
           type: integer
           minimum: 1
-          maximum: 256
+          maximum: 1400
         source_language: &id006
           type: string
           enum:
@@ -216,10 +217,16 @@ components:
       - lemma
       properties:
         schema_version: *id001
-        selected_text: *id002
+        selected_text:
+          type: string
+          minLength: 1
+          maxLength: 256
         context: *id003
         selection_location_utf16: *id004
-        selection_length_utf16: *id005
+        selection_length_utf16:
+          type: integer
+          minimum: 1
+          maximum: 256
         source_language: *id006
         target_language: *id007
         lemma:
@@ -272,7 +279,9 @@ components:
               phrase_translation:
                 type: string
                 minLength: 1
-                maxLength: 512
+                maxLength: 2800
+                description: At most 2800 UTF-16 code units for phrase-only requests;
+                  otherwise at most 512.
               word_explanations:
                 type: array
                 maxItems: 128

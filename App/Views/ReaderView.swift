@@ -29,6 +29,7 @@ private struct LocalReaderView: View {
     @State private var translationPreview: SelectionTranslationPreview?
     @State private var followGeneration = 0
     @State private var translationCache = SelectionTranslationCache()
+    @State private var autoTranslation = BookAutoTranslationCoordinator()
     @State private var openedRevision = ""
     @State private var selecting = false
 
@@ -67,7 +68,9 @@ private struct LocalReaderView: View {
                 selecting = true
             }, onFollowAudio: { followGeneration += 1; following = true },
                 initialReadingOffset: item.readingCharacterOffset,
-                onReadingOffsetChanged: { item.readingCharacterOffset = $0 }) { action, text, selectionRange, segment, selectionContext in
+                onReadingOffsetChanged: { item.readingCharacterOffset = $0 },
+                item: item, sourceScope: currentPart.map { "part:\($0.id)" } ?? "main",
+                autoTranslation: autoTranslation) { action, text, selectionRange, segment, selectionContext in
                 let absoluteSegment = segment.flatMap { document.sourceIndices.indices.contains($0) ? document.sourceIndices[$0] : nil }
                 let audio = audioRange(for: selectionRange)
                 let normalized = DictionaryEntry.normalized(text)
@@ -80,6 +83,9 @@ private struct LocalReaderView: View {
                     audioRange: audio, segmentIndex: absoluteSegment,
                     saveOnOpen: action == .addToDictionary
                 )
+                if action == .showSavedTranslation {
+                    translationPreview?.cachedTranslation = autoTranslation.translation(at: selectionRange)?.translation
+                }
                 if audio != nil {
                     translationPreview?.phraseAudioRange = PhraseAudioTiming.sentenceRange(
                         for: selectionRange, in: document, duration: item.duration)
@@ -92,7 +98,12 @@ private struct LocalReaderView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { if item.hasAudio { playerBar } }
-        .safeAreaInset(edge: .top) { OnboardingTip(step: .reading, allowed: !compactPlayer && item.hasText && !selecting && translationPreview == nil) }
+        .safeAreaInset(edge: .top) {
+            VStack(spacing: 0) {
+                if item.hasText { ReaderTranslationControls(coordinator: autoTranslation) }
+                OnboardingTip(step: .reading, allowed: !compactPlayer && item.hasText && !selecting && translationPreview == nil)
+            }
+        }
         .readingActivity(language: item.sourceLanguageCode, isPlaying: { playback.player.timeControlStatus == .playing })
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -114,11 +125,12 @@ private struct LocalReaderView: View {
                     }
                     .disabled(item.isSourceLanguageLocked)
                     .help(AppLanguage.text(item.isSourceLanguageLocked ? "The language is locked after marking a text read." : "Source language"))
-                    BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() })
+                    BookResourceMenu(item: item, beforeUpdate: { savePosition(); playback.pause() }, showsReadingControls: false)
                 }
             }
         }
         .onAppear {
+            autoTranslation.open(itemID: item.id)
             openedRevision = item.resourceRevision
             selectedPart = item.partIndex(containing: item.lastPosition)
             openCurrentPart()
@@ -160,7 +172,7 @@ private struct LocalReaderView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { savePosition() }
         }
-        .onDisappear { savePosition(); playback.close() }
+        .onDisappear { savePosition(); playback.close(); autoTranslation.close() }
         .alert("Dictionary", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") { message = nil }
         } message: { Text(message ?? "") }

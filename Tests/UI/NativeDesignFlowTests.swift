@@ -47,8 +47,8 @@ final class NativeDesignFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["reader.chapter.one"].waitForExistence(timeout: 5))
         capture(app, "Native Glass — Chapters")
         app.buttons["Done"].tap()
-        app.buttons["book.resources"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["reader.new-words"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["reader.new-words"].waitForExistence(timeout: 5))
+        app.buttons["reader.text-layout"].tap()
         capture(app, "Editorial — Reading options")
     }
 

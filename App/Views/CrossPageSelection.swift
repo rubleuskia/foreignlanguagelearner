@@ -160,6 +160,8 @@ struct CrossPageSelection {
 
     func configure(_ page: StableBookPager.Page) {
         page.textView.isSelectable = false
+        page.textView.hasExternalSelection = { [weak self] in self?.selection != nil }
+        if let press = longPress, let tap = page.textView.sentenceTap { tap.require(toFail: press) }
         let previous = page.textView.didLayout
         page.textView.didLayout = { [weak self] in previous?(); self?.refresh() }
     }

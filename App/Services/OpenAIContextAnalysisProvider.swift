@@ -141,8 +141,9 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
             model: model.rawValue,
             input: input,
             reasoning: .init(effort: reasoningEffort),
-            instructions: instructions,
-            maxOutputTokens: ReasoningRequestBudget.outputTokens(effort: reasoningEffort, base: ContextAnalysisLimits.maximumResponseTokens)
+            instructions: request.translationOnly ? Self.requiredInstructions : instructions,
+            maxOutputTokens: ReasoningRequestBudget.outputTokens(effort: reasoningEffort,
+                base: request.translationOnly ? 2048 : ContextAnalysisLimits.maximumResponseTokens)
         ))
 
         let data: Data
@@ -203,14 +204,14 @@ struct OpenAIContextAnalysisProvider: ContextAnalysisProvider {
             let meaning = item.meaning.trimmingCharacters(in: .whitespacesAndNewlines)
             return (word, lemma, meaning)
         }
-        let expectedWords = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage)
+        let expectedWords = request.wordsToExplain
         guard wordLines.count == expectedWords.count,
               zip(wordLines, expectedWords).allSatisfy({ $0.0.0 == $0.1 && !$0.0.1.isEmpty && !$0.0.2.isEmpty }) else {
             throw ContextAnalysisError.invalidOutput
         }
         let explanation = wordLines.map { "\($0.0) — \($0.1) — \($0.2)" }.joined(separator: "\n\n")
         guard !direct.isEmpty,
-              direct.utf16.count <= ContextAnalysisLimits.maximumDirectTranslationUTF16,
+              direct.utf16.count <= request.maximumTranslationUTF16,
               explanation.utf16.count <= ContextAnalysisLimits.maximumContextExplanationUTF16 else {
             throw ContextAnalysisError.invalidOutput
         }
@@ -263,7 +264,7 @@ private struct OpenAIInput: Encodable {
         sourceLanguage = request.sourceLanguage
         targetLanguage = request.targetLanguage
         selectedText = request.selectedText
-        wordsToExplain = ContextAnalysisWords.wordsToExplain(in: request.selectedText, language: request.sourceLanguage)
+        wordsToExplain = request.wordsToExplain
         context = request.contextFragment
         selectionLocationUTF16 = request.selectionLocationUTF16
         selectionLengthUTF16 = request.selectionLengthUTF16

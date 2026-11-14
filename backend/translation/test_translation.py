@@ -280,6 +280,18 @@ class TranslationTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
+    def test_phrase_only_accepts_full_sentence_but_keeps_ordinary_selection_limits(self):
+        value = payload('a' * 1400)
+        value['words_to_explain'] = []
+        validate_input('context', value)
+        validate_output('context', {'phrase_translation': 'я' * 2800, 'word_explanations': []}, value)
+        with self.assertRaises(CloudError):
+            validate_output('context', {'phrase_translation': 'я' * 2801, 'word_explanations': []}, value)
+        value['words_to_explain'] = [value['selected_text']]
+        with self.assertRaises(CloudError): validate_input('context', value)
+        value = payload('a' * 1401); value['words_to_explain'] = []
+        with self.assertRaises(CloudError): validate_input('context', value)
+
     def test_utf16_supplementary_and_six_languages_repeated_words(self):
         for language, words in [('en','cat cat'),('fr','chat chat'),('es','gato gato'),('de','Haus Haus'),('it','gatto gatto'),('pl','kot kot')]:
             value = payload(words, '😀 ' + words, language)

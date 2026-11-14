@@ -217,3 +217,9 @@
 "On device · Apple Translation" = "On device · Apple Translation";
 
 "Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode." = "Selected text and bounded context are sent through our backend to OpenAI. Successful results remain recoverable for 24 hours. The selected model and reasoning effort are sent with each request. Personal prompts apply only to personal API key mode.";
+"Auto translate" = "Auto translate";
+"Reading layout" = "Reading layout";
+"Translations in progress" = "Translations in progress";
+"Translations are still running. Wait until they finish or turn off Auto translate to turn the page." = "Translations are still running. Wait until they finish or turn off Auto translate to turn the page.";
+"Translating page…" = "Translating page…";
+"This sentence is too long for automatic translation." = "This sentence is too long for automatic translation.";

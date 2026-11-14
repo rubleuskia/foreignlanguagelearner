@@ -6,6 +6,7 @@ final class TranscriptLayoutManager: NSLayoutManager {
     private(set) var unknownRanges: [NSRange] = []
     private(set) var activeRange: NSRange?
     private var underlineWords = false
+    private(set) var translatedRanges: [NSRange] = []
     private var glyphTint: UIColor?
     private let wordColor = UIColor { $0.userInterfaceStyle == .dark ? .systemYellow : .systemBrown }
 
@@ -26,6 +27,13 @@ final class TranscriptLayoutManager: NSLayoutManager {
     func clearDecorations() {
         setWords([], underline: false)
         setActiveRange(nil)
+        setTranslatedSentences([])
+    }
+
+    func setTranslatedSentences(_ ranges: [NSRange]) {
+        guard ranges != translatedRanges else { return }
+        for range in translatedRanges + ranges { invalidateDisplay(forCharacterRange: range) }
+        translatedRanges = ranges
     }
 
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
@@ -66,6 +74,24 @@ final class TranscriptLayoutManager: NSLayoutManager {
             cursor = NSMaxRange(tinted)
         }
         if cursor < end { super.drawGlyphs(forGlyphRange: NSRange(location: cursor, length: end - cursor), at: origin) }
+        if let container = textContainers.first, let context = UIGraphicsGetCurrentContext() {
+            context.saveGState()
+            context.setFillColor(UIColor.secondaryLabel.cgColor)
+            let visibleCharacters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+            for range in translatedRanges where NSIntersectionRange(range, visibleCharacters).length > 0 {
+                let glyphs = NSIntersectionRange(glyphRange(forCharacterRange: range, actualCharacterRange: nil), glyphsToShow)
+                guard glyphs.length > 0 else { continue }
+                enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: container) { rect, _ in
+                    let y = rect.maxY + origin.y - 1.5
+                    var x = rect.minX + origin.x + 1
+                    while x < rect.maxX + origin.x {
+                        context.fillEllipse(in: CGRect(x: x, y: y, width: 1.5, height: 1.5))
+                        x += 4
+                    }
+                }
+            }
+            context.restoreGState()
+        }
     }
 
     override func showCGGlyphs(_ glyphs: UnsafePointer<CGGlyph>, positions: UnsafePointer<CGPoint>, count glyphCount: Int,

@@ -134,10 +134,12 @@ struct BookPagedTranscriptView: View {
                         revision: .init(active: reader.activeSegment, words: reader.wordStyleRevision,
                             index: reader.vocabularyIndex.map(ObjectIdentifier.init),
                             follow: reader.followGeneration, following: reader.following,
-                            underline: reader.differentiateWithoutColor),
+                            underline: reader.differentiateWithoutColor,
+                            translations: reader.autoTranslation?.revision ?? 0),
                         makePage: { pageView($0) },
                         onManualStart: { reader.following = false },
                         onSelection: { move(to: $0) },
+                        allowManualTurn: { reader.autoTranslation?.requestManualTurn() ?? true },
                         selectionDocument: reader.document, pageRanges: pages,
                         selectionDisplayText: displayedText,
                         onTextSelection: { action, range in
@@ -196,6 +198,7 @@ struct BookPagedTranscriptView: View {
                     page = BookTextPagination.page(containing: readingOffset, ranges: result)
                     followAudio()
                     layoutRevision += 1
+                    announceVisiblePage()
                 } catch { /* A newer document or geometry superseded this layout. */ }
             }
             .onChange(of: reader.activeSegment) { _, _ in followAudio() }
@@ -219,7 +222,8 @@ struct BookPagedTranscriptView: View {
             reader.document.sourceIndices.indices.contains(segment)
                 ? document.sourceIndices.firstIndex(of: reader.document.sourceIndices[segment]) : nil
         }
-        let unknown = reader.vocabularyIndex?.unknownRanges(in: range, known: reader.knownForms)
+        let known = reader.knownForms.subtracting(reader.autoTranslation?.retainedForms(on: range) ?? [])
+        let unknown = reader.vocabularyIndex?.unknownRanges(in: range, known: known)
             ?? reader.unknownWordRanges
         return TranscriptTextView(document: document, activeSegment: active,
             following: reader.$following, followGeneration: reader.followGeneration,
@@ -231,20 +235,35 @@ struct BookPagedTranscriptView: View {
                                                     length: overlap.length) : nil
             }, wordStyleRevision: reader.wordStyleRevision,
             differentiateWithoutColor: reader.differentiateWithoutColor,
-            wordStyleLanguage: reader.wordStyleLanguage) { action, text, local, _, _ in
+            wordStyleLanguage: reader.wordStyleLanguage,
+            translatedSentences: reader.translatedSentences.compactMap { sentence in
+                let overlap = NSIntersectionRange(sentence.range, range)
+                guard overlap.length > 0 else { return nil }
+                return TranslatedBookSentence(range: NSRange(location: overlap.location - range.location, length: overlap.length),
+                                              text: sentence.text, translation: sentence.translation)
+            }) { action, text, local, _, _ in
                 let full = NSRange(location: local.location + range.location, length: local.length)
-                let segment = reader.document.ranges.firstIndex { NSIntersectionRange($0, full).length > 0 }
-                reader.handleSelection(action, text, full, segment,
-                    TranscriptTextView.Coordinator.context(in: reader.document.text, selection: full))
+                let selected = action == .showSavedTranslation
+                    ? reader.translatedSentences.first(where: { NSIntersectionRange($0.range, full).length > 0 })?.range ?? full : full
+                let segment = reader.document.ranges.firstIndex { NSIntersectionRange($0, selected).length > 0 }
+                reader.handleSelection(action, text, selected, segment,
+                    TranscriptTextView.Coordinator.context(in: reader.document.text, selection: selected))
             }
     }
 
     private func move(to destination: Int) {
         guard pages.indices.contains(destination), destination != page else { return }
+        guard reader.autoTranslation?.requestManualTurn() ?? true else { return }
         reader.following = false
         page = destination
         readingOffset = pages[destination].location
         reader.onReadingOffsetChanged?(readingOffset)
+        announceVisiblePage(newVisit: true)
+    }
+
+    private func announceVisiblePage(newVisit: Bool = false) {
+        guard pages.indices.contains(page), sourceText == reader.document.text else { return }
+        reader.onPageVisible?(pages[page], newVisit)
     }
 
     private func followAudio(force: Bool = false) {
@@ -254,9 +273,11 @@ struct BookPagedTranscriptView: View {
         let cue = reader.document.ranges[segment]
         let destination = BookTextPagination.page(containing: cue.location, ranges: pages)
         if !force, page == destination { return }
+        let changedPage = page != destination
         page = destination
         readingOffset = cue.location
         reader.onReadingOffsetChanged?(readingOffset)
+        if changedPage { announceVisiblePage(newVisit: true) }
     }
 
     private var uiCategory: UIContentSizeCategory {
