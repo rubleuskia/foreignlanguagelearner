@@ -79,6 +79,7 @@ private actor DeferredSentenceFixture: ContextAnalysisServing {
         let requests = await service.requests
         XCTAssertEqual(requests.map(\.selectedText), ["Cats run.", "Cats sleep."])
         XCTAssertTrue(requests.allSatisfy { $0.translationOnly && $0.wordsToExplain.isEmpty })
+        XCTAssertTrue(requests.allSatisfy { $0.contextFragment == $0.selectedText && $0.selectionLocationUTF16 == 0 })
         XCTAssertEqual(vocabulary.forms(for: "en"), ["cats", "run", "sleep"])
         XCTAssertEqual(coordinator.retainedNewForms, ["cats", "run", "sleep"])
         XCTAssertEqual(coordinator.translations.count, 2)
@@ -91,6 +92,69 @@ private actor DeferredSentenceFixture: ContextAnalysisServing {
              vocabulary: vocabulary, context: container.mainContext, service: service)
         XCTAssertTrue(coordinator.retainedNewForms.isEmpty)
         XCTAssertEqual(coordinator.translations.count, 2)
+    }
+
+    func testStrictPunctuationSplitsPolishDialogueAndPreservesUTF16Source() {
+        let expected = [
+            "😀 A jak on umiał podnosić ducha!...",
+            "— Pracuj — mówił nieraz do Stacha — i\nwierz, bo silna wiara może zatrzymać\n\nsłońce w biegu, a nie dopiero polepszyć stosunki ludzkie.",
+            "— A może mnie wysłać do uniwersytetu?",
+            "— zapytał Stach.",
+            "— Jestem pewien — odparł Leon — że znalazłbyś się w uniwersytecie...",
+            "— Albo u wariatów — mruknął Wokulski.",
+            "Co za lód w tych sercach!...", "co za chłód!...", "co za upodlenie!...",
+            "«Tak?!»", "Nie…", "Koniec bez kropki"]
+        let text = expected.joined(separator: " \r\n ")
+        let ranges = BookSentenceRanges.ranges(in: text)
+        XCTAssertEqual(ranges.map { (text as NSString).substring(with: $0) }, expected)
+        for range in ranges { XCTAssertNotNil(Range(range, in: text)) }
+    }
+
+    func testPolishAutoTranslationSendsOnlyTheSentenceContainingEachNewWord() async throws {
+        let (container, item, vocabulary) = try await fixture()
+        item.sourceLanguageCode = "pl"
+        let sentences = ["Leon począł biegać po pokoju i trząść rękoma.",
+            "— Co za lód w tych sercach!...", "co za chłód!...", "co za upodlenie!...",
+            "— wołał — jeżeli nawet taki człowiek jak ty jeszcze nie ufa.",
+            "Więc przypomnij sobie, coś już zrobił w tak krótkim czasie: tyle umiesz, że mógłbyś dzisiaj zdawać egzamin...",
+            "— Co ja tam zrobię!...", "— westchnął Stach."]
+        let text = sentences.joined(separator: "\n\n")
+        let new: Set<String> = ["biegać", "upodlenie", "umiesz"]
+        ReadingKnowledge.insert(try ReadingKnowledge.encode(VocabularyTokenizer.forms(in: text).subtracting(new)),
+                                language: "pl", context: container.mainContext)
+        try container.mainContext.save(); try vocabulary.reload(context: container.mainContext)
+        let coordinator = BookAutoTranslationCoordinator(), service = SentenceAnalysisFixture()
+        show(coordinator, text: text, item: item, vocabulary: vocabulary, context: container.mainContext, service: service)
+        coordinator.setEnabled(true)
+        try await waitFor { coordinator.pendingCount == 0 }
+        let requests = await service.requests
+        XCTAssertEqual(requests.map(\.selectedText), [sentences[0], sentences[3], sentences[5]])
+        XCTAssertTrue(requests.allSatisfy { $0.contextFragment == $0.selectedText })
+        XCTAssertEqual(coordinator.retainedNewForms, new)
+        coordinator.setEnabled(false)
+    }
+
+    func testOldParagraphAnchorIsIgnoredWithoutRemovingValidSentenceCache() async throws {
+        let (container, item, vocabulary) = try await fixture()
+        let text = "Cats run. Dogs sleep!"
+        for source in [text, "Cats run."] {
+            let cached = SentenceTranslation(text: source, sourceLanguage: "en", targetLanguage: "ru", translation: "Saved")
+            container.mainContext.insert(cached)
+            container.mainContext.insert(BookSentenceTranslation(itemID: item.id, scope: "full",
+                documentDigest: SentenceTranslation.digest(text), range: NSRange(location: 0, length: source.utf16.count),
+                translationKey: cached.key))
+        }
+        try container.mainContext.save()
+        let coordinator = BookAutoTranslationCoordinator(), service = SentenceAnalysisFixture()
+        show(coordinator, text: text, item: item, vocabulary: vocabulary, context: container.mainContext, service: service)
+        XCTAssertEqual(coordinator.translations.map(\.text), ["Cats run."])
+        coordinator.setEnabled(true)
+        try await waitFor { coordinator.pendingCount == 0 }
+        let requests = await service.requests
+        XCTAssertEqual(requests.map(\.selectedText), ["Dogs sleep!"])
+        XCTAssertEqual(coordinator.translations.map(\.text), ["Cats run.", "Dogs sleep!"])
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<SentenceTranslation>()), 3)
+        coordinator.setEnabled(false)
     }
 
     func testCacheReusesAcrossBooksButPreservesWhitespacePunctuationAndLanguages() async throws {

@@ -468,6 +468,60 @@ final class ReadingVocabularyTests: XCTestCase {
         XCTAssertEqual(render(), plain, "Removing paint must restore the original rendering")
     }
 
+    @MainActor func testTranslatedDotsRenderOnlyUnderYellowWordAndDisappearWithItsHighlight() throws {
+        let view = TranscriptTextView.makeTextView(frame: CGRect(x: 0, y: 0, width: 500, height: 90))
+        view.overrideUserInterfaceStyle = .light
+        view.backgroundColor = .white; view.textColor = .black
+        view.font = .systemFont(ofSize: 22)
+        view.text = "Known biegać words. New upodlenie!"
+        view.layoutIfNeeded()
+        let manager = try XCTUnwrap(view.layoutManager as? TranscriptLayoutManager)
+        let source = view.text! as NSString
+        let first = source.range(of: "biegać"), second = source.range(of: "upodlenie")
+        let sentence = source.range(of: "Known biegać words.")
+        let storage = NSAttributedString(attributedString: view.textStorage)
+        manager.setWords([first, second], underline: false)
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.preferredRange = .standard
+        func render() -> UIImage {
+            view.setNeedsDisplay(); view.layoutIfNeeded()
+            return UIGraphicsImageRenderer(size: view.bounds.size, format: format).image { context in
+                view.traitCollection.performAsCurrent { view.layer.render(in: context.cgContext) }
+            }
+        }
+        func pixels(_ image: UIImage) throws -> [UInt8] {
+            let cg = try XCTUnwrap(image.cgImage)
+            var data = [UInt8](repeating: 0, count: cg.width * cg.height * 4)
+            try data.withUnsafeMutableBytes { bytes in
+                let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: cg.width, height: cg.height,
+                    bitsPerComponent: 8, bytesPerRow: cg.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+            }
+            return data
+        }
+        let before = try pixels(render())
+        manager.setTranslatedSentences([sentence])
+        XCTAssertEqual(manager.translatedWordRanges, [first], "Known words and untranslated yellow words have no dots")
+        let marked = render(), after = try pixels(marked)
+        let glyphs = manager.glyphRange(forCharacterRange: first, actualCharacterRange: nil)
+        let rect = manager.boundingRect(forGlyphRange: glyphs, in: view.textContainer)
+            .offsetBy(dx: view.textContainerInset.left, dy: view.textContainerInset.top).insetBy(dx: -1, dy: -1)
+        var changed = 0, outsideWord = false
+        for index in stride(from: 0, to: before.count, by: 4) where Array(before[index..<index + 4]) != Array(after[index..<index + 4]) {
+            changed += 1
+            let x = CGFloat((index / 4) % 500)
+            if x < rect.minX || x > rect.maxX { outsideWord = true }
+        }
+        XCTAssertGreaterThan(changed, 0, "A saved translation must visibly add dots")
+        XCTAssertFalse(outsideWord, "Dots must not extend under neighboring white words")
+        let attachment = XCTAttachment(image: marked)
+        attachment.name = "Dotted marker only under biegać"; attachment.lifetime = .keepAlways
+        add(attachment)
+        manager.setWords([second], underline: false)
+        XCTAssertTrue(manager.translatedWordRanges.isEmpty, "No yellow word means no translated dots")
+        XCTAssertEqual(view.textStorage, storage, "Markers remain paint-only")
+    }
+
     func testZIPAndExternalTranscriptPreviewRemainReadOnlyAndDetectChanges() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

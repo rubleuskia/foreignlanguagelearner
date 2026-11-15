@@ -123,12 +123,15 @@ percentage to preserve text space.
 
 Local book pages also offer per-book automatic sentence translation, off by default
 and remembered only for the app session. New-word sentences are translated without
-word breakdown, cached on the device and marked with clickable dotted underlines.
+word breakdown and cached on the device. Strict sentence-ending punctuation bounds
+each request, including its context. Dotted markers appear only under yellow words
+with a saved sentence translation; neighboring white words/spaces have no dots.
 Successful results atomically teach the sentence's new forms across books in that
 language; yellow remains until leaving the page. Manual page turns wait for pending
 translations or toggle-off; audio following continues. Saved translations reopen
 offline and can explicitly save the whole sentence to Dictionary without another
-request. Vertical layout disables automatic work while retaining saved underlines.
+request. Markers disappear together with yellow highlighting after leaving a page.
+Vertical layout disables automatic work while retaining access to saved translations.
 Text anchors survive repagination; this local cache is outside portable library
 backups. Whole sentences support up to 1400 UTF-16 units (2800 for results); the
 extended cloud bound needs a backend release. See the
