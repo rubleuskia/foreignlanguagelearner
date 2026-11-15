@@ -41,6 +41,12 @@ def tree_digest(root):
 
 
 class Jobs:
+    def check_worker_image(self, key, aws, config, source):
+        if (is_operator(config) and config.get('context', {}).get('operatorAlignment', 'true') == 'true'
+                and (Path(source) / 'backend/book_alignment/api.py').is_file()):
+            image = aws.require_book_worker()
+            self.update(key, worker_image=image)
+
     def __init__(self, root, configuration, *, aws_factory=AWS, releases=None):
         self.root, self.configuration = Path(root), configuration
         self.directory = configuration.directory / 'operations'
@@ -209,6 +215,7 @@ class Jobs:
         self.execute(key, ['git', 'archive', '--format=tar', '--output', str(archive), release['sha']], cwd=self.root)
         with tarfile.open(archive) as bundle: bundle.extractall(source, filter='data')
         archive.unlink()
+        self.check_worker_image(key, aws, config, source)
         for required in ['scripts/build-cloud.py', 'infra/alignment/bin/cloud.ts']:
             if not (source / required).exists(): raise ControlError('Этот тег не содержит поддерживаемый облачный бэкенд.')
         context.update(stage='prod', cloudAsset=str(area / 'lambda'))
@@ -272,6 +279,7 @@ class Jobs:
             raise ControlError('Prod изменился после подготовки. Подготовьте новый план.')
         area = self.plans / plan['id']
         infra = area / 'source/infra/alignment'
+        self.check_worker_image(key, aws, config, area / 'source')
         self.update(plan['id'], state='consumed')
         self.update(key, tag=plan['tag'], sha=plan['sha'], plan_id=plan['id'], before=current)
         self.execute(key, [str(infra / 'node_modules/.bin/cdk'), '--app', str(area / 'assembly'),
