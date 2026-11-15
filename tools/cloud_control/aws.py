@@ -21,6 +21,13 @@ class AWS:
     def client(self, name):
         return self.session.client(name, config=self.options)
 
+    def require_book_worker(self):
+        from .worker_image import inspect
+        self.identity()
+        context = self.config.get('context', {})
+        return inspect(self.client('ecr'), self.config['account_id'], self.config['region'],
+                       context.get('workerRepositoryName'), context.get('workerImageDigest'))
+
     def identity(self):
         actual = self.client('sts').get_caller_identity()['Account']
         if actual != self.config['account_id']:
@@ -108,9 +115,8 @@ class AWS:
                 def image():
                     if not ctx.get('workerRepositoryName') or not ctx.get('workerImageDigest'):
                         raise ControlError('Образ аудио ещё не указан. Заполните репозиторий и digest в настройках.')
-                    self.client('ecr').describe_images(repositoryName=ctx['workerRepositoryName'],
-                                                      imageIds=[{'imageDigest': ctx['workerImageDigest']}])
-                    return 'Неизменяемый образ найден в ECR'
+                    image = self.require_book_worker()
+                    return 'Книжная очередь поддерживается; исходная ревизия ' + image['source_revision'][:12]
                 record('Образ обработчика аудио', image)
                 def benchmark():
                     import json

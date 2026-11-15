@@ -51,6 +51,13 @@ import SwiftData
             }.joined(separator: "\n")
             try subtitles.write(to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
         }
+        if ProcessInfo.processInfo.arguments.contains("--punctuation-pages-fixture") {
+            let text = "Leon począł biegać po pokoju i trząść rękoma. — Co za lód w tych sercach!... co za chłód!... co za upodlenie!... — wołał — jeżeli nawet taki człowiek jak ty jeszcze nie ufa. Więc przypomnij sobie, coś już zrobił w tak krótkim czasie: tyle umiesz, że mógłbyś dzisiaj zdawać egzamin... — Co ja tam zrobię!... — westchnął Stach."
+            try "1\n00:00:00,000 --> 00:00:20,000\n\(text)\n".write(
+                to: directory.appending(path: "one.srt"), atomically: true, encoding: .utf8)
+            let known = try VocabularyTokenizer.forms(in: text).subtracting(["biegać", "upodlenie", "umiesz"])
+            ReadingKnowledge.insert(try ReadingKnowledge.encode(known), language: "pl", context: context)
+        }
         if ProcessInfo.processInfo.arguments.contains("--legacy-reader-fixture") {
             item.tracks = []
             item.lastTrackID = nil

@@ -7,6 +7,7 @@ final class TranscriptLayoutManager: NSLayoutManager {
     private(set) var activeRange: NSRange?
     private var underlineWords = false
     private(set) var translatedRanges: [NSRange] = []
+    private(set) var translatedWordRanges: [NSRange] = []
     private var glyphTint: UIColor?
     private let wordColor = UIColor { $0.userInterfaceStyle == .dark ? .systemYellow : .systemBrown }
 
@@ -14,6 +15,7 @@ final class TranscriptLayoutManager: NSLayoutManager {
         guard ranges != unknownRanges || underline != underlineWords else { return }
         for range in unknownRanges { invalidateDisplay(forCharacterRange: range) }
         unknownRanges = ranges; underlineWords = underline
+        updateTranslatedWords()
         for range in ranges { invalidateDisplay(forCharacterRange: range) }
     }
 
@@ -31,9 +33,22 @@ final class TranscriptLayoutManager: NSLayoutManager {
     }
 
     func setTranslatedSentences(_ ranges: [NSRange]) {
+        let ranges = ranges.sorted { $0.location < $1.location }
         guard ranges != translatedRanges else { return }
-        for range in translatedRanges + ranges { invalidateDisplay(forCharacterRange: range) }
         translatedRanges = ranges
+        updateTranslatedWords()
+    }
+
+    private func updateTranslatedWords() {
+        var marked: [NSRange] = [], sentence = 0
+        for word in unknownRanges.sorted(by: { $0.location < $1.location }) {
+            while sentence < translatedRanges.count, NSMaxRange(translatedRanges[sentence]) <= word.location { sentence += 1 }
+            if sentence < translatedRanges.count, word.location >= translatedRanges[sentence].location,
+               NSMaxRange(word) <= NSMaxRange(translatedRanges[sentence]) { marked.append(word) }
+        }
+        guard marked != translatedWordRanges else { return }
+        for range in translatedWordRanges + marked { invalidateDisplay(forCharacterRange: range) }
+        translatedWordRanges = marked
     }
 
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
@@ -63,7 +78,7 @@ final class TranscriptLayoutManager: NSLayoutManager {
             glyphTint = wordColor
             super.drawGlyphs(forGlyphRange: tinted, at: origin)
             glyphTint = nil
-            if underlineWords, let context = UIGraphicsGetCurrentContext() {
+            if underlineWords, !translatedWordRanges.contains(range), let context = UIGraphicsGetCurrentContext() {
                 context.saveGState(); wordColor.setFill(); wordColor.setStroke()
                 enumerateLineFragments(forGlyphRange: tinted) { rect, _, _, lineRange, _ in
                     self.underlineGlyphRange(NSIntersectionRange(tinted, lineRange), underlineType: .single,
@@ -74,20 +89,17 @@ final class TranscriptLayoutManager: NSLayoutManager {
             cursor = NSMaxRange(tinted)
         }
         if cursor < end { super.drawGlyphs(forGlyphRange: NSRange(location: cursor, length: end - cursor), at: origin) }
-        if let container = textContainers.first, let context = UIGraphicsGetCurrentContext() {
+        if let context = UIGraphicsGetCurrentContext() {
             context.saveGState()
-            context.setFillColor(UIColor.secondaryLabel.cgColor)
+            UIColor.secondaryLabel.setFill(); UIColor.secondaryLabel.setStroke()
             let visibleCharacters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-            for range in translatedRanges where NSIntersectionRange(range, visibleCharacters).length > 0 {
+            let style = NSUnderlineStyle(rawValue: NSUnderlineStyle.single.rawValue | NSUnderlineStyle.patternDot.rawValue)
+            for range in translatedWordRanges where NSIntersectionRange(range, visibleCharacters).length > 0 {
                 let glyphs = NSIntersectionRange(glyphRange(forCharacterRange: range, actualCharacterRange: nil), glyphsToShow)
                 guard glyphs.length > 0 else { continue }
-                enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: container) { rect, _ in
-                    let y = rect.maxY + origin.y - 1.5
-                    var x = rect.minX + origin.x + 1
-                    while x < rect.maxX + origin.x {
-                        context.fillEllipse(in: CGRect(x: x, y: y, width: 1.5, height: 1.5))
-                        x += 4
-                    }
+                enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, lineRange, _ in
+                    self.underlineGlyphRange(NSIntersectionRange(glyphs, lineRange), underlineType: style,
+                        lineFragmentRect: rect, lineFragmentGlyphRange: lineRange, containerOrigin: origin)
                 }
             }
             context.restoreGState()

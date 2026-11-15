@@ -1,3 +1,32 @@
+## Strict sentence boundaries and yellow-word markers (2026-11-15)
+
+Supersede linguistic sentence grouping for automatic book translation with explicit
+sentence-ending punctuation. Keep punctuation clusters/closing quotes together,
+preserve source UTF-16 ranges across cue/page breaks, and use only the one sentence
+as both selected text and request context. A stored anchor is reusable only when
+its range exactly matches a current strict sentence; do not erase the cache or
+studied vocabulary to retire coarse legacy anchors.
+
+Supersede whole-sentence dotted decoration with the intersection of successful
+sentence ranges and currently highlighted new-word ranges. Draw dots using exact
+glyph ranges, without extending through whitespace or to a line's edge. Markers
+disappear together with yellow highlighting after a page visit; the persisted
+translation and whole-sentence tap action remain available in both layouts.
+
+## Digest-bound worker compatibility before book deployment (2026-11-15)
+
+Treat ECR existence and old pilot benchmark evidence as insufficient for the book queue service.
+Require the pinned image's configuration to declare book-queue-v1, the supported entrypoint,
+Linux/amd64 and its source revision. Read only the small config blob, validate its digest/size,
+refuse redirects and non-Regional S3 hosts, and resolve an OCI index to its single amd64 image.
+Recheck on deploy, including plans prepared before this guard; reject before consuming the plan
+or invoking CDK. Check actual exported release features so legacy-only rollback remains possible.
+
+The normal builder stamps those labels and tests entrypoint dispatch/imports offline before
+publishing from clean source. This is a compatibility contract for the trusted project builder,
+not image signing or acoustic/cost acceptance. Real measurements remain bound to the exact digest.
+No image publication, IAM grant or AWS retry follows from a successful read-only check.
+
 ## Automatic sentence translation storage and lifecycle (2026-11-14)
 
 Implement the agreed book-page specification below in both local readers. Keep

@@ -8,6 +8,35 @@
 - Architecture/product decisions and the project overview are unchanged; DECISIONS.md and
   PROJECT.md need no update. No AWS resource or permission changes.
 
+## 2026-11-15 — Strict sentence translation and word-sized dotted markers
+
+- Split automatic translation strictly at sentence-ending punctuation, including
+  ellipsis/mixed punctuation clusters and closing quotes. Ignore subtitle/line/page
+  breaks when locating the complete sentence. Send only that sentence as selection
+  and request context, with original source offsets preserved.
+- Draw translated dots only under currently yellow new words, using the exact glyph
+  ranges instead of full-line enclosing rectangles. Hide dots when highlighting is
+  disabled or words lose yellow after leaving the page; saved translations remain.
+- Ignore legacy anchors that span multiple strict sentences, preserving valid cache,
+  dictionary and studied vocabulary. Add Polish dialogue, stale-cache and pixel
+  regression coverage. Update DECISIONS.md, PROJECT.md and the feature specification
+  for the corrected behavior; project purpose is unchanged.
+- Validation: all 312 iOS unit tests and 14 reader UI scenarios pass; unsigned
+  device Release builds. Visually verify the Polish dialogue screenshot and
+  one-sentence preview; the marker pixel test also passes in an explicit light
+  appearance. Provider answers are fixtures; no backend deployment is needed.
+
+## 2026-11-15 — Block legacy worker images from book-queue deployments
+
+- Fix Cloud Control accepting an existing pilot image for the book ECS service, which then
+  crashed on missing ALIGNMENT_INPUT. Require digest-verified ECR image configuration with
+  book-queue-v1 support, Linux/amd64, the expected entrypoint and source revision during readiness,
+  preparation and deployment; keep legacy-only rollback releases compatible.
+- Stamp new image contracts/revision and run an offline entrypoint/import smoke check before
+  publication. Require clean source when publishing; keep exact-image benchmark requirements.
+- Document mixed-stack rollback recovery. DECISIONS.md records the image compatibility contract;
+  the project purpose and major boundaries are unchanged, so PROJECT.md needs no update.
+
 ## 2026-11-14 — Weekly and monthly API error filters
 
 - Add 7-day and 30-day periods to Cloud Control's API errors/logs view alongside 1/24 hours.
