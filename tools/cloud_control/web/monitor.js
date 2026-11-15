@@ -18,7 +18,7 @@ function monitorFailure(kind,message){
   if(kind==='errors'){$('error-metrics').replaceChildren(monitorCard('HTTP 5xx','Недоступно','Проверьте CloudWatch и Logs'));$('errors-more').hidden=true;}
   if(kind==='deployment')$('deployment-changes').replaceChildren();
 }
-async function loadMonitor(kind,more=false){
+async function loadMonitor(kind,more=false,trigger=null){
   const sequence=(monitorState.sequence[kind] || 0)+1;monitorState.sequence[kind]=sequence;
   let path;
   if(kind==='storage')path='/api/storage'+monitorParams({bucket:$('storage-bucket').value,prefix:$('storage-prefix').value,cursor:more?monitorState.data.storage?.cursor:null});
@@ -26,14 +26,13 @@ async function loadMonitor(kind,more=false){
   if(kind==='costs')path='/api/costs';
   if(kind==='errors')path='/api/errors'+monitorParams({group:$('error-group').value,hours:$('error-hours').value,cursor:more?monitorState.data.errors?.cursor:null});
   if(kind==='deployment')path='/api/deployment-summary'+monitorParams({tag:$('release-tag').value});
-  const refresh=$('refresh-'+kind);if(refresh)refresh.disabled=true;
   try{
-    const data=await api(path);if(sequence!==monitorState.sequence[kind])return;
+    const data=await api(path,undefined,{buttons:[$('refresh-'+kind),trigger]});if(sequence!==monitorState.sequence[kind])return;
     if(!data.available)throw Error(data.error || 'Нет данных из AWS.');
     if(more && kind==='storage')data.files=[...(monitorState.data.storage?.files || []),...data.files];
     monitorState.data[kind]=data;
     ({storage:renderStorage,alignment:renderAlignment,costs:renderCosts,errors:renderErrors,deployment:renderDeployment})[kind](data);
-  }catch(error){if(sequence===monitorState.sequence[kind])monitorFailure(kind,error.message);}finally{if(refresh && sequence===monitorState.sequence[kind])refresh.disabled=false;}
+  }catch(error){if(sequence===monitorState.sequence[kind])monitorFailure(kind,error.message);}
 }
 function renderStorage(data){
   monitorOptions('storage-bucket',data.buckets.map(b=>({value:b.id,label:b.id})),data.bucket?.id);
@@ -65,7 +64,8 @@ function renderCosts(data){
   if(!data.daily.length)chart.append(element('p','Пока нет дневных данных.','empty'));
 }
 function renderErrors(data){
-  $('error-metrics').replaceChildren(...data.metrics.map(metric=>monitorCard('HTTP 5xx · '+metric.api_id,metric.errors_5xx==null?'Нет данных':metric.errors_5xx,metric.requests==null?'Счётчик запросов не найден':metric.requests+' запросов за '+data.hours+' ч')));
+  const period=data.hours>=168?data.hours/24+' дн.':data.hours+' ч';
+  $('error-metrics').replaceChildren(...data.metrics.map(metric=>monitorCard('HTTP 5xx · '+metric.api_id,metric.errors_5xx==null?'Нет данных':metric.errors_5xx,metric.requests==null?'Счётчик запросов не найден':metric.requests+' запросов за '+period)));
   if(!data.metrics.length)$('error-metrics').append(monitorCard('HTTP 5xx','—','API Gateway не найден'));
   monitorOptions('error-group',data.groups.map(group=>({value:group.id,label:stackName(group.stack)+' · '+group.logical_id})),data.group?.id);
   $('error-note').textContent=data.scope+' · '+date(data.checked_at)+(monitorWarnings(data)?' · '+monitorWarnings(data):'');
@@ -99,7 +99,7 @@ window.addEventListener('cloud-state',()=>{
   if(monitorState.active==='releases' && operation!==monitorState.operation)loadMonitor('deployment');
   monitorState.configuration=configuration;monitorState.operation=operation;
 });
-for(const kind of ['storage','alignment','costs','errors','deployment'])$('refresh-'+kind).onclick=()=>loadMonitor(kind);
-$('storage-search').onclick=()=>loadMonitor('storage');$('storage-bucket').onchange=()=>loadMonitor('storage');$('storage-more').onclick=()=>loadMonitor('storage',true);
-$('alignment-days').onchange=()=>loadMonitor('alignment');$('error-hours').onchange=()=>loadMonitor('errors');$('error-group').onchange=()=>loadMonitor('errors');$('errors-more').onclick=()=>loadMonitor('errors',true);
+for(const kind of ['storage','alignment','costs','errors','deployment'])$('refresh-'+kind).onclick=event=>loadMonitor(kind,false,event.currentTarget);
+$('storage-search').onclick=event=>loadMonitor('storage',false,event.currentTarget);$('storage-bucket').onchange=()=>loadMonitor('storage');$('storage-more').onclick=event=>loadMonitor('storage',true,event.currentTarget);
+$('alignment-days').onchange=()=>loadMonitor('alignment');$('error-hours').onchange=()=>loadMonitor('errors');$('error-group').onchange=()=>loadMonitor('errors');$('errors-more').onclick=event=>loadMonitor('errors',true,event.currentTarget);
 $('release-tag').onchange=()=>loadMonitor('deployment');

@@ -25,6 +25,12 @@ nav button[aria-current]{color:white;background:#253b59}
 header{height:75px;padding:0 44px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}
 .breadcrumbs{font-size:12px;color:var(--muted)}
 .breadcrumbs span{margin:0 12px;color:#b9c4d1}
+.request-status{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-size:12px;white-space:nowrap}
+.request-spinner,button.is-loading::before{content:"";display:inline-block;box-sizing:border-box;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:request-spin .8s linear infinite;flex-shrink:0}
+button.is-loading{display:inline-flex;align-items:center;justify-content:center;gap:8px;opacity:.8;cursor:wait}
+@keyframes request-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.request-spinner,button.is-loading::before{animation:none;border-style:dotted}}
+@media(max-width:760px){header:has(.request-status:not([hidden])) .breadcrumbs{display:none}}
 .environment{font-size:10px;letter-spacing:1.1px;font-weight:700;display:flex;align-items:center}
 .environment .dot{background:#dc9965}
 .region{border-left:1px solid var(--line);margin-left:16px;padding-left:16px;letter-spacing:.1px;color:var(--muted);font-weight:400}

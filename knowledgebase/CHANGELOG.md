@@ -1,3 +1,13 @@
+## 2026-11-15 — Cloud Control request loading indicators
+
+- Show an accessible header spinner for foreground reads, tab navigation and manual actions;
+  add busy indicators to refresh, pagination, readiness and save buttons. Clear indicators after
+  success or failure and keep shared indicators active while overlapping requests finish.
+- Keep scheduled background polling silent and reuse in-flight state/status reads when the
+  user refreshes or changes tabs. Add delayed/failed offline responses for browser verification.
+- Architecture/product decisions and the project overview are unchanged; DECISIONS.md and
+  PROJECT.md need no update. No AWS resource or permission changes.
+
 ## 2026-11-15 — Strict sentence translation and word-sized dotted markers
 
 - Split automatic translation strictly at sentence-ending punctuation, including
@@ -26,6 +36,14 @@
   publication. Require clean source when publishing; keep exact-image benchmark requirements.
 - Document mixed-stack rollback recovery. DECISIONS.md records the image compatibility contract;
   the project purpose and major boundaries are unchanged, so PROJECT.md needs no update.
+
+## 2026-11-14 — Weekly and monthly API error filters
+
+- Add 7-day and 30-day periods to Cloud Control's API errors/logs view alongside 1/24 hours.
+  Apply the same time range to CloudWatch request/5xx metrics and paginated error logs; disclose
+  log-retention limits. No AWS retention or resource settings change.
+- Architecture/product decisions and the project overview are unchanged; DECISIONS.md and
+  PROJECT.md need no update.
 
 ## 2026-11-14 — Automatic sentence translation on book pages
 

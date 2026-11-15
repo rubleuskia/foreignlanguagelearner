@@ -32,10 +32,11 @@ existing local server; startup never deploys AWS or submits inference. Configure
   and are cached for 15 minutes. OpenAI provider spending is separate. Denied/empty sources are
   unavailable, never presented as a zero bill. Global billing APIs use their us-east-1 endpoint;
   no Regional resources are created there.
-- **Errors and logs** shows API Gateway request/5xx sums for 1/24 hours and pages of error events
+- **Errors and logs** shows API Gateway request/5xx sums for 1/24 hours or 7/30 days and pages of error events
   from one discovered CloudWatch log group. Access logs require an actual JSON status 500–599;
   worker/function logs use an error-pattern filter. Missing metrics or empty pages do not prove
-  zero errors. Credential patterns are redacted, but this remains private operational data.
+  zero errors. Log history is limited by each group's configured retention, even when a longer
+  period is selected. Credential patterns are redacted, but this remains private operational data.
 - **Versions and deploy** compares candidate and deployed revisions, identifies missing book
   components and worker-image prerequisites, and displays resource/property/output changes from
   the actual prepared/current templates. Retain removals are labelled. An absent prepared plan
@@ -83,6 +84,12 @@ They never deploy or invoke paid inference. For reproducible browser QA without 
 ```sh
 python -m tools.cloud_control.test_web_fixture --port 8770
 ```
+
+Add `--delay 3` to inspect foreground loading indicators during tab navigation, refresh and
+pagination. `--fail-source costs` simulates a failed read to verify cleanup. The shared header
+spinner and affected buttons stay busy until foreground requests complete; routine background
+status polling is silent. A manual refresh joins an already-running status read without creating
+a duplicate request.
 
 That separate server labels every page **OFFLINE TEST**, disables operation execution and returns
 fixture telemetry/manual responses. It is not evidence of real spend or deployment health.

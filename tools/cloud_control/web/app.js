@@ -1,7 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="control-token"]').content;
-let state = {jobs:[],tags:[]}, selectedOperation = null, initialized = false, statusBusy = false, stateBusy = false;
+let state = {jobs:[],tags:[]}, selectedOperation = null, initialized = false, statusRequest = null, stateRequest = null;
+let foregroundRequests = 0;
+const loadingButtons = new WeakMap();
 const labels = {queued:'В очереди',running:'Выполняется',ready:'Готов к деплою',consumed:'Использован',passed:'Пройдено',failed:'Ошибка',warning:'Требует внимания',interrupted:'Прервано',skipped:'Пропущено'};
 const actions = {refresh:'Обновление тегов',prepare:'Подготовка версии',deploy:'Деплой версии',tests:'Проверки API'};
 const color = s => ({passed:'good',ready:'good',failed:'bad',warning:'warn',interrupted:'warn',running:'busy',queued:'busy'}[s] || 'neutral');
@@ -9,9 +11,31 @@ function element(tag, text, cls) { const e=document.createElement(tag); if(text!
 function pill(s, text) { return element('span',text || labels[s] || s,'pill '+color(s)); }
 function date(v) { return v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'; }
 function notice(text) { $('notice').textContent=text; $('notice').hidden=!text; }
-async function api(path, body) {
-  const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{'X-Control-Token':csrf},body:body ? JSON.stringify(body):undefined});
-  const data=await response.json(); if(!response.ok)throw Error(data.error || 'Не удалось выполнить запрос.'); return data;
+function beginLoading(buttons=[]) {
+  foregroundRequests++;$('request-status').hidden=false;
+  const controls=[...new Set(buttons.filter(Boolean))];
+  for(const control of controls){
+    const current=loadingButtons.get(control) || {count:0,disabled:control.disabled};
+    current.count++;loadingButtons.set(control,current);control.disabled=true;
+    control.classList.add('is-loading');control.setAttribute('aria-busy','true');
+  }
+  let finished=false;
+  return ()=>{
+    if(finished)return;finished=true;
+    foregroundRequests--;$('request-status').hidden=foregroundRequests===0;
+    for(const control of controls){
+      const current=loadingButtons.get(control);if(--current.count)continue;
+      loadingButtons.delete(control);control.classList.remove('is-loading');control.removeAttribute('aria-busy');
+      control.disabled=control.classList.contains('operation-button')?!!state.active || control.dataset.expired==='true':current.disabled;
+    }
+  };
+}
+async function api(path, body, {background=false,buttons=[]}={}) {
+  const finish=background?()=>{}:beginLoading(buttons);
+  try{
+    const response=await fetch(path,{method:body ? 'POST':'GET',headers:body ? {'Content-Type':'application/json','X-Control-Token':csrf}:{'X-Control-Token':csrf},body:body ? JSON.stringify(body):undefined});
+    const data=await response.json(); if(!response.ok)throw Error(data.error || 'Не удалось выполнить запрос.'); return data;
+  }finally{finish();}
 }
 function tab(id) {
   document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==id);
@@ -19,6 +43,8 @@ function tab(id) {
   $('operation-detail').hidden=true;
   window.scrollTo({top:0,behavior:'instant'});
   window.dispatchEvent(new CustomEvent('cloud-tab',{detail:id}));
+  if(id==='overview')refreshStatus();
+  else if(['releases','tests','settings'].includes(id))refreshState(true);
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>tab(b.dataset.goto));
@@ -81,17 +107,24 @@ function renderState() {
     $('api-status').textContent='Не запускались';$('api-detail').textContent='Для текущего аккаунта нет отчёта';
     $('test-report').textContent='Для текущего аккаунта проверок ещё не было.';$('test-report').className='rows empty';$('test-report-time').textContent='—';
   }
-  document.querySelectorAll('.operation-button').forEach(b=>b.disabled=!!state.active || b.dataset.expired==='true');
+  document.querySelectorAll('.operation-button').forEach(b=>b.disabled=!!state.active || b.dataset.expired==='true' || loadingButtons.has(b));
   renderOperation();
   if(!initialized){fillConfig(state.configuration);initialized=true;}
   window.dispatchEvent(new CustomEvent('cloud-state'));
 }
-async function refreshState() {if(stateBusy)return;stateBusy=true;try{state=await api('/api/state');renderState();}catch(e){notice(e.message);}finally{stateBusy=false;}}
+async function refreshState(visible=false) {
+  const finish=visible?beginLoading():()=>{};
+  try{
+    if(!stateRequest)stateRequest=(async()=>{state=await api('/api/state',undefined,{background:true});renderState();})().finally(()=>{stateRequest=null;});
+    await stateRequest;
+  }catch(e){notice(e.message);}finally{finish();}
+}
 function stackName(name) {return ({'CloudFoundation':'Аккаунты и API','CloudBilling':'Подписки Apple','CloudTranslation':'Облачные переводы','PaidAlignment':'Обработка аудио','Operator':'Первый этап · API и OpenAI','OperatorAlignment':'Первый этап · аудио'})[name.replace('ForeignLanguageLearner','').replace('-prod','')] || name;}
-async function refreshStatus() {
-  if(statusBusy)return;statusBusy=true;
+async function refreshStatus(visible=true) {
+  const finish=visible?beginLoading([$('refresh-status')]):()=>{};
   try {
-    const result=await api('/api/status');
+    if(!statusRequest)statusRequest=(async()=>{
+    const result=await api('/api/status',undefined,{background:true});
     $('connection-note').hidden=!!result.stacks;
     $('connection-note').textContent=result.error || 'Подключите AWS, чтобы увидеть состояние продакшена.';
     if(!result.stacks){$('infra-status').textContent=result.configured?'Нет доступа':'Не подключено';$('infra-detail').textContent='Откройте «Настройка»';$('release-status').textContent='—';
@@ -109,13 +142,15 @@ async function refreshStatus() {
     $('checked-at').textContent=date(result.checked_at);
     rows('stacks',stacks,s=>{const ok=['CREATE_COMPLETE','UPDATE_COMPLETE','IMPORT_COMPLETE'].includes(s.status);return row(stackName(s.name),(s.tags.ControlReleaseTag || 'Без тега')+' · '+s.status,pill(s.status==='NOT_DEPLOYED'?'skipped':ok?'passed':'warning',s.status==='NOT_DEPLOYED'?'Не развёрнуто':s.status==='UPDATE_ROLLBACK_COMPLETE'?'Изменения отменены':ok?'Доступен':'Проверить'));},'Стеков нет');
     rows('alarms',result.alarms,a=>row(a.name,null,pill(a.state==='OK'?'passed':a.state==='ALARM'?'failed':'warning',a.state==='OK'?'В норме':a.state==='ALARM'?'Тревога':'Мало данных')),'Нет зарегистрированных сигналов. Это не подтверждение исправности API.');
-  }catch(e){notice(e.message);}finally{statusBusy=false;}
+    })().finally(()=>{statusRequest=null;});
+    await statusRequest;
+  }catch(e){notice(e.message);}finally{finish();}
 }
-async function start(path, body) {try{notice('');const job=await api(path,body);await refreshState();showOperation(job.id);}catch(e){notice(e.message);}}
-$('refresh-status').onclick=refreshStatus;
-$('refresh-tags').onclick=()=>start('/api/refresh',{});
-$('prepare').onclick=()=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите проверенную версию из списка.');start('/api/prepare',{tag});};
-$('smoke-tests').onclick=()=>start('/api/tests',{mode:'smoke'});
+async function start(path, body, trigger) {try{notice('');const job=await api(path,body,{buttons:[trigger]});await refreshState(true);showOperation(job.id);}catch(e){notice(e.message);}}
+$('refresh-status').onclick=()=>refreshStatus();
+$('refresh-tags').onclick=event=>start('/api/refresh',{},event.currentTarget);
+$('prepare').onclick=event=>{const tag=$('release-tag').value.trim();if(!tag)return notice('Выберите проверенную версию из списка.');start('/api/prepare',{tag},event.currentTarget);};
+$('smoke-tests').onclick=event=>start('/api/tests',{mode:'smoke'},event.currentTarget);
 function confirm(title,description,expected,action) {
   const dialog=$('confirm-dialog');$('confirm-title').textContent=title;$('confirm-description').textContent=description;
   $('confirm-input').value='';$('confirm-expected').textContent='Введите: '+expected;$('confirm-action').disabled=true;
@@ -127,7 +162,7 @@ function deploy(plan) {confirm('Развернуть '+plan.tag+'?', 'Измен
 $('inference-tests').onclick=()=>confirm('Запустить сквозной тест?', 'Будут созданы до двух новых запросов к платной модели для тестового подписчика. Повтор того же ключа должен вернуть тот же результат. Прерванная операция не запускается повторно автоматически.','2',value=>start('/api/tests',{mode:'inference',confirm:value}));
 function updateMode() {const operator=$('deployment-mode').value==='operator';$('operator-settings').hidden=!operator;$('subscription-settings').hidden=operator;}
 $('deployment-mode').onchange=updateMode;
-$('check-readiness').onclick=async()=>{const b=$('check-readiness');b.disabled=true;try{const r=await api('/api/readiness');rows('readiness-cases',r.cases,c=>row(c.name,c.detail,pill(c.state)),'Нет проверок');notice(r.note);}catch(e){notice(e.message);}finally{b.disabled=false;}};
+$('check-readiness').onclick=async event=>{try{const r=await api('/api/readiness',undefined,{buttons:[event.currentTarget]});rows('readiness-cases',r.cases,c=>row(c.name,c.detail,pill(c.state)),'Нет проверок');notice(r.note);}catch(e){notice(e.message);}};
 function fillConfig(c) {
   c=c || {account_id:'',profile:'fll-prod',region:'eu-north-1',context:{acceptTranslations:'false',paidAlignment:'false'}};
   $('deployment-mode').value=c.deployment_mode || 'subscription';
@@ -140,7 +175,7 @@ function fillConfig(c) {
   const extra={...c};delete extra.deployment_mode;delete extra.account_id;delete extra.profile;delete extra.region;delete extra.access_token_file;
   $('deploy-config').value=JSON.stringify(extra,null,2);
 }
-$('config-form').onsubmit=async event=>{event.preventDefault();try{
+$('config-form').onsubmit=async event=>{event.preventDefault();const finish=beginLoading([event.currentTarget.querySelector('button[type="submit"]')]);try{
   const extra=JSON.parse($('deploy-config').value), c={...extra,account_id:$('account-id').value.trim(),profile:$('profile').value.trim(),region:$('region').value};
   c.deployment_mode=$('deployment-mode').value;
   if(c.deployment_mode==='operator'){c.context={openaiSecretArn:$('openai-secret-arn').value.trim(),operatorUsername:$('operator-username').value.trim(),dailyModelLimit:$('daily-model-limit').value,operatorAlignment:$('operator-alignment').value};
@@ -149,7 +184,7 @@ $('config-form').onsubmit=async event=>{event.preventDefault();try{
     delete c.apple_roots;delete c.root_sha256;delete c.policy_file;delete c.alignment_benchmark_file;
     if($('benchmark-file').value.trim())c.alignment_benchmark_file=$('benchmark-file').value.trim();}
   if($('access-token-file').value.trim())c.access_token_file=$('access-token-file').value.trim();
-  await api('/api/config',c);notice('Настройки сохранены. Проверяю подключение к AWS.');await refreshState();await refreshStatus();
-}catch(e){notice(e.message);}};
+  await api('/api/config',c);notice('Настройки сохранены. Проверяю подключение к AWS.');await refreshState(true);await refreshStatus();
+}catch(e){notice(e.message);}finally{finish();}};
 api('/api/profiles').then(d=>$('profiles').replaceChildren(...d.profiles.map(p=>{const o=element('option');o.value=p;return o;}))).catch(()=>{});
-refreshState();refreshStatus();setInterval(refreshState,3000);setInterval(refreshStatus,30000);
+refreshState(true);refreshStatus();setInterval(()=>refreshState(),3000);setInterval(()=>refreshStatus(false),30000);
