@@ -16,6 +16,17 @@
   one-sentence preview; the marker pixel test also passes in an explicit light
   appearance. Provider answers are fixtures; no backend deployment is needed.
 
+## 2026-11-15 — Block legacy worker images from book-queue deployments
+
+- Fix Cloud Control accepting an existing pilot image for the book ECS service, which then
+  crashed on missing ALIGNMENT_INPUT. Require digest-verified ECR image configuration with
+  book-queue-v1 support, Linux/amd64, the expected entrypoint and source revision during readiness,
+  preparation and deployment; keep legacy-only rollback releases compatible.
+- Stamp new image contracts/revision and run an offline entrypoint/import smoke check before
+  publication. Require clean source when publishing; keep exact-image benchmark requirements.
+- Document mixed-stack rollback recovery. DECISIONS.md records the image compatibility contract;
+  the project purpose and major boundaries are unchanged, so PROJECT.md needs no update.
+
 ## 2026-11-14 — Automatic sentence translation on book pages
 
 - Add a compact top strip to local book readers with session-only per-book auto

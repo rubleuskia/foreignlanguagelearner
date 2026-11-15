@@ -4,8 +4,11 @@ from datetime import datetime, timezone
 import http.client
 import hashlib
 import json
+import io
 from pathlib import Path
 import tempfile
+import tarfile
+import time
 import threading
 import unittest
 from unittest.mock import Mock, patch
@@ -16,11 +19,13 @@ from botocore.config import Config
 from botocore.stub import Stubber
 from moto import mock_aws
 
-from .config import ControlError, Configuration, digest
+from .config import ControlError, Configuration, digest, atomic_json
 from .deployment import prepared_changes, summary, template_changes
 from .monitoring import Monitoring, normalize_job, redact
 from .openapi import manual, specification
 from .server import Application, Handler
+from .worker_image import inspect as inspect_image, download_config, CONTRACT_LABEL, REVISION_LABEL
+from .jobs import Jobs, tree_digest
 
 ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 11, 14, 12, tzinfo=timezone.utc)
@@ -203,6 +208,109 @@ class TelemetryTests(unittest.TestCase):
         self.assertIsNone(normalize_job({'job_id':'empty','created_at':1},'table',10)['runtime_seconds'])
         value=redact('eyJabc.def.ghi AKIA'+'X'*16+' Bearer tokenvalue '+json.dumps({'refreshToken':'private','password':'hidden'}))
         for hidden in ['eyJabc','AKIA','tokenvalue','private','hidden']: self.assertNotIn(hidden,value)
+
+
+class WorkerImageTests(unittest.TestCase):
+    def test_prepare_blocks_old_image_before_building_assets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config=copy.deepcopy(CONFIG);benchmark=Path(temp)/'benchmark.json';benchmark.write_text('{}')
+            config['alignment_benchmark_file']=str(benchmark)
+            aws=Mock();aws.snapshot.return_value=[]
+            aws.client.return_value.describe_availability_zones.return_value={'AvailabilityZones':[{'ZoneName':'eu-north-1a'},{'ZoneName':'eu-north-1b'}]}
+            aws.require_book_worker.side_effect=ControlError('old image: book-queue-v1')
+            releases=Mock();releases.verify.return_value={'tag':'test','sha':'a'*40}
+            jobs=Jobs(ROOT,Configuration(temp),aws_factory=lambda _:aws,releases=releases);key='a'*32
+            atomic_json(jobs.directory/(key+'.json'),{'id':key,'state':'running','log':''})
+            def archive(operation,argv,**kwargs):
+                self.assertEqual(argv[:2],['git','archive'])
+                with tarfile.open(argv[4],'w') as bundle:
+                    item=tarfile.TarInfo('backend/book_alignment/api.py');item.size=1
+                    bundle.addfile(item,io.BytesIO(b'x'))
+            jobs.execute=Mock(side_effect=archive)
+            with patch('tools.cloud_control.jobs.validate_benchmark'),self.assertRaisesRegex(ControlError,'book-queue-v1'):
+                jobs.prepare(key,config,{'tag':'test'})
+            jobs.execute.assert_called_once();aws.require_book_worker.assert_called_once()
+
+    def test_existing_ready_plan_rechecks_image_before_consumption_or_cdk(self):
+        with tempfile.TemporaryDirectory() as temp:
+            aws=Mock();aws.snapshot.return_value=DISCOVERY['stacks']
+            aws.require_book_worker.side_effect=ControlError('old image: book-queue-v1')
+            releases=Mock();releases.verify.return_value={'sha':'a'*40}
+            jobs=Jobs(ROOT,Configuration(temp),aws_factory=lambda _:aws,releases=releases)
+            plan_id='a'*32;operation='b'*32;area=jobs.plans/plan_id
+            source=area/'source/backend/book_alignment/api.py';source.parent.mkdir(parents=True);source.write_text('')
+            plan={'id':plan_id,'action':'prepare','state':'ready','tag':'test','sha':'a'*40,'prepared_at':time.time(),
+                  'config_hash':digest(CONFIG),'artifact_hash':tree_digest(area),'baseline':DISCOVERY['stacks']}
+            atomic_json(jobs.directory/(plan_id+'.json'),plan)
+            atomic_json(jobs.directory/(operation+'.json'),{'id':operation,'state':'running','log':''})
+            jobs.execute=Mock()
+            with self.assertRaisesRegex(ControlError,'book-queue-v1'):
+                jobs.deploy(operation,CONFIG,{'plan_id':plan_id,'confirm':ACCOUNT+'/test'})
+            self.assertEqual(jobs.get(plan_id)['state'],'ready');jobs.execute.assert_not_called()
+
+    def image(self, change=None):
+        config={'os':'linux','architecture':'amd64','config':{'Entrypoint':['python','tools/subtitle-aligner/worker/worker.py'],
+            'Labels':{CONTRACT_LABEL:'alignment-input-v1,book-queue-v1',REVISION_LABEL:'b'*40}}}
+        if change: change(config)
+        raw=json.dumps(config).encode(); sha='sha256:'+hashlib.sha256(raw).hexdigest()
+        manifest={'schemaVersion':2,'mediaType':'application/vnd.docker.distribution.manifest.v2+json',
+                  'config':{'digest':sha,'size':len(raw)}}
+        client=Mock();client.batch_get_image.return_value={'images':[{'imageId':{'imageDigest':'sha256:'+'a'*64},
+            'imageManifest':json.dumps(manifest)}]}
+        client.get_download_url_for_layer.return_value={'layerDigest':sha,'downloadUrl':'https://private-config'}
+        return client,raw
+
+    def inspect(self, client, raw):
+        return inspect_image(client,ACCOUNT,'eu-north-1','worker','sha256:'+'a'*64,download=lambda *_:raw)
+
+    def test_compatible_digest_is_verified_without_pulling_layers(self):
+        client,raw=self.image();result=self.inspect(client,raw)
+        self.assertIn('book-queue-v1',result['contracts']);self.assertEqual(result['source_revision'],'b'*40)
+        client.batch_get_image.assert_called_once_with(registryId=ACCOUNT,repositoryName='worker',imageIds=[{'imageDigest':'sha256:'+'a'*64}])
+        self.assertEqual(client.get_download_url_for_layer.call_count,1)
+
+    def test_legacy_wrong_platform_and_entrypoint_fail_closed(self):
+        for change in [lambda c:c['config'].update(Labels={}),lambda c:c.update(architecture='arm64'),
+                       lambda c:c['config'].update(Entrypoint=['python','old.py']),
+                       lambda c:c['config']['Labels'].update({REVISION_LABEL:'unknown'})]:
+            with self.subTest(change=change),self.assertRaisesRegex(ControlError,'book-queue-v1'):
+                self.inspect(*self.image(change))
+
+    def test_config_corruption_or_missing_image_is_rejected(self):
+        client,raw=self.image()
+        with self.assertRaisesRegex(ControlError,'сумма'):self.inspect(client,raw+b'bad')
+        client.batch_get_image.return_value={'images':[],'failures':[{'failureCode':'ImageNotFound'}]}
+        with self.assertRaises(ControlError):self.inspect(client,raw)
+
+    def test_oci_index_selects_amd64_and_ignores_attestation(self):
+        client,raw=self.image();child=copy.deepcopy(client.batch_get_image.return_value)
+        child['images'][0]['imageId']['imageDigest']='sha256:'+'c'*64
+        index={'schemaVersion':2,'mediaType':'application/vnd.oci.image.index.v1+json','manifests':[
+            {'digest':'sha256:'+'c'*64,'platform':{'os':'linux','architecture':'amd64'}},
+            {'digest':'sha256:'+'d'*64,'platform':{'os':'unknown','architecture':'unknown'}}]}
+        client.batch_get_image.side_effect=[{'images':[{'imageId':{'imageDigest':'sha256:'+'a'*64},'imageManifest':json.dumps(index)}]},child]
+        self.assertEqual(self.inspect(client,raw)['platform'],'linux/amd64')
+        self.assertEqual(client.batch_get_image.call_count,2)
+
+    def test_config_download_rejects_redirects_and_untrusted_hosts(self):
+        for url in ['http://bucket.s3.eu-north-1.amazonaws.com/x','https://evil.test/x',
+                    'https://bucket.s3.eu-north-1.amazonaws.com.evil.test/x','https://bucket.s3.us-east-1.amazonaws.com/x']:
+            with self.subTest(url=url),self.assertRaises(ControlError):download_config(url,'eu-north-1')
+        from .worker_image import NoRedirect
+        self.assertIsNone(NoRedirect().redirect_request(None,None,None,None,None,None))
+
+    def test_book_source_requires_contract_but_legacy_rollback_does_not(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jobs=Jobs(ROOT,Configuration(temp));jobs.update=Mock();aws=Mock()
+            source=Path(temp)/'source';source.mkdir()
+            jobs.check_worker_image('operation',aws,CONFIG,source);aws.require_book_worker.assert_not_called()
+            book=source/'backend/book_alignment/api.py';book.parent.mkdir(parents=True);book.write_text('')
+            aws.require_book_worker.side_effect=ControlError('old image')
+            with self.assertRaises(ControlError):jobs.check_worker_image('operation',aws,CONFIG,source)
+            jobs.update.assert_not_called()
+            aws.require_book_worker.side_effect=None;aws.require_book_worker.return_value={'contracts':['book-queue-v1']}
+            jobs.check_worker_image('operation',aws,CONFIG,source)
+            jobs.update.assert_called_once_with('operation',worker_image={'contracts':['book-queue-v1']})
 
 
 class OpenAPITests(unittest.TestCase):

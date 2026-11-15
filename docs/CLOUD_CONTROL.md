@@ -78,6 +78,9 @@ Tag latency depends on complete CI and runner availability, not a fixed ten-minu
    locked npm dependencies without install scripts, and synthesizes a prod assembly with explicit
    account/region and lookups disabled. Policy, roots and optional benchmark files are copied into it.
    Preparation does not mutate AWS. The live stacks/templates/tags form its baseline.
+   For book-queue releases, the pinned ECR image must advertise the checked `book-queue-v1`
+   contract; old pilot images are rejected before asset building. Existing plans recheck image
+   compatibility before deployment. See [worker image and recovery](CLOUD_BOOK_ALIGNMENT.md#release-and-validation).
 2. Read **Изменения**, including the CDK diff and IAM/deletion/replacement effects. Unexpected stacks,
    environment or unauthenticated application routes block the plan. Oversized diffs that cannot be
    reviewed in the panel also block it. Already-deployed components cannot be silently omitted by
