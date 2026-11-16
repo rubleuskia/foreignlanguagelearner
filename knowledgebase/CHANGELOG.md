@@ -1,3 +1,18 @@
+## 2026-11-16 — YouTube browsing, covers, subtitle replacement and playback resume
+
+- Add **Open YouTube** for searching in the embedded homepage without pasting a link.
+- Save the public video thumbnail as a bounded local JPEG cover, with standard-quality
+  fallback and optional failure; unavailable artwork does not block caption import.
+- Mark YouTube items visibly, persist their source link, and add source/open and subtitle
+  update actions to the library, details and reader. Replace captions in the same item,
+  preserving video position/cover and historical dictionary languages. Show the captured
+  language; switching requires recapturing the chosen YouTube caption track, including
+  correct language reporting for YouTube-translated tracks.
+- Request autoplay at the saved position, persist progress periodically/on exit, and ignore
+  unready timing samples so reopening/loading cannot erase the saved position.
+- Record these behavior/storage decisions in DECISIONS.md and supported workflow in
+  PROJECT.md. Project purpose is unchanged.
+
 ## 2026-11-15 — Cloud Control request loading indicators
 
 - Show an accessible header spinner for foreground reads, tab navigation and manual actions;

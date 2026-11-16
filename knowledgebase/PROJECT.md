@@ -22,6 +22,10 @@ not changed the live Polish pilot. See [workflow and boundaries](../docs/CLOUD_B
 ## YouTube learning material
 
 Import captioned YouTube videos through the library's + menu or Safari Share Extension.
+The in-app importer supports pasted links or browsing/searching from the YouTube homepage.
+New imports save the video thumbnail locally as cover art and display a YouTube badge.
+YouTube actions retain/open the source link and recapture a different caption language in
+the same item. The reader persists video progress and requests autoplay from the saved time.
 Review the source language, retain timed captions locally, and watch the online embedded
 video above the native transcript with cue highlighting, translation and dictionary capture.
 Enable the desired captions on the video before capture. This best-effort integration does

@@ -5,6 +5,7 @@ import WebKit
 struct YouTubeImportView: View {
     var incoming: YouTubeImport? = nil
     var inboxURL: URL? = nil
+    var replacing: LearningItem? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var link = ""
@@ -13,6 +14,8 @@ struct YouTubeImportView: View {
     @State private var language = "en"
     @State private var busy = false
     @State private var error: String?
+    @State private var replacementRevision: String?
+    @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -20,13 +23,19 @@ struct YouTubeImportView: View {
                 if let payload {
                     Form {
                         Section("YouTube") { Text(payload.title); Text("\(payload.cues.count) subtitle segments") }
-                        Picker("Source language", selection: $language) {
-                            ForEach(SourceLanguage.supportedCodes.sorted(), id: \.self) { code in
-                                Text(SourceLanguage.name(for: code)).tag(code)
-                            }
-                        }
+                        Text(AppLanguage.format("Captured subtitles: %@", SourceLanguage.name(for: payload.language)))
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("Choose different subtitles") {
+                            if browser == nil { browser = YouTubeBrowserSession(videoID: payload.videoID) }
+                            self.payload = nil
+                            error = nil
+                        }.disabled(busy)
+                        Text("To change the language, choose subtitles in the YouTube player and capture again.")
+                            .font(.caption).foregroundStyle(.secondary)
                         Text("The video streams from YouTube. The transcript is saved on this device. Internet is required to watch.")
-                        Button("Add to library") { save(payload) }.disabled(busy)
+                        Button(AppLanguage.text(replacing == nil ? "Add to library" : "Replace subtitles")) {
+                            saveTask = Task { await save(payload) }
+                        }.disabled(busy || !SourceLanguage.isSupported(language))
                             .accessibilityIdentifier("youtube.save")
                     }
                 } else if let browser {
@@ -41,6 +50,10 @@ struct YouTubeImportView: View {
                             TextField("Paste YouTube link", text: $link).textInputAutocapitalization(.never)
                                 .autocorrectionDisabled().keyboardType(.URL).accessibilityIdentifier("youtube.link")
                             Button("Open video") { open() }.accessibilityIdentifier("youtube.open")
+                            Button("Open YouTube", systemImage: "magnifyingglass") {
+                                error = nil
+                                browser = YouTubeBrowserSession()
+                            }.accessibilityIdentifier("youtube.browse")
                         }
                         Text("You can also open a video in Safari, enable subtitles, and share it to Language Learner.")
                     }
@@ -50,8 +63,18 @@ struct YouTubeImportView: View {
             }
             .navigationTitle("Import YouTube")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            .onAppear { if let incoming { accept(incoming) } }
-            .onDisappear { browser?.webView.stopLoading(); browser?.webView.loadHTMLString("", baseURL: nil) }
+            .onAppear {
+                if replacementRevision == nil { replacementRevision = replacing?.resourceRevision }
+                if let incoming { accept(incoming) }
+                else if browser == nil, let id = replacing?.youtubeVideoID {
+                    browser = YouTubeBrowserSession(videoID: id)
+                }
+            }
+            .onDisappear {
+                saveTask?.cancel()
+                browser?.webView.stopLoading()
+                browser?.webView.loadHTMLString("", baseURL: nil)
+            }
         }
     }
 
@@ -63,8 +86,8 @@ struct YouTubeImportView: View {
     private func accept(_ value: YouTubeImport) {
         payload = value
         let code = value.language.split(separator: "-").first.map(String.init) ?? "en"
-        language = SourceLanguage.isSupported(code) ? code : "en"
-        if !SourceLanguage.isSupported(code) { error = "Choose a supported source language before saving this transcript." }
+        language = code
+        if !SourceLanguage.isSupported(code) { error = "This subtitle language is not supported. Choose another subtitle language in YouTube." }
     }
     private func capture(_ browser: YouTubeBrowserSession) async {
         busy = true; error = nil
@@ -72,22 +95,40 @@ struct YouTubeImportView: View {
         do { accept(try await browser.capture()) }
         catch { self.error = error.localizedDescription }
     }
-    private func save(_ value: YouTubeImport) {
+    private func save(_ value: YouTubeImport) async {
+        guard !busy else { return }
+        busy = true; error = nil
+        defer { busy = false }
         do {
             let value = try value.validated()
             _ = try VocabularyTokenizer.language(language)
+            if let replacing {
+                try YouTubeTranscriptUpdateService.replace(value, language: language, item: replacing,
+                                                           expectedRevision: replacementRevision, context: context)
+                dismiss()
+                return
+            }
             let id = value.id
             let existing = try context.fetch(FetchDescriptor<LearningItem>(predicate: #Predicate { $0.id == id }))
             if existing.isEmpty {
+                let cover = await YouTubeCoverService.fetch(videoID: value.videoID)
+                try Task.checkCancellation()
                 let root = MediaImportService.directory(for: id)
                 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
                 let item = LearningItem(id: id, title: value.title, mediaKind: "youtube", mediaFilename: "",
                     transcriptFilename: "", duration: value.duration,
                     segments: value.cues.map { .init(start: $0.start, end: $0.end, text: $0.text) }, sourceLanguageCode: language)
                 item.youtubeVideoID = value.videoID
+                item.youtubeSourceURL = "https://www.youtube.com/watch?v=\(value.videoID)"
                 item.readingVocabularyMigrationVersion = 1
                 context.insert(item)
-                do { try context.save() }
+                do {
+                    if let cover {
+                        try cover.write(to: root.appending(path: BookCoverService.filename), options: .atomic)
+                        item.coverFilename = BookCoverService.filename
+                    }
+                    try context.save()
+                }
                 catch { context.delete(item); try? FileManager.default.removeItem(at: root); throw error }
             }
             if let inboxURL { try FileManager.default.removeItem(at: inboxURL) }
@@ -98,7 +139,7 @@ struct YouTubeImportView: View {
 
 @MainActor final class YouTubeBrowserSession: NSObject, WKNavigationDelegate {
     let webView: WKWebView
-    init(videoID: String) {
+    init(videoID: String? = nil) {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         if let url = Bundle.main.url(forResource: "YouTubeCapture", withExtension: "js"),
@@ -112,7 +153,8 @@ struct YouTubeImportView: View {
         super.init()
         webView.navigationDelegate = self
         webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-        webView.load(URLRequest(url: URL(string: "https://m.youtube.com/watch?v=\(videoID)")!))
+        let url = videoID.map { "https://m.youtube.com/watch?v=\($0)" } ?? "https://m.youtube.com/"
+        webView.load(URLRequest(url: URL(string: url)!))
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url, url.scheme == "https", let host = url.host,

@@ -65,7 +65,7 @@ jobs:
           node --check tools/cloud_control/web/app.js
           node --check tools/cloud_control/web/monitor.js
           node --check tools/cloud_control/web/swagger.js
-          node --test Tests/YouTubeCapture.test.cjs
+          node --test Tests/YouTubeCapture.test.cjs Tests/YouTubePlayback.test.cjs
           bash -n scripts/cloud-control.sh scripts/tag-verified-main.sh
       - name: CDK type and infrastructure assertions
         working-directory: infra/alignment

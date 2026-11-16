@@ -1,8 +1,30 @@
 # YouTube import
 
-Choose **Library → + → YouTube video**, paste an HTTPS YouTube link and open it.
+Choose **Library → + → YouTube video**, then paste an HTTPS YouTube link and open it,
+or choose **Open YouTube** to search and select a video from the embedded homepage.
 Play the video, enable captions in the desired language, then choose **Get subtitles**.
-Review the source language and choose **Add to library**.
+Review the captured subtitle language and choose **Add to library**. To change languages,
+choose **Choose different subtitles**, select the desired captions in the YouTube player's
+settings, and capture again. Changing a text's language label does not translate captions.
+
+YouTube items display a YouTube badge and retain their original video ID and source link.
+Their actions menu in the library, book details and reader offers **Open on YouTube** and
+**Update subtitles**. The latter reopens the original video and replaces captions in the
+same item after review. For example, switch from English to Polish in the player's caption
+settings, then capture and confirm **Replace subtitles**. Another video's captions cannot
+replace this item's text. The cover, item identity, playback position and saved dictionary
+entries remain; text scroll/completion resets and obsolete dictionary cue indices are cleared.
+Historical dictionary entries keep their original languages.
+
+Saving a new item downloads its public video thumbnail from YouTube's image CDN, trying
+`maxresdefault.jpg` then `hqdefault.jpg`. The existing bounded cover decoder produces a
+local `cover.jpg` inside the item's directory. Thumbnail failure leaves the bundled cover
+and does not block caption import. No API key or backend is involved.
+
+The reader saves playback progress every five seconds and on exit/backgrounding, then
+seeks to that position and requests autoplay when reopened. Loading/buffering telemetry
+cannot replace the saved position with an unloaded zero. If YouTube blocks autoplay, the
+reader asks the user to tap Play; the saved start position is retained.
 
 Alternatively, open the video in Safari, play it with captions enabled and choose
 Safari **Share → Language Learner**. Confirm save, open Language Learner, then review
@@ -37,6 +59,14 @@ duration, validates IDs and requires ordered finite cue intervals. The main app 
 again before inserting into SwiftData; the extension cannot access its model store.
 
 ## Verification
+
+2026-11-16 additions: nine JavaScript capture/player checks pass. A native macOS harness
+compiled the actual cover services and verified JPEG conversion, thumbnail fallback,
+temporary-file cleanup, invalid-image and offline handling. Changed Swift files pass syntax
+parsing and both localization tables pass validation. iOS unit/simulator execution remains
+blocked by environment access to CoreSimulator/compiler-plugin services; the historical
+simulator results below describe the original importer, not acceptance of these additions.
+
 
 iPhone 17 Pro simulator / iOS 26.5: the real Safari Share Extension captured English captions
 for `jNQXAC9IVRw` (six cues), wrote the App Group inbox and the main app reviewed and inserted

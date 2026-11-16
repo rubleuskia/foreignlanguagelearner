@@ -223,3 +223,15 @@
 "Translations are still running. Wait until they finish or turn off Auto translate to turn the page." = "Translations are still running. Wait until they finish or turn off Auto translate to turn the page.";
 "Translating page…" = "Translating page…";
 "This sentence is too long for automatic translation." = "This sentence is too long for automatic translation.";
+"Open YouTube" = "Open YouTube";
+"Open on YouTube" = "Open on YouTube";
+"YouTube actions" = "YouTube actions";
+"Update subtitles" = "Update subtitles";
+"Replace subtitles" = "Replace subtitles";
+"Captured subtitles: %@" = "Captured subtitles: %@";
+"Choose different subtitles" = "Choose different subtitles";
+"Choose different subtitles to change their language." = "Choose different subtitles to change their language.";
+"To change the language, choose subtitles in the YouTube player and capture again." = "To change the language, choose subtitles in the YouTube player and capture again.";
+"This subtitle language is not supported. Choose another subtitle language in YouTube." = "This subtitle language is not supported. Choose another subtitle language in YouTube.";
+"Open the original YouTube video to replace its subtitles." = "Open the original YouTube video to replace its subtitles.";
+"Tap Play in the video to continue from your saved position." = "Tap Play in the video to continue from your saved position.";

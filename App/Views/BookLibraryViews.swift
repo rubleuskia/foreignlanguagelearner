@@ -94,7 +94,7 @@ struct BookResumeLabel: View {
         } else if !item.parts.isEmpty {
             Text(AppLanguage.format("Chapter %d · %@", item.partIndex(containing: item.lastPosition) + 1,
                                     BookLibraryDesign.time(item.lastPosition)))
-        } else if item.hasAudio { Text(BookLibraryDesign.time(item.lastPosition)) }
+        } else if item.hasAudio || item.isYouTube { Text(BookLibraryDesign.time(item.lastPosition)) }
         else { Text("Saved reading position") }
     }
 }
@@ -205,7 +205,8 @@ private struct BookLibraryShelfContent: View {
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                             }.padding(.vertical, 8)
                         }.accessibilityIdentifier("library.book.\(item.id)")
-                        if item.youtubeVideoID == nil { BookResourceMenu(item: item).buttonStyle(.borderless) }
+                        if item.isYouTube { YouTubeResourceMenu(item: item).buttonStyle(.borderless) }
+                        else { BookResourceMenu(item: item).buttonStyle(.borderless) }
                     }
                 }.onDelete { offsets in
                     let ids = Set(offsets.map { filtered[$0].id })
@@ -234,8 +235,11 @@ private struct BookLibraryShelfContent: View {
     private func metadata(_ item: LearningItem) -> some View {
         let parts = [SourceLanguage.name(for: item.sourceLanguageCode)]
             + (item.tracks.isEmpty ? [] : [AppLanguage.format("%d chapters", item.tracks.count)])
-            + (item.hasAudio ? [BookLibraryDesign.time(item.duration)] : [])
-        return Text(parts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+            + (item.hasAudio || item.isYouTube ? [BookLibraryDesign.time(item.duration)] : [])
+        return HStack(spacing: 6) {
+            if item.isYouTube { Label("YouTube", systemImage: "play.rectangle.fill").foregroundStyle(.red) }
+            Text(parts.joined(separator: " · "))
+        }.font(.caption).foregroundStyle(.secondary)
     }
     private func progress(_ item: LearningItem) -> some View {
         HStack(spacing: 10) {
@@ -334,9 +338,11 @@ struct BookDetailView: View {
                 }.frame(height: 260)
                 VStack(alignment: .leading, spacing: 24) {
                     HStack {
+                        if item.isYouTube { Label("YouTube", systemImage: "play.rectangle.fill").foregroundStyle(.red) }
                         Text(SourceLanguage.name(for: item.sourceLanguageCode))
                         if !item.tracks.isEmpty { Text(AppLanguage.format("%d chapters", item.tracks.count)) }
                         if item.hasAudio { Label(BookLibraryDesign.time(item.duration), systemImage: "headphones") }
+                        else if item.isYouTube { Label(BookLibraryDesign.time(item.duration), systemImage: "play.rectangle") }
                     }.font(.caption).foregroundStyle(.secondary)
                     VStack(spacing: 8) {
                         HStack { Text("Reading progress"); Spacer(); Text(item.readingProgress, format: .percent.precision(.fractionLength(0))) }.font(.subheadline)
@@ -372,7 +378,12 @@ struct BookDetailView: View {
         .background(BookLibraryDesign.background)
         .preferredColorScheme(.dark).tint(.blue)
         .navigationTitle("About book").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { if item.youtubeVideoID == nil { BookResourceMenu(item: item) } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if item.isYouTube { YouTubeResourceMenu(item: item) }
+                else { BookResourceMenu(item: item) }
+            }
+        }
         .navigationDestination(isPresented: $reading) {
             if item.tracks.isEmpty { ReaderView(item: item).id(item.resourceRevision) }
             else { BookReaderView(item: item).id(item.resourceRevision) }

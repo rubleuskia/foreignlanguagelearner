@@ -57,3 +57,16 @@ test('missing and inaccessible captions return recoverable errors', async () => 
     assert.match((await page({ missing: true }).capture()).error, /no available subtitles/);
     assert.match((await page().capture()).error, /enable subtitles/);
 });
+
+test('translated captions report the translation language rather than the original track language', async () => {
+    const p = page({ entries: [{ name: validURL + '&tlang=pl', decodedBodySize: 100 }] });
+    assert.equal((await p.capture()).language, 'pl');
+});
+
+test('capture uses current player metadata after navigating from the homepage', async () => {
+    const p = page({ entries: [{ name: validURL, decodedBodySize: 100 }] });
+    const response = p.context.ytInitialPlayerResponse;
+    p.context.ytInitialPlayerResponse = undefined;
+    p.context.document.getElementById = () => ({ getPlayerResponse: () => response });
+    assert.equal((await p.capture()).videoID, 'jNQXAC9IVRw');
+});
