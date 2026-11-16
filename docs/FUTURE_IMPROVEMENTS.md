@@ -64,3 +64,12 @@ For any item selected from this backlog, specify:
 5. Updates to `knowledgebase/CHANGELOG.md`, `DECISIONS.md` and, when boundaries/workflows change, `PROJECT.md` in the implementation PR.
 
 Do not label these improvements complete until code, verification and any required operational work are complete. Planning decisions do not change the description of the currently shipped application.
+
+
+## Wolne Lektury catalog — large-book paid limits (before release)
+
+Approved 2026-11-16. Keep books visible in discovery even if their requested processing exceeds the current limits. Return explicit validation failures above 100,000,000 bytes of staged input or 100 output chapters; never truncate audio/text or silently skip chapters. No subscription or payment flow is implemented by catalog admission.
+
+Before release, select measured free/paid limits for total bytes, chapter count, duration and processing work. Define server-verified entitlements and durable quotas before enqueueing. Decide charging for shared cache hits, concurrent waiters, failed runs, infrastructure retries, regeneration and upstream updates. Keep shared provider assets separate from private entitlement/usage data. Measure memory, temporary disk, timings and recovery on representative long books before lifting limits.
+
+Acceptance: concurrent requests cannot bypass admission or pay/process twice; a limit error is actionable and localized; all supported chapters survive output packaging; existing local reading progress/vocabulary survive updates. Also define automatic-download policy for mobile/expensive connections, old metadata-generation cleanup, abandoned persistent result cleanup, and permanent-vs-review result acceptance before broad release.

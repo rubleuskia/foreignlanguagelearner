@@ -14,6 +14,15 @@
   restrictions; three HTTP tests could not bind a local port. Further tests skipped at
   the user's request. Full build and end-to-end import remain release requirements.
 
+## 2026-11-16 — Wolne Lektury discovery and shared on-demand imports (implementation, not deployed)
+
+- Add a dark genre-shelf Catalog tab with search, book details, prepared library titles, and persistent import requests. Remove the dedicated Practice tab; dictionary learning remains available.
+- Add operator-authenticated DynamoDB catalog snapshots and a manual refresh API. Source media is fetched only for requested books and cached in S3.
+- Share one leased alignment job/progress/result per source version and pipeline; preserve chapters and local word timings in output packages. Keep one processing worker.
+- Keep the current 100 MB input and 100 output-chapter validation limits. Larger-book paid entitlements and measured limits are release blockers in docs/FUTURE_IMPROVEMENTS.md.
+- Architectural/product decisions and project workflow changed; see DECISIONS.md and PROJECT.md.
+- Not deployed or seeded in AWS. Full iOS build was blocked by host sandbox/SwiftPM restrictions; further tests deferred at user request. See docs/CATALOG.md for validation and remaining acceptance work.
+
 ## 2026-11-16 — YouTube browsing, covers, subtitle replacement and playback resume
 
 - Add **Open YouTube** for searching in the embedded homepage without pasting a link.

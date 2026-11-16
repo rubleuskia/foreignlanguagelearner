@@ -1055,3 +1055,16 @@ resume on reopening. Do not replace an existing local book or reading progress s
 Keep current size/track validation until paid entitlements and large-book resource limits
 are defined. Allow review-marked results with visible status. See DEFERRED_DECISIONS.md
 for pre-release work. The separate Practice tab is removed; dictionary practice remains.
+
+
+## 2026-11-16 — Shared provider catalog and chapter-preserving imports
+
+Operator authentication gates discovery/import/refresh; provider metadata, source media and prepared results are global rather than user-owned. A deterministic source-book/version/pipeline identity maps concurrent callers to one durable job. Existing lease/heartbeat/recovery and fenced writes guard processing; snapshot publication checks the refresh lease transactionally. One worker processes queued jobs.
+
+Catalog metadata uses complete DynamoDB generations and a conditional active pointer; refresh is manual API only, with no schedule. Capture provider resource validators in the source version. Fetch text/audio on demand to the 30-day source cache; publish ready packages into the independent retained library bucket. Missing cached results can be regenerated. Do not merge existing curated books and provider editions by title.
+
+Preserve source chapter boundaries and names. Project full-book aligned words onto chapter-local timelines; clip boundary words without dropping source tokens and flag uncertain chapters for review. Preserve source notices separately from alignment text. Imported source IDs prevent local duplicates and preserve existing reading/vocabulary data.
+
+The first operator version retains 100 MB input and 100 output-chapter limits and returns explicit validation errors. Do not infer paid entitlement from a client flag. Release decisions for paid limits/charging, long-book capacity, source updates and cache reuse remain deferred; see docs/FUTURE_IMPROVEMENTS.md.
+
+UI: Catalog follows Library, replacing the standalone Practice tab. Genre shelves use broad categories while retaining provider genres. Nested works are shown through collection details and global search. No large promotional banner.

@@ -229,3 +229,8 @@ Generated packages retain original audio chapters and local chapter timings. Met
 refreshed manually with POST /v1/catalog/refresh; no scheduled refresh is configured.
 Current size limits return validation errors. Catalog population and representative
 end-to-end imports require deployment of the catalog-capable API/worker first.
+
+
+### Provider discovery catalog (implementation awaiting deployment)
+
+The operator can browse a combined prepared-book and Wolne Lektury catalog from a dedicated Catalog tab, grouped by genre. Provider book imports queue shared server-side source fetching and chapter-preserving alignment, then import an offline book through the existing validated file transaction path. Metadata lives in versioned DynamoDB catalog generations; sources are fetched on demand, and completed results are reused across callers. Manual catalog refresh replaces a scheduled sync. Operator-only access and the current processing limits remain in force. See [catalog implementation](../docs/CATALOG.md); these changes do not imply deployment or catalog ingestion has occurred.
