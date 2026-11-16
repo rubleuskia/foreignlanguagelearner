@@ -1068,3 +1068,12 @@ Preserve source chapter boundaries and names. Project full-book aligned words on
 The first operator version retains 100 MB input and 100 output-chapter limits and returns explicit validation errors. Do not infer paid entitlement from a client flag. Release decisions for paid limits/charging, long-book capacity, source updates and cache reuse remain deferred; see docs/FUTURE_IMPROVEMENTS.md.
 
 UI: Catalog follows Library, replacing the standalone Practice tab. Genre shelves use broad categories while retaining provider genres. Nested works are shown through collection details and global search. No large promotional banner.
+
+## 2026-11-16 — Practice entry after adding Catalog
+
+Keep Catalog in the former Practice tab position. Expose PracticeHomeView through
+the Dictionary toolbar so listening practice, resume, round setup and cooldown
+settings remain reachable. Dictionary quick start and Learn remain available.
+UI scenarios enter practice through this navigation link rather than a tab.
+Backend discovery uses the repository import root so mocks and production imports
+share the canonical backend package identity.

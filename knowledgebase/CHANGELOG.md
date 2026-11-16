@@ -1,3 +1,17 @@
+## 2026-11-16 — Catalog integration regression fixes
+
+- Keep the standalone Practice tab removed while exposing the existing practice screen,
+  listening mode and cooldown settings from the Dictionary toolbar.
+- Update navigation, language, accessibility, activity and practice UI scenarios to use
+  Dictionary → Practice. Check that Catalog replaces the former Practice tab.
+- Run backend test discovery with the repository as its import root (`-t .`) so catalog
+  downloader mocks target the same modules as the worker code.
+- Record the navigation decision in DECISIONS.md and workflow in PROJECT.md;
+  project purpose and cloud deployment boundaries are unchanged.
+- Validation: 132 backend tests without skips, 316 iOS unit tests, all 11 previously
+  failing UI scenarios, 33 CI tests and device Release compilation passed. The other
+  53 UI scenarios passed in the preceding complete run; see docs/CATALOG.md for scope.
+
 ## 2026-11-16 — Wolne Lektury catalog and shared imports
 
 - Add an operator-only Catalog tab with dark genre shelves, search, book details,

@@ -23,7 +23,9 @@ A refresh request and import requests use the existing single worker and queue/o
 
 Catalog combines provider metadata with the existing prepared library titles. It does not reconcile editions by title. Default shelves show root works, with nested works reachable through collections and global search. Provider genres remain available while broad genre memberships determine shelves.
 
-The Catalog tab replaces the dedicated Practice tab; dictionary-based learning remains. A book detail presents chapters, an excerpt when provided, source links, and import/status controls. Pending requests persist locally. While the app stays active after a request, successful results are downloaded and committed using the checked importer and source identity. After reopening or suspending the app, ready requests remain available for explicit download. Duplicate local imports preserve the existing book and progress.
+The Catalog tab replaces the dedicated Practice tab; dictionary-based learning remains.
+The Dictionary toolbar opens the existing Practice screen, including listening practice,
+saved rounds, round setup and cooldown settings. A book detail presents chapters, an excerpt when provided, source links, and import/status controls. Pending requests persist locally. While the app stays active after a request, successful results are downloaded and committed using the checked importer and source identity. After reopening or suspending the app, ready requests remain available for explicit download. Duplicate local imports preserve the existing book and progress.
 
 The provider worker aligns the full text/audio timeline, preserves the original audio chapter boundaries, and projects each aligned word once onto a chapter-local clock. Boundary clipping/empty narration chapters are marked for review. Each timed chapter has separate audio, subtitles, word-timing JSON and its original title. Publisher notices are separated from narrated TXT and retained in `provenance.json`; original EPUBs and available covers are retained in packages. Local book details expose retained source/attribution notices. Read/review uncertain timings before claiming acoustic quality.
 
@@ -33,6 +35,14 @@ A new digest-pinned image must declare `catalog-chapters-v1` as well as the exis
 
 After deployment, invoke the refresh endpoint once and verify the resulting metadata count. No source media will be fetched until import requests are submitted. Exercise one real short book, a multi-chapter book, duplicate concurrent requests, process-loss recovery, oversize validation, and an existing ready ZIP import before claiming production readiness.
 
-Validation before the user requested skipping further tests: catalog/API tests and worker tests passed, including two-chapter packaging/local word clocks, duplicate jobs, lease-fenced refresh publication, source-cache reuse and oversize validation; CDK type/infrastructure assertions passed. Swift parser validation passed. Full iOS compilation was blocked before compilation by `sandbox-exec: sandbox_apply: Operation not permitted`; three existing Cloud Control HTTP tests could not bind a local socket in the host sandbox. Further testing is deferred by user request. No real-model timing acceptance or UI visual acceptance is claimed.
+Local validation on 2026-11-16: all 316 iOS unit tests, device Release compilation,
+35 aligner/worker tests, 76 Cloud Control/benchmark tests, 33 CI tests, 9 YouTube
+JavaScript tests, and CDK type/infrastructure assertions passed. The initial complete
+UI run passed 53 of 64 scenarios; all 11 failures referenced the removed Practice tab.
+After adding Dictionary → Practice and updating those scenarios, all 11 passed on
+repeat. Backend discovery now uses the repository import root (`-t .`) to keep
+catalog downloader mocks aligned with canonical module imports; the corrected script
+passed all 132 backend tests against local DynamoDB without skips.
+No live deployment, real-model timing acceptance or catalog import acceptance is claimed.
 
 Deferred before release: measured large-book limits and paid entitlement/charging policy, mobile-download policy, source update UX, cache cleanup and full localization/accessibility/production acceptance. See `FUTURE_IMPROVEMENTS.md`.

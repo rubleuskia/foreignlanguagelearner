@@ -57,7 +57,8 @@ final class LibraryFlowTests: XCTestCase {
         for _ in 0..<6 where !key.exists { app.swipeUp() }
         XCTAssertTrue(key.waitForExistence(timeout: 5))
         app.navigationBars["Settings"].buttons.firstMatch.tap()
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.settings"].tap()
         let field = app.textFields["settings.cooldown.level.1"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

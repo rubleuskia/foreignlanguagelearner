@@ -68,7 +68,8 @@ final class ActivityDashboardFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
         app.launch()
-        app.buttons["Practice"].firstMatch.tap()
+        app.buttons["Dictionary"].firstMatch.tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.quick-start"].tap()
         XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
         app.buttons["learn.preview-learn"].tap()
@@ -91,7 +92,8 @@ final class ActivityDashboardFlowTests: XCTestCase {
         let count = app.descendants(matching: .any)["activity.card.advanced"]
         XCTAssertTrue(count.waitForExistence(timeout: 10))
         XCTAssertTrue(count.label.contains("0"))
-        app.buttons["Practice"].firstMatch.tap()
+        app.buttons["Dictionary"].firstMatch.tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.quick-start"].tap()
         XCTAssertTrue(app.buttons["learn.preview-learn"].waitForExistence(timeout: 5))
         app.buttons["learn.preview-learn"].tap()

@@ -152,6 +152,10 @@ struct DictionaryView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                NavigationLink { PracticeHomeView() } label: {
+                    Label("Practice", systemImage: "rectangle.on.rectangle")
+                }
+                .accessibilityIdentifier("dictionary.practice")
                 Button("Learn", systemImage: "brain.head.profile") { learningLaunch = .setup }
                     .disabled(!entries.contains(where: \.isLearningEligible))
                     .accessibilityIdentifier("dictionary.learn")

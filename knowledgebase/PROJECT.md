@@ -1,5 +1,11 @@
 # Foreign Language Learner
 
+## Practice navigation
+
+The main tabs are Library, Catalog, Dictionary and Activity. Open Practice from
+the Dictionary toolbar for listening, saved rounds, round setup and cooldown
+settings. Dictionary also retains its quick start and Learn actions.
+
 ## Local Cloud Control diagnostics
 
 The loopback dashboard provides Swagger/manual API tests, S3 file sizes, AWS costs/credits,
