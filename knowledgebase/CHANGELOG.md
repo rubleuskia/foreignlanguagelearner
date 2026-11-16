@@ -1,3 +1,42 @@
+## 2026-11-16 — Catalog integration regression fixes
+
+- Keep the standalone Practice tab removed while exposing the existing practice screen,
+  listening mode and cooldown settings from the Dictionary toolbar.
+- Update navigation, language, accessibility, activity and practice UI scenarios to use
+  Dictionary → Practice. Check that Catalog replaces the former Practice tab.
+- Run backend test discovery with the repository as its import root (`-t .`) so catalog
+  downloader mocks target the same modules as the worker code.
+- Record the navigation decision in DECISIONS.md and workflow in PROJECT.md;
+  project purpose and cloud deployment boundaries are unchanged.
+- Validation: 132 backend tests without skips, 316 iOS unit tests, all 11 previously
+  failing UI scenarios, 33 CI tests and device Release compilation passed. The other
+  53 UI scenarios passed in the preceding complete run; see docs/CATALOG.md for scope.
+
+## 2026-11-16 — Wolne Lektury catalog and shared imports
+
+- Add an operator-only Catalog tab with dark genre shelves, search, book details,
+  existing ready books and persistent import progress. Remove the separate Practice tab;
+  dictionary practice remains available.
+- Add manual catalog refresh and on-demand source downloads to S3. Concurrent requests
+  for the same source/pipeline version share one durable job and its progress.
+- Preserve audio chapters and chapter-local timings in generated packages; retain source
+  attribution and reuse prepared results. Keep one worker and explicit size validation.
+- Record architecture in DECISIONS.md, workflow in PROJECT.md and pre-release follow-ups
+  in DEFERRED_DECISIONS.md. No live deployment or catalog population performed by this PR.
+- Validation before the user requested stopping tests: catalog/API, worker and CDK checks
+  passed in focused runs. Full iOS build was blocked by package/network/cache sandbox
+  restrictions; three HTTP tests could not bind a local port. Further tests skipped at
+  the user's request. Full build and end-to-end import remain release requirements.
+
+## 2026-11-16 — Wolne Lektury discovery and shared on-demand imports (implementation, not deployed)
+
+- Add a dark genre-shelf Catalog tab with search, book details, prepared library titles, and persistent import requests. Remove the dedicated Practice tab; dictionary learning remains available.
+- Add operator-authenticated DynamoDB catalog snapshots and a manual refresh API. Source media is fetched only for requested books and cached in S3.
+- Share one leased alignment job/progress/result per source version and pipeline; preserve chapters and local word timings in output packages. Keep one processing worker.
+- Keep the current 100 MB input and 100 output-chapter validation limits. Larger-book paid entitlements and measured limits are release blockers in docs/FUTURE_IMPROVEMENTS.md.
+- Architectural/product decisions and project workflow changed; see DECISIONS.md and PROJECT.md.
+- Not deployed or seeded in AWS. Full iOS build was blocked by host sandbox/SwiftPM restrictions; further tests deferred at user request. See docs/CATALOG.md for validation and remaining acceptance work.
+
 ## 2026-11-16 — YouTube browsing, covers, subtitle replacement and playback resume
 
 - Add **Open YouTube** for searching in the embedded homepage without pasting a link.

@@ -1034,3 +1034,46 @@ Video/audio remain streamed, and backups retain their existing metadata-only sco
 Persist actual playback samples every five seconds and at lifecycle boundaries. Initial
 and buffering states do not publish timestamps. Seek to the saved time on readiness and
 request autoplay; display a manual Play hint when YouTube reports autoplay blocking.
+
+## 2026-11-16 — Shared Wolne Lektury catalog and chapter imports
+
+Keep access behind the existing operator boundary. Provider metadata, source files and
+prepared books are shared rather than owned by the requesting user. Derive the shared
+job identity from provider book ID, source version and pipeline version; atomic admission
+and worker leases let concurrent callers observe the same processing job and progress.
+Run one worker. Publish complete catalog generations atomically; refresh only through
+POST /v1/catalog/refresh for now, without a schedule.
+
+Download source text/audio only when requested, cache in S3, preserve attribution, and
+retain prepared artifacts separately from expiring job artifacts. Preserve original audio
+chapters with chapter-local alignment timestamps. Existing ready books join the catalog.
+Top-level books appear on genre shelves; nested works remain searchable and accessible
+through their collections. Use a dark catalog, detail-first import and persistent status.
+While active, the application completes pending downloads; after suspension, pending jobs
+resume on reopening. Do not replace an existing local book or reading progress silently.
+
+Keep current size/track validation until paid entitlements and large-book resource limits
+are defined. Allow review-marked results with visible status. See DEFERRED_DECISIONS.md
+for pre-release work. The separate Practice tab is removed; dictionary practice remains.
+
+
+## 2026-11-16 — Shared provider catalog and chapter-preserving imports
+
+Operator authentication gates discovery/import/refresh; provider metadata, source media and prepared results are global rather than user-owned. A deterministic source-book/version/pipeline identity maps concurrent callers to one durable job. Existing lease/heartbeat/recovery and fenced writes guard processing; snapshot publication checks the refresh lease transactionally. One worker processes queued jobs.
+
+Catalog metadata uses complete DynamoDB generations and a conditional active pointer; refresh is manual API only, with no schedule. Capture provider resource validators in the source version. Fetch text/audio on demand to the 30-day source cache; publish ready packages into the independent retained library bucket. Missing cached results can be regenerated. Do not merge existing curated books and provider editions by title.
+
+Preserve source chapter boundaries and names. Project full-book aligned words onto chapter-local timelines; clip boundary words without dropping source tokens and flag uncertain chapters for review. Preserve source notices separately from alignment text. Imported source IDs prevent local duplicates and preserve existing reading/vocabulary data.
+
+The first operator version retains 100 MB input and 100 output-chapter limits and returns explicit validation errors. Do not infer paid entitlement from a client flag. Release decisions for paid limits/charging, long-book capacity, source updates and cache reuse remain deferred; see docs/FUTURE_IMPROVEMENTS.md.
+
+UI: Catalog follows Library, replacing the standalone Practice tab. Genre shelves use broad categories while retaining provider genres. Nested works are shown through collection details and global search. No large promotional banner.
+
+## 2026-11-16 — Practice entry after adding Catalog
+
+Keep Catalog in the former Practice tab position. Expose PracticeHomeView through
+the Dictionary toolbar so listening practice, resume, round setup and cooldown
+settings remain reachable. Dictionary quick start and Learn remain available.
+UI scenarios enter practice through this navigation link rather than a tab.
+Backend discovery uses the repository import root so mocks and production imports
+share the canonical backend package identity.

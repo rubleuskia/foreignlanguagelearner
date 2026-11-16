@@ -14,7 +14,11 @@ final class InterfaceLanguageFlowTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.tabBars.buttons["Library"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Catalog"].tap()
+        XCTAssertTrue(app.navigationBars["Catalog"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.buttons["Practice"].exists)
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         XCTAssertTrue(app.navigationBars["Practice"].waitForExistence(timeout: 5))
     }
 }

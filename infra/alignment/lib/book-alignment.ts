@@ -46,13 +46,24 @@ export class BookAlignment extends Construct {
     const queue = new sqs.Queue(this, "Queue", { encryption: sqs.QueueEncryption.SQS_MANAGED,
       enforceSSL: true, retentionPeriod: cdk.Duration.days(14), visibilityTimeout: cdk.Duration.minutes(2),
       deadLetterQueue: { queue: dead, maxReceiveCount: 5 } });
+    const catalog = new db.Table(this, "Catalog", {
+      partitionKey: { name: "generation", type: db.AttributeType.STRING },
+      sortKey: { name: "id", type: db.AttributeType.STRING },
+      billingMode: db.BillingMode.PAY_PER_REQUEST, deletionProtection: true,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    const libraryBucket = s3.Bucket.fromBucketName(this, "PersistentLibrary",
+      `fll-book-library-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`);
     const environment = { ...props.operator.common, BOOK_ALIGNMENT_TABLE: table.tableName,
-      BOOK_ALIGNMENT_BUCKET: bucket.bucketName, BOOK_ALIGNMENT_QUEUE: queue.queueUrl };
+      BOOK_ALIGNMENT_BUCKET: bucket.bucketName, BOOK_ALIGNMENT_QUEUE: queue.queueUrl, BOOK_CATALOG_TABLE: catalog.tableName,
+      BOOK_LIBRARY_BUCKET: libraryBucket.bucketName };
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PYTHON_3_12, code: props.code, handler: "backend.book_alignment.api.handler",
       environment, timeout: cdk.Duration.seconds(28), memorySize: 256,
       logGroup: new logs.LogGroup(this, "ApiLogs", { retention: logs.RetentionDays.ONE_WEEK }),
     });
+    catalog.grantReadData(api); libraryBucket.grantRead(api, "library/catalog-results/*");
     table.grantReadWriteData(api); props.operator.table.grantReadWriteData(api);
     bucket.grantRead(api, "books/*"); bucket.grantPut(api, "books/*");
     const dispatcher = new lambda.Function(this, "Dispatcher", {
@@ -71,25 +82,33 @@ export class BookAlignment extends Construct {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX } });
     task.addContainer("Worker", { image: ecs.ContainerImage.fromEcrRepository(props.repository, props.digest),
       environment: { BOOK_ALIGNMENT_TABLE: table.tableName, BOOK_ALIGNMENT_BUCKET: bucket.bucketName,
-        BOOK_ALIGNMENT_QUEUE: queue.queueUrl, MODEL_DIR: "/opt/models" },
+        BOOK_ALIGNMENT_QUEUE: queue.queueUrl, BOOK_CATALOG_TABLE: catalog.tableName,
+        BOOK_LIBRARY_BUCKET: libraryBucket.bucketName, MODEL_DIR: "/opt/models" },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: "book-worker",
         logGroup: new logs.LogGroup(this, "WorkerLogs", { retention: logs.RetentionDays.ONE_WEEK }) }),
       stopTimeout: cdk.Duration.seconds(120) });
     bucket.grantRead(task.taskRole, "books/*"); bucket.grantPut(task.taskRole, "books/*");
-    table.grantReadWriteData(task.taskRole);
+    table.grantReadWriteData(task.taskRole); catalog.grantReadWriteData(task.taskRole);
+    libraryBucket.grantPut(task.taskRole, "library/catalog-results/*");
+    bucket.grantReadWrite(task.taskRole, "sources/*");
     queue.grantConsumeMessages(task.taskRole);
     const service = new ecs.FargateService(this, "Workers", { cluster: props.cluster, taskDefinition: task,
       desiredCount: 1, minHealthyPercent: 0, maxHealthyPercent: 100, assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC }, securityGroups: [props.securityGroup],
       circuitBreaker: { rollback: true } });
     // One worker today. Scale-out can be enabled explicitly after capacity/quality measurement.
-    const maxWorkers = props.maxWorkers ?? 1;
+    const maxWorkers = 1; // Operator catalog admission: one global processing worker.
     const scaling = service.autoScaleTaskCount({ minCapacity: 1, maxCapacity: maxWorkers });
     scaling.scaleOnMetric("QueueScaleOut", { metric: queue.metricApproximateNumberOfMessagesVisible(),
       scalingSteps: [{ upper: 0, change: 0 }, { lower: 1, change: 1 }], cooldown: cdk.Duration.minutes(2),
       adjustmentType: cdk.aws_applicationautoscaling.AdjustmentType.CHANGE_IN_CAPACITY });
     const integration = new HttpLambdaIntegration("BookAlignment", api);
     const routes: [apigw.HttpMethod, string][] = [
+      [apigw.HttpMethod.GET, "/v1/catalog/books"],
+      [apigw.HttpMethod.GET, "/v1/catalog/books/{id}"],
+      [apigw.HttpMethod.POST, "/v1/catalog/refresh"],
+      [apigw.HttpMethod.POST, "/v1/catalog/books/{id}/import"],
+      [apigw.HttpMethod.GET, "/v1/catalog/books/{id}/import"],
       [apigw.HttpMethod.GET, "/v1/book-alignments"], [apigw.HttpMethod.POST, "/v1/book-alignments"],
       [apigw.HttpMethod.GET, "/v1/book-alignments/{id}"],
       [apigw.HttpMethod.POST, "/v1/book-alignments/{id}/upload"],
@@ -112,6 +131,7 @@ export class BookAlignment extends Construct {
         treatMissingData: cw.TreatMissingData.NOT_BREACHING })
         .addAlarmAction(new actions.SnsAction(props.operator.alarms));
     }
+    new cdk.CfnOutput(cdk.Stack.of(this), "BookCatalogTable", { value: catalog.tableName });
     new cdk.CfnOutput(cdk.Stack.of(this), "BookAlignmentBucket", { value: bucket.bucketName });
     new cdk.CfnOutput(cdk.Stack.of(this), "BookAlignmentQueue", { value: queue.queueUrl });
   }

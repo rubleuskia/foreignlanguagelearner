@@ -4,7 +4,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cloud_test_python="${PYTHON:-python3}"
 if [[ -n "${DYNAMODB_LOCAL_URL:-}" ]]; then
   cd "$repo_root"
-  "$cloud_test_python" -m unittest discover -s backend -p 'test_*.py' -v
+  "$cloud_test_python" -m unittest discover -s backend -t . -p 'test_*.py' -v
   exit
 fi
 cloud_test_dir="$(mktemp -d "${TMPDIR:-/tmp}/fll-dynamo.XXXXXX")"
@@ -35,4 +35,4 @@ for attempt in range(30):
         time.sleep(1)
 PY
 cd "$repo_root"
-"$cloud_test_python" -m unittest discover -s backend -p 'test_*.py' -v
+"$cloud_test_python" -m unittest discover -s backend -t . -p 'test_*.py' -v

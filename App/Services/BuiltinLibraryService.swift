@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import SwiftData
 
-struct LibraryBook: Decodable, Identifiable, Sendable {
+struct LibraryBook: Codable, Identifiable, Sendable {
     let id: String
     let title: String
     let language: String

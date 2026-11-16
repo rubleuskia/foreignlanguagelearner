@@ -11,7 +11,8 @@ final class NativeDesignFlowTests: XCTestCase {
         app.tabBars.buttons["Dictionary"].tap()
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
         capture(app, "Native Glass — Dictionary")
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         XCTAssertTrue(app.buttons["practice.quick-start"].waitForExistence(timeout: 5))
         capture(app, "Native Glass — Practice")
         app.buttons["practice.quick-start"].tap()
@@ -58,7 +59,8 @@ final class NativeDesignFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--learning-ux-fixture",
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         let quick = app.buttons["practice.quick-start"]
         XCTAssertTrue(quick.waitForExistence(timeout: 5))
         if !quick.isHittable { app.swipeUp() }
@@ -82,7 +84,8 @@ final class NativeDesignFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
         app.launch()
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.quick-start"].tap()
         app.buttons["learn.preview-learn"].tap()
         let translation = app.buttons["learn.translation"]
@@ -113,7 +116,8 @@ final class NativeDesignFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture", "--audio-boundary-fixture", "--dual-audio-fixture"]
         app.launch()
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.quick-start"].tap()
         let mode = app.buttons["learn.audio-mode"]
         let edit = app.buttons["learn.edit-audio"]
@@ -144,7 +148,8 @@ final class NativeDesignFlowTests: XCTestCase {
         app.launchArguments = ["--uitesting", "--reading-vocabulary-fixture",
                                "--audio-boundary-fixture", "--dual-audio-fixture"]
         app.launch()
-        app.tabBars.buttons["Practice"].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        app.buttons["dictionary.practice"].tap()
         app.buttons["practice.quick-start"].tap()
         XCTAssertTrue(app.buttons["learn.play-audio"].waitForExistence(timeout: 5))
         let translation = app.buttons["learn.translation"]
@@ -275,14 +280,14 @@ extension NativeDesignFlowTests {
         XCTAssertTrue(app.buttons["dictionary.entry.English phrase 10"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["dictionary.entry.dzień dobry"].exists)
         XCTAssertEqual(app.staticTexts["dictionary.stats.level.1"].label, "10")
-        destination("Practice")
+        app.buttons["dictionary.practice"].tap()
         XCTAssertTrue(app.staticTexts["practice.ready-count"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["practice.ready-count"].label, "10 ready to repeat")
         app.buttons["source-language.picker"].tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Italian")).firstMatch.exists,
                        "Languages without books must not be selectable")
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Polish")).firstMatch.tap()
-        destination("Dictionary")
+        app.navigationBars["Practice"].buttons.firstMatch.tap()
         choose("Polish")
         XCTAssertTrue(app.buttons["dictionary.entry.dzień dobry"].waitForExistence(timeout: 5))
     }
@@ -291,8 +296,9 @@ extension NativeDesignFlowTests {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "--learning-ux-fixture"]
         app.launch()
-        for tab in ["Dictionary", "Practice"] {
-            app.tabBars.buttons[tab].tap()
+        app.tabBars.buttons["Dictionary"].tap()
+        for screen in ["Dictionary", "Practice"] {
+            if screen == "Practice" { app.buttons["dictionary.practice"].tap() }
             let current = app.descendants(matching: .any)["source-language.current"]
             XCTAssertTrue(current.waitForExistence(timeout: 5))
             XCTAssertTrue(current.label.contains("🇵🇱"))

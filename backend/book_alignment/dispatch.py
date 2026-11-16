@@ -47,4 +47,4 @@ def handler(event, context):
 def send(row):
     _client.send_message(QueueUrl=os.environ['BOOK_ALIGNMENT_QUEUE'], MessageBody=json.dumps({
         'owner': row['owner'], 'job_id': row['job_id'], 'bucket': os.environ['BOOK_ALIGNMENT_BUCKET'],
-        'key': f"books/{row['owner']}/{row['job_id']}/input.zip", 'version_id': row['input_version']}))
+        'key': f"books/{row['owner']}/{row['job_id']}/input.zip", 'version_id': row.get('input_version'), 'kind': row.get('kind', 'upload')}))

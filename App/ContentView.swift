@@ -22,14 +22,21 @@ struct ContentView: View {
         TabView {
             library
                 .tabItem { Label("Library", systemImage: "books.vertical") }
+            NavigationStack { CatalogView() }
+                .tabItem { Label("Catalog", systemImage: "square.grid.2x2") }
             NavigationStack { DictionaryView() }
                 .tabItem { Label("Dictionary", systemImage: "book.closed") }
-            NavigationStack { PracticeHomeView() }
-                .tabItem { Label("Practice", systemImage: "rectangle.on.rectangle") }
             NavigationStack { ActivityDashboardView() }
                 .tabItem { Label("Activity", systemImage: "chart.bar.xaxis") }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { CatalogModel.shared.suspendAutomaticDownloads(); return }
+            repeat {
+                await CatalogModel.shared.poll(context: context)
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            } while !Task.isCancelled
+        }
         .onChange(of: scenePhase) { _, phase in if phase == .active { checkYouTubeInbox() } }
         .task { checkYouTubeInbox() }
         .tint(.blue)

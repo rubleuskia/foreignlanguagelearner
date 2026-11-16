@@ -91,7 +91,7 @@ def process(source, root, job, model_dir, stage, engine=align.run):
     if text.stat().st_size > TEXT_LIMIT:
         raise ValueError('INVALID_TEXT')
     if text.suffix.lower() == '.epub':
-        extracted = epub_text.extract(text)
+        extracted = epub_text.extract(text, 'wolne-lektury' if job.get('kind') == 'catalog_import' else 'generic')
         content = '\n\n'.join(section['text'] for section in extracted['sections'])
     else:
         content = text.read_text(encoding='utf-8-sig')
@@ -128,6 +128,8 @@ def process(source, root, job, model_dir, stage, engine=align.run):
     validate_cues(report.get('cues'), duration)
     package = root / 'book'
     package.mkdir()
+    if job.get('preserve_chapters'):
+        return chapter_package(tracks, normalized, transcript, report, package, root, job, stage)
     shutil.move(audio, package / 'audio.m4a')
     shutil.copyfile(transcript, package / 'transcript.txt')
     shutil.copyfile(output / 'subtitles.srt', package / 'subtitles.srt')
@@ -144,4 +146,73 @@ def process(source, root, job, model_dir, stage, engine=align.run):
     with zipfile.ZipFile(result, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(package.iterdir()):
             archive.write(path, path.name)
+    return result, review
+
+
+def chapter_package(tracks, normalized, transcript, report, package, root, job, stage):
+    """Keep original track boundaries; project full-book word alignment onto local clocks."""
+    import bisect
+    if len(tracks) > 100:
+        raise ValueError('TRACK_LIMIT_EXCEEDED')
+    durations = [probe(normalized / f'{i:04d}.wav') for i in range(len(tracks))]
+    boundaries = [0.0]
+    for duration in durations: boundaries.append(boundaries[-1] + duration)
+    grouped = [[] for _ in tracks]
+    raw = [w for segment in report['alignment']['segments'] for w in segment['words']]
+    # Preserve every source token once, including zero-duration words marked for review.
+    for word in raw:
+        center = (word['start'] + word['end']) / 2
+        index = min(len(tracks) - 1, max(0, bisect.bisect_right(boundaries, center) - 1))
+        grouped[index].append(word)
+    review = bool(report.get('requires_review'))
+    manifest_tracks = []
+    for index, original in enumerate(tracks):
+        track_id = f'chapter-{index + 1:03d}'
+        base = package / track_id; base.mkdir()
+        output_audio = base / 'audio.m4a'
+        subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(normalized / f'{index:04d}.wav'),
+            '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', str(output_audio)], check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        duration = probe(output_audio)
+        title = job['source_book']['source']['tracks'][index]['title'][:500]
+        track = {'id': track_id, 'title': title, 'audio': f'{track_id}/audio.m4a', 'alignmentStatus': 'untimed'}
+        words = []
+        clipped = False
+        for raw_word in grouped[index]:
+            start = max(0.0, min(duration, raw_word['start'] - boundaries[index]))
+            end = max(start, min(duration, raw_word['end'] - boundaries[index]))
+            clipped |= start != raw_word['start'] - boundaries[index] or end != raw_word['end'] - boundaries[index]
+            words.append({**raw_word, 'start': start, 'end': end})
+        if words:
+            try: cues = align.make_cues(words)
+            except ValueError:
+                cues = [{'start': 0, 'end': round(duration * 1000), 'text': ''.join(w['word'] for w in words).strip()}]
+                clipped = True
+            validate_cues(cues, duration)
+            subtitle = align.render(cues, 'srt')
+            local_report = {'alignment': {'segments': [{'words': words}]}}
+            (base / 'subtitles.srt').write_text(subtitle, encoding='utf-8')
+            (base / 'words.json').write_bytes(word_timings.make_file(local_report, subtitle, track_id,
+                                                                     word_timings.file_hash(output_audio), duration))
+            track.update(subtitle=f'{track_id}/subtitles.srt', wordTimings=f'{track_id}/words.json',
+                         alignmentStatus='review-required' if review or clipped else 'aligned')
+        else:
+            clipped = True
+        review |= clipped
+        manifest_tracks.append(track)
+        stage('validating', 85 + int(9 * (index + 1) / len(tracks)))
+    shutil.copyfile(transcript, package / 'transcript.txt')
+    provenance = root / 'inputs' / 'provenance.json'
+    if provenance.exists(): shutil.copyfile(provenance, package / 'provenance.json')
+    cover = root / 'inputs' / 'cover.jpg'
+    if cover.exists(): shutil.copyfile(cover, package / 'cover.jpg')
+    original_epub = root / 'inputs' / 'text.epub'
+    if original_epub.exists(): shutil.copyfile(original_epub, package / 'source.epub')
+    manifest = {'format': 'foreign-language-learner.book', 'schemaVersion': 1, 'title': job['title'],
+        'sourceLanguage': job['language'], 'transcript': 'transcript.txt', 'tracks': manifest_tracks}
+    (package / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
+    result = root / 'book.book.zip'
+    with zipfile.ZipFile(result, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(package.rglob('*')):
+            if path.is_file(): archive.write(path, path.relative_to(package).as_posix())
     return result, review

@@ -46,7 +46,7 @@ actor CloudAlignmentService {
     struct Jobs: Decodable { let jobs: [CloudAlignmentJob]; let cursor: String? }
     private struct Upload: Decodable { let url: URL; let headers: [String: String] }
     private struct Download: Decodable { let url: URL; let bytes: Int; let sha256: String }
-    private func request<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,
+    func request<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,
                                         key: String? = nil, cursor: String? = nil) async throws -> T {
         var lease = try await authentication.lease()
         func send(_ token: String) async throws -> (Data, HTTPURLResponse) {
@@ -86,6 +86,9 @@ actor CloudAlignmentService {
     nonisolated static func message(for code: String) -> String {
         let text = switch code {
         case "INPUT_TOO_LARGE": "The prepared ZIP exceeds 100 MB. Choose smaller files."
+        case "TRACK_LIMIT_EXCEEDED": "This book exceeds the current limit of 100 chapters."
+        case "SOURCE_CHANGED": "The source book changed. Refresh the catalog before trying again."
+        case "SOURCE_UNAVAILABLE": "The source file is unavailable. Try again later."
         case "CHECKSUM_MISMATCH": "The uploaded file failed verification. Upload it again."
         case "RESULT_EXPIRED": "The result has expired. Create a new alignment."
         case "INVALID_TEXT": "Could not read the book text. Use matching UTF-8 TXT or EPUB."

@@ -11,7 +11,7 @@ def check():
             patch.object(book_worker, 'main', return_value=0) as consumer:
         if worker.main() != 0 or consumer.call_count != 1:
             raise RuntimeError('Worker entrypoint does not dispatch to the book queue consumer')
-    return {'schema_version': 1, 'contracts': ['alignment-input-v1', 'book-queue-v1']}
+    return {'schema_version': 1, 'contracts': ['alignment-input-v1', 'book-queue-v1', 'catalog-chapters-v1']}
 
 
 def main():

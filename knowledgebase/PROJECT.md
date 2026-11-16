@@ -1,5 +1,11 @@
 # Foreign Language Learner
 
+## Practice navigation
+
+The main tabs are Library, Catalog, Dictionary and Activity. Open Practice from
+the Dictionary toolbar for listening, saved rounds, round setup and cooldown
+settings. Dictionary also retains its quick start and Learn actions.
+
 ## Local Cloud Control diagnostics
 
 The loopback dashboard provides Swagger/manual API tests, S3 file sizes, AWS costs/credits,
@@ -219,3 +225,18 @@ S3 storage via the operator Cognito API. A manually supplied access token is sto
 Downloaded books enter the existing ZIP import workflow and become offline local books after
 review and commit. Publishing packages is an operator maintenance workflow; the app has read-only
 catalog/download access. See [Book library](../docs/BOOK_LIBRARY.md).
+
+## Wolne Lektury catalog (pending deployment)
+
+The operator-only Catalog tab adds searchable genre shelves and book details alongside
+existing prepared books. Import requests fetch provider text/audio on demand, reuse a
+shared job/result per source and pipeline version, and expose progress across relaunches.
+Generated packages retain original audio chapters and local chapter timings. Metadata is
+refreshed manually with POST /v1/catalog/refresh; no scheduled refresh is configured.
+Current size limits return validation errors. Catalog population and representative
+end-to-end imports require deployment of the catalog-capable API/worker first.
+
+
+### Provider discovery catalog (implementation awaiting deployment)
+
+The operator can browse a combined prepared-book and Wolne Lektury catalog from a dedicated Catalog tab, grouped by genre. Provider book imports queue shared server-side source fetching and chapter-preserving alignment, then import an offline book through the existing validated file transaction path. Metadata lives in versioned DynamoDB catalog generations; sources are fetched on demand, and completed results are reused across callers. Manual catalog refresh replaces a scheduled sync. Operator-only access and the current processing limits remain in force. See [catalog implementation](../docs/CATALOG.md); these changes do not imply deployment or catalog ingestion has occurred.
