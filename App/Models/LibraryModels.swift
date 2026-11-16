@@ -147,6 +147,16 @@ struct TranscriptDocument: Sendable {
 @Model final class LearningItem {
     var builtinLibraryID: String? = nil
     var youtubeVideoID: String? = nil
+    var youtubeSourceURL: String? = nil
+    var isYouTube: Bool { youtubeVideoID != nil }
+    var youtubeURL: URL? {
+        guard let youtubeVideoID,
+              YouTubeImport.videoID(from: "https://www.youtube.com/watch?v=\(youtubeVideoID)") == youtubeVideoID else { return nil }
+        if let youtubeSourceURL, YouTubeImport.videoID(from: youtubeSourceURL) == youtubeVideoID {
+            return URL(string: youtubeSourceURL)
+        }
+        return URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoID)")
+    }
     // Defaults keep existing stores readable. Empty filenames represent absent resources.
     var resourceRevision: String = ""
     var coverFilename: String = ""

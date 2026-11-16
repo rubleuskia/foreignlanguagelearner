@@ -1013,3 +1013,24 @@ Debug uses an empty PersonalTeam.entitlements file to support free Personal Team
 Release retains ForeignLanguageLearner.entitlements with Sign in with Apple for native account
 reauthentication. Native Apple recovery must be tested with the paid-team Release configuration;
 this does not bypass Apple membership or web-service configuration requirements.
+## YouTube source actions, artwork and resume (2026-11-16)
+
+Use the persisted video ID as the authoritative YouTube marker, expose `isYouTube`, and
+store a canonical source URL; older items derive the URL from the ID without migration.
+The importer may start at the mobile homepage for search. Capture preserves the actual
+caption-track language, including `tlang` for translated captions; the review does not
+offer a language relabeling picker that could disguise English text as Polish.
+
+Subtitle replacement is an explicit reviewed update of the same video only. Preserve
+item identity, artwork, playback time and dictionary text/language/history, clear obsolete
+cue indices, reset text scroll/completion, and change the resource revision. Flush unrelated
+model changes first and restore the prior transcript/metadata on save failure.
+
+Download only public thumbnail artwork from the video-ID-derived YouTube image CDN URL,
+trying maximum then standard quality. Decode/downsample through BookCoverService into
+the item's existing local cover file. Artwork is optional and uses no YouTube API key.
+Video/audio remain streamed, and backups retain their existing metadata-only scope.
+
+Persist actual playback samples every five seconds and at lifecycle boundaries. Initial
+and buffering states do not publish timestamps. Seek to the saved time on readiness and
+request autoplay; display a manual Play hint when YouTube reports autoplay blocking.

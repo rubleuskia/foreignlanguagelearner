@@ -62,7 +62,8 @@ async function captureYouTube() {
             text: e.segs.map(s => s.utf8 || '').join('').replace(/\s+/g, ' ').trim()
         })).filter(e => e.text).sort((a,b) => a.start - b.start);
         if (!cues.length) return fail('No timed subtitles were found. Enable subtitles and try again.');
-        return { id: crypto.randomUUID(), videoID: details.videoId, title: details.title, language: track.languageCode,
+        const language = activeURL?.searchParams.get('tlang') || track.languageCode;
+        return { id: crypto.randomUUID(), videoID: details.videoId, title: details.title, language,
             duration: Number(details.lengthSeconds), cues };
     } catch (_) { return fail('Could not load subtitles. Play the video, enable subtitles, then try again.'); }
 }

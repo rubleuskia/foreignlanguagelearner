@@ -5,8 +5,15 @@ import Observation
 @MainActor @Observable final class YouTubePlayback: NSObject, WKScriptMessageHandler {
     var position = 0.0
     var isPlaying = false
+    var hasReceivedPosition = false
+    var autoplayBlocked = false
     var error: String?
     var webView: WKWebView?
+
+    init(initialPosition: Double = 0) {
+        position = initialPosition.isFinite ? max(0, initialPosition) : 0
+        super.init()
+    }
 
     func pause() { webView?.evaluateJavaScript("player?.pauseVideo()", completionHandler: nil) }
 
@@ -15,8 +22,15 @@ import Observation
         if let code = value["error"] as? Int {
             error = "YouTube cannot play this video here (\(code)). It may be unavailable or embedding may be disabled."
         }
-        if let time = value["time"] as? Double, time.isFinite, time >= 0 { position = time }
-        if let playing = value["playing"] as? Bool { isPlaying = playing }
+        if let blocked = value["autoplayBlocked"] as? Bool { autoplayBlocked = blocked }
+        if let time = value["time"] as? Double, time.isFinite, time >= 0 {
+            position = time
+            hasReceivedPosition = true
+        }
+        if let playing = value["playing"] as? Bool {
+            isPlaying = playing
+            if playing { autoplayBlocked = false }
+        }
     }
 }
 
@@ -38,18 +52,27 @@ struct YouTubePlayerView: UIViewRepresentable {
         playback.webView = view
         // Only validated IDs and numeric positions are interpolated into the player document.
         guard YouTubeImport.videoID(from: "https://www.youtube.com/watch?v=\(videoID)") == videoID else { return view }
-        let initial = start.isFinite ? max(0, start) : 0
+        let initial = start.isFinite ? min(86_400, max(0, start)) : 0
         view.loadHTMLString("""
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>html,body,#player{margin:0;width:100%;height:100%;background:black}</style></head>
         <body><div id="player"></div><script>
         var player;
         function onYouTubeIframeAPIReady(){player=new YT.Player('player',{
-          videoId:'\(videoID)',playerVars:{playsinline:1,autoplay:0,start:\(Int(initial)),origin:'https://com.rubleuskia.foreignlanguagelearner'},
-          events:{onError:e=>webkit.messageHandlers.youtube.postMessage({error:e.data})}
+          videoId:'\(videoID)',playerVars:{playsinline:1,autoplay:1,start:\(Int(initial)),origin:'https://com.rubleuskia.foreignlanguagelearner'},
+          events:{
+            onReady:e=>{e.target.seekTo(\(initial),true);e.target.playVideo();},
+            onAutoplayBlocked:()=>webkit.messageHandlers.youtube.postMessage({autoplayBlocked:true}),
+            onError:e=>webkit.messageHandlers.youtube.postMessage({error:e.data})
+          }
         });}
-        setInterval(()=>{if(player&&player.getCurrentTime)webkit.messageHandlers.youtube.postMessage({
-          time:player.getCurrentTime(),playing:player.getPlayerState()===1});},200);
+        setInterval(()=>{
+          if(!player||!player.getCurrentTime||!player.getPlayerState)return;
+          const state=player.getPlayerState();
+          const sample={playing:state===1};
+          if(player.getDuration()>0&&[0,1,2].includes(state))sample.time=player.getCurrentTime();
+          webkit.messageHandlers.youtube.postMessage(sample);
+        },200);
         </script><script src="https://www.youtube.com/iframe_api"></script></body></html>
         """, baseURL: URL(string: "https://com.rubleuskia.foreignlanguagelearner"))
         return view
