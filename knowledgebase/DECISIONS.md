@@ -1034,3 +1034,24 @@ Video/audio remain streamed, and backups retain their existing metadata-only sco
 Persist actual playback samples every five seconds and at lifecycle boundaries. Initial
 and buffering states do not publish timestamps. Seek to the saved time on readiness and
 request autoplay; display a manual Play hint when YouTube reports autoplay blocking.
+
+## 2026-11-16 — Shared Wolne Lektury catalog and chapter imports
+
+Keep access behind the existing operator boundary. Provider metadata, source files and
+prepared books are shared rather than owned by the requesting user. Derive the shared
+job identity from provider book ID, source version and pipeline version; atomic admission
+and worker leases let concurrent callers observe the same processing job and progress.
+Run one worker. Publish complete catalog generations atomically; refresh only through
+POST /v1/catalog/refresh for now, without a schedule.
+
+Download source text/audio only when requested, cache in S3, preserve attribution, and
+retain prepared artifacts separately from expiring job artifacts. Preserve original audio
+chapters with chapter-local alignment timestamps. Existing ready books join the catalog.
+Top-level books appear on genre shelves; nested works remain searchable and accessible
+through their collections. Use a dark catalog, detail-first import and persistent status.
+While active, the application completes pending downloads; after suspension, pending jobs
+resume on reopening. Do not replace an existing local book or reading progress silently.
+
+Keep current size/track validation until paid entitlements and large-book resource limits
+are defined. Allow review-marked results with visible status. See DEFERRED_DECISIONS.md
+for pre-release work. The separate Practice tab is removed; dictionary practice remains.

@@ -219,3 +219,13 @@ S3 storage via the operator Cognito API. A manually supplied access token is sto
 Downloaded books enter the existing ZIP import workflow and become offline local books after
 review and commit. Publishing packages is an operator maintenance workflow; the app has read-only
 catalog/download access. See [Book library](../docs/BOOK_LIBRARY.md).
+
+## Wolne Lektury catalog (pending deployment)
+
+The operator-only Catalog tab adds searchable genre shelves and book details alongside
+existing prepared books. Import requests fetch provider text/audio on demand, reuse a
+shared job/result per source and pipeline version, and expose progress across relaunches.
+Generated packages retain original audio chapters and local chapter timings. Metadata is
+refreshed manually with POST /v1/catalog/refresh; no scheduled refresh is configured.
+Current size limits return validation errors. Catalog population and representative
+end-to-end imports require deployment of the catalog-capable API/worker first.

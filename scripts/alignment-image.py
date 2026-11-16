@@ -44,7 +44,7 @@ def main():
     smoke = run(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'python', local,
                  'tools/subtitle-aligner/worker/image_contract.py'], capture_output=True, text=True)
     contracts = json.loads(smoke.stdout)
-    if contracts != {'schema_version': 1, 'contracts': ['alignment-input-v1', 'book-queue-v1']}:
+    if contracts != {'schema_version': 1, 'contracts': ['alignment-input-v1', 'book-queue-v1', 'catalog-chapters-v1']}:
         raise RuntimeError('Worker image did not pass the offline contract check')
     report = {'source_revision': revision, 'worker_contracts': contracts['contracts'],
               'dirty_source': dirty,

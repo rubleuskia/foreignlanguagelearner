@@ -359,6 +359,12 @@ actor BookImportService {
                                        duration: duration, alignmentStatus: track.alignmentStatus,
                                        wordTimingsFilename: wordTimingsFilename))
         }
+        if let provenance = byPath["provenance.json"], provenance.type == .file {
+            try extractFile(provenance, from: archive, to: book.appending(path: "provenance.json"), maximumBytes: 2_000_000)
+        }
+        if let source = byPath["source.epub"], source.type == .file {
+            try extractFile(source, from: archive, to: book.appending(path: "source.epub"), maximumBytes: 10_000_000)
+        }
         let cover = try extractCover(archive: archive, entries: entries, book: book)
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
         manifests[transactionID] = manifest

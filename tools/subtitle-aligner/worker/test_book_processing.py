@@ -71,6 +71,41 @@ class BookProcessingTests(unittest.TestCase):
                 self.assertEqual(json.loads(archive.read('words.json'))['words'][-1]['end'], 305)
             self.assertIn(('aligning', 35), stages)
 
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg required')
+    def test_chapter_output_preserves_boundaries_and_words(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); audio = root / 'tone.mp3'
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440',
+                '-t', '2', '-ac', '1', '-ar', '16000', str(audio)], check=True)
+            source = root / 'input.zip'
+            with zipfile.ZipFile(source, 'w') as archive:
+                archive.write(audio, 'one.mp3'); archive.write(audio, 'two.mp3')
+                archive.writestr('input.json', json.dumps({'schemaVersion': 1, 'audio': ['one.mp3', 'two.mp3'], 'text': 'text.txt'}))
+                archive.writestr('text.txt', 'First chapter. Second chapter.')
+                archive.writestr('provenance.json', '{"provider":"Wolne Lektury"}')
+            def engine(args):
+                args.output.mkdir()
+                words = [{'word': w, 'start': start, 'end': end} for w,start,end in [
+                    ('First',0,0.5),(' chapter.',0.5,1.5),(' Second',2.1,2.5),(' chapter.',2.5,3.5)]]
+                (args.output / 'alignment.json').write_text(json.dumps({'requires_review': False,
+                    'cues': [{'start': 0, 'end': 3500}], 'alignment': {'segments': [{'words': words}]}}))
+            work = root / 'work'; work.mkdir()
+            job = {'title': 'Book', 'language': 'en', 'preserve_chapters': True,
+                'source_book': {'source': {'tracks': [{'title': 'One'}, {'title': 'Two'}]}}}
+            result, review = process(source, work, job, root, lambda *args: None, engine)
+            with zipfile.ZipFile(result) as archive:
+                manifest = json.loads(archive.read('manifest.json'))
+                self.assertEqual([t['title'] for t in manifest['tracks']], ['One','Two'])
+                self.assertEqual(len({t['audio'] for t in manifest['tracks']}), 2)
+                words=[]
+                for t in manifest['tracks']:
+                    local=json.loads(archive.read(t['wordTimings']))
+                    self.assertEqual(local['trackID'], t['id'])
+                    self.assertLess(local['words'][-1]['end'],2)
+                    words.extend(w['text'] for w in local['words'])
+                self.assertEqual(words, ['First','chapter.','Second','chapter.'])
+                self.assertIn('provenance.json',archive.namelist())
+
 
 if __name__ == '__main__':
     unittest.main()

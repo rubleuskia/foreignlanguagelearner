@@ -273,7 +273,7 @@ class WorkerImageTests(unittest.TestCase):
 
     def image(self, change=None):
         config={'os':'linux','architecture':'amd64','config':{'Entrypoint':['python','tools/subtitle-aligner/worker/worker.py'],
-            'Labels':{CONTRACT_LABEL:'alignment-input-v1,book-queue-v1',REVISION_LABEL:'b'*40}}}
+            'Labels':{CONTRACT_LABEL:'alignment-input-v1,book-queue-v1,catalog-chapters-v1',REVISION_LABEL:'b'*40}}}
         if change: change(config)
         raw=json.dumps(config).encode(); sha='sha256:'+hashlib.sha256(raw).hexdigest()
         manifest={'schemaVersion':2,'mediaType':'application/vnd.docker.distribution.manifest.v2+json',
@@ -293,7 +293,7 @@ class WorkerImageTests(unittest.TestCase):
         self.assertEqual(client.get_download_url_for_layer.call_count,1)
 
     def test_legacy_wrong_platform_and_entrypoint_fail_closed(self):
-        for change in [lambda c:c['config'].update(Labels={}),lambda c:c.update(architecture='arm64'),
+        for change in [lambda c:c['config']['Labels'].update({CONTRACT_LABEL:'alignment-input-v1,book-queue-v1'}),lambda c:c['config'].update(Labels={}),lambda c:c.update(architecture='arm64'),
                        lambda c:c['config'].update(Entrypoint=['python','old.py']),
                        lambda c:c['config']['Labels'].update({REVISION_LABEL:'unknown'})]:
             with self.subTest(change=change),self.assertRaisesRegex(ControlError,'book-queue-v1'):

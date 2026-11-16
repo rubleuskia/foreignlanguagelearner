@@ -1,3 +1,19 @@
+## 2026-11-16 — Wolne Lektury catalog and shared imports
+
+- Add an operator-only Catalog tab with dark genre shelves, search, book details,
+  existing ready books and persistent import progress. Remove the separate Practice tab;
+  dictionary practice remains available.
+- Add manual catalog refresh and on-demand source downloads to S3. Concurrent requests
+  for the same source/pipeline version share one durable job and its progress.
+- Preserve audio chapters and chapter-local timings in generated packages; retain source
+  attribution and reuse prepared results. Keep one worker and explicit size validation.
+- Record architecture in DECISIONS.md, workflow in PROJECT.md and pre-release follow-ups
+  in DEFERRED_DECISIONS.md. No live deployment or catalog population performed by this PR.
+- Validation before the user requested stopping tests: catalog/API, worker and CDK checks
+  passed in focused runs. Full iOS build was blocked by package/network/cache sandbox
+  restrictions; three HTTP tests could not bind a local port. Further tests skipped at
+  the user's request. Full build and end-to-end import remain release requirements.
+
 ## 2026-11-16 — YouTube browsing, covers, subtitle replacement and playback resume
 
 - Add **Open YouTube** for searching in the embedded homepage without pasting a link.

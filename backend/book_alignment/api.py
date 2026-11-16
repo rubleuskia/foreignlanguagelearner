@@ -30,6 +30,9 @@ def input_key(row):
 
 def handle(event, repo, s3, bucket, owner=SYSTEM_OWNER):
     route = event.get('routeKey', '')
+    if route.startswith(('GET /v1/catalog/', 'POST /v1/catalog/')):
+        from backend.catalog.api import handle as catalog_handle
+        return catalog_handle(event, repo, s3)
     params = event.get('pathParameters') or {}
     if route == 'GET /v1/book-alignments':
         cursor = (event.get('queryStringParameters') or {}).get('cursor')
@@ -82,17 +85,18 @@ def handle(event, repo, s3, bucket, owner=SYSTEM_OWNER):
         if row['status'] not in TERMINAL - {'failed'}:
             raise CloudError('RESULT_NOT_READY', 409)
         artifact = row['result']
-        remaining = int(row['updated_at']) + 30 * 86400 - int(time.time())
+        result_bucket = os.environ['BOOK_LIBRARY_BUCKET'] if row.get('kind') == 'catalog_import' else bucket
+        remaining = 900 if row.get('kind') == 'catalog_import' else int(row['updated_at']) + 30 * 86400 - int(time.time())
         if remaining <= 0:
             raise CloudError('RESULT_EXPIRED', 410)
         try:
-            s3.head_object(Bucket=bucket, Key=artifact['key'], VersionId=artifact['version_id'])
+            s3.head_object(Bucket=result_bucket, Key=artifact['key'], VersionId=artifact['version_id'])
         except s3.exceptions.ClientError as error:
             if error.response['ResponseMetadata']['HTTPStatusCode'] == 404:
                 raise CloudError('RESULT_EXPIRED', 410) from None
             raise
         return {**artifact, 'bytes': int(artifact['bytes']), 'url': s3.generate_presigned_url('get_object', Params={
-            'Bucket': bucket, 'Key': artifact['key'], 'VersionId': artifact['version_id']}, ExpiresIn=min(900, remaining))}
+            'Bucket': result_bucket, 'Key': artifact['key'], 'VersionId': artifact['version_id']}, ExpiresIn=min(900, remaining))}
     raise CloudError('NOT_FOUND', 404)
 
 

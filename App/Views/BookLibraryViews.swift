@@ -349,6 +349,7 @@ struct BookDetailView: View {
                         BookProgressBar(value: item.readingProgress)
                     }
                     BookWordStatistics(item: item)
+                    CatalogSourceInfoView(item: item)
                     VStack(spacing: 10) {
                         Button { reading = true } label: { Label("Continue", systemImage: "play.fill").lineLimit(1).minimumScaleFactor(0.5).frame(maxWidth: .infinity) }
                             .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: 12))

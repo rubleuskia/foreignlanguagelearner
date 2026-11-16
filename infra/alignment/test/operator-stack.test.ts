@@ -49,7 +49,7 @@ try {
     assert.doesNotMatch(JSON.stringify(template.toJSON()), /APPLE_API_SECRET_ARN/);
   }
   foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 8);
-  audio.resourceCountIs("AWS::ApiGatewayV2::Route", 7);
+  audio.resourceCountIs("AWS::ApiGatewayV2::Route", 12);
   audio.resourceCountIs("AWS::ECS::Service", 1);
   audio.resourceCountIs("AWS::SQS::Queue", 2);
   audio.hasResourceProperties("AWS::ApplicationAutoScaling::ScalableTarget", { MinCapacity: 1, MaxCapacity: 1 });
@@ -59,7 +59,7 @@ try {
     StreamSpecification: { StreamViewType: "NEW_AND_OLD_IMAGES" } });
   audio.hasResourceProperties("AWS::Lambda::Function", { Handler: "backend.book_alignment.api.handler" });
   for (const route of Object.values(audio.findResources("AWS::ApiGatewayV2::Route"))) {
-    assert.match(route.Properties.RouteKey, /\/v1\/book-alignments/);
+    assert.match(route.Properties.RouteKey, /\/v1\/(book-alignments|catalog)/);
     assert.doesNotMatch(route.Properties.RouteKey, /\/v1\/alignments/);
   }
   foundation.hasResourceProperties("AWS::IAM::Policy", { PolicyDocument: { Statement: Match.arrayWith([

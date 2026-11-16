@@ -69,8 +69,8 @@ def inspect(client, registry, region, repository, image_digest, *, download=down
     revision = labels.get(REVISION_LABEL, '')
     if (config.get('os') != 'linux' or config.get('architecture') != 'amd64'
             or (config.get('config') or {}).get('Entrypoint') != ['python', 'tools/subtitle-aligner/worker/worker.py']
-            or BOOK_CONTRACT not in contracts or not re.fullmatch(r'[a-f0-9]{40}', revision)):
-        raise ControlError('Выбранный образ не подтверждает поддержку книжной очереди (book-queue-v1). '
+            or BOOK_CONTRACT not in contracts or 'catalog-chapters-v1' not in contracts or not re.fullmatch(r'[a-f0-9]{40}', revision)):
+        raise ControlError('Выбранный образ не подтверждает поддержку книжной очереди (book-queue-v1) и каталога (catalog-chapters-v1). '
             'Соберите и опубликуйте новый образ через scripts/alignment-image.py, затем укажите его digest '
             'и новые замеры. Старый образ пилота запускать в книжном сервисе нельзя.')
     return {'digest': image_digest, 'contracts': contracts, 'source_revision': revision, 'platform': 'linux/amd64'}

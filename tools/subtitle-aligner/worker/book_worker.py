@@ -12,15 +12,26 @@ import time
 from backend.book_alignment.contract import ARCHIVE_LIMIT, SYSTEM_OWNER, TERMINAL
 from backend.book_alignment.repository import Repository
 from book_processing import process
+from backend.catalog.processing import stage_book, refresh
+from backend.catalog.repository import Catalog
 
 
 def compute(source, root, job, model_dir, messages):
     try:
+        if job.get('kind') == 'catalog_import':
+            import boto3
+            source = stage_book(job['source_book'], Path(root), boto3.client('s3'), job['source_bucket'],
+                                lambda status, progress: messages.put(('stage', status, progress)))
         result, review = process(Path(source), Path(root), job, model_dir,
                                  lambda status, progress: messages.put(('stage', status, progress)))
     except Exception as error:
+        import urllib.error
+        from botocore.exceptions import ClientError, BotoCoreError
+        if isinstance(error, (urllib.error.URLError, ClientError, BotoCoreError)):
+            messages.put(('retry', 'INFRASTRUCTURE_FAILURE'))
+            return
         code = str(error) if str(error) in {'INVALID_TEXT', 'INVALID_AUDIO', 'INVALID_ARCHIVE',
-            'INPUT_TOO_LARGE', 'INVALID_TIMINGS'} else 'ALIGNMENT_FAILED'
+            'INPUT_TOO_LARGE', 'INVALID_TIMINGS', 'TRACK_LIMIT_EXCEEDED', 'SOURCE_UNAVAILABLE', 'SOURCE_CHANGED', 'CHECKSUM_MISMATCH'} else 'ALIGNMENT_FAILED'
         messages.put(('error', code))
         return
     try:
@@ -59,7 +70,7 @@ class Consumer:
             self.ack(message)
             return
         expected_key = f"books/{row['owner']}/{row['job_id']}/input.zip"
-        if pointer.get('key') != expected_key or pointer.get('version_id') != row.get('input_version'):
+        if pointer.get('key') != expected_key or pointer.get('version_id') != row.get('input_version') or pointer.get('kind', 'upload') != row.get('kind', 'upload'):
             raise ValueError('Invalid queue input identity')
         row = self.repo.claim(row['owner'], row['job_id'], int(time.time()))
         if row is None:
@@ -71,30 +82,50 @@ class Consumer:
             with tempfile.TemporaryDirectory(prefix='book-alignment-') as directory:
                 root = Path(directory)
                 source = root / 'input.zip'
-                head = self.s3.head_object(Bucket=self.bucket, Key=expected_key, VersionId=row['input_version'])
-                if not 0 < head['ContentLength'] <= ARCHIVE_LIMIT or head['ContentLength'] != row['size_bytes']:
-                    raise ValueError('INPUT_TOO_LARGE')
-                digest = hashlib.sha256()
-                last_heartbeat = time.monotonic()
-                incoming = self.s3.get_object(Bucket=self.bucket, Key=expected_key,
-                                              VersionId=row['input_version'])['Body']
-                with incoming, source.open('wb') as output:
-                    count = 0
-                    for block in incoming.iter_chunks(1024 * 1024):
-                        count += len(block)
-                        if count > ARCHIVE_LIMIT:
-                            raise ValueError('INPUT_TOO_LARGE')
-                        output.write(block); digest.update(block)
-                        if time.monotonic() - last_heartbeat > 20:
-                            self.heartbeat(row, message); last_heartbeat = time.monotonic()
-                if count != row['size_bytes'] or digest.hexdigest() != row['sha256']:
-                    raise ValueError('CHECKSUM_MISMATCH')
+                if row.get('kind') == 'catalog_refresh':
+                    import boto3
+                    catalog = Catalog(boto3.resource('dynamodb').Table(os.environ['BOOK_CATALOG_TABLE']))
+                    last = [0.0]
+                    def check():
+                        if time.monotonic() - last[0] > 10:
+                            self.heartbeat(row, message); last[0] = time.monotonic()
+                    def stage(status, progress):
+                        nonlocal row
+                        if progress != row['progress']:
+                            row = self.repo.change(row, status, progress, lease_until=int(time.time()) + 180)
+                    count = refresh(catalog, check, stage, guard=lambda: (self.repo.table.name, row))
+                    self.repo.change(row, 'succeeded', 100, catalog_count=count, lease_until=0)
+                    return
+                if row.get('kind') != 'catalog_import':
+                    head = self.s3.head_object(Bucket=self.bucket, Key=expected_key, VersionId=row['input_version'])
+                    if not 0 < head['ContentLength'] <= ARCHIVE_LIMIT or head['ContentLength'] != row['size_bytes']:
+                        raise ValueError('INPUT_TOO_LARGE')
+                    digest = hashlib.sha256()
+                    last_heartbeat = time.monotonic()
+                    incoming = self.s3.get_object(Bucket=self.bucket, Key=expected_key,
+                                                  VersionId=row['input_version'])['Body']
+                    with incoming, source.open('wb') as output:
+                        count = 0
+                        for block in incoming.iter_chunks(1024 * 1024):
+                            count += len(block)
+                            if count > ARCHIVE_LIMIT:
+                                raise ValueError('INPUT_TOO_LARGE')
+                            output.write(block); digest.update(block)
+                            if time.monotonic() - last_heartbeat > 20:
+                                self.heartbeat(row, message); last_heartbeat = time.monotonic()
+                    if count != row['size_bytes'] or digest.hexdigest() != row['sha256']:
+                        raise ValueError('CHECKSUM_MISMATCH')
                 context = multiprocessing.get_context('spawn')
                 messages = context.Queue()
                 # Decimal-free child inputs; AWS clients stay in the parent.
                 job = {key: row[key] for key in ('title', 'language')}
-                job.update(bucket=self.bucket,
-                    result_key=f"books/{row['owner']}/{row['job_id']}/{row['lease_token']}/book.book.zip")
+                job.update(kind=row.get('kind', 'upload'))
+                if row.get('kind') == 'catalog_import':
+                    job.update(source_book=row['source_book'], source_bucket=self.bucket, preserve_chapters=True)
+                output_bucket = os.environ['BOOK_LIBRARY_BUCKET'] if row.get('kind') == 'catalog_import' else self.bucket
+                job.update(bucket=output_bucket,
+                    result_key=(f"library/catalog-results/{row['job_id']}/{row['lease_token']}/book.book.zip"
+                        if row.get('kind') == 'catalog_import' else f"books/{row['owner']}/{row['job_id']}/{row['lease_token']}/book.book.zip"))
                 child = context.Process(target=compute, args=(str(source), str(root), job, self.model_dir, messages))
                 child.start()
                 result = None
@@ -119,7 +150,8 @@ class Consumer:
                                  result=result, requires_review=review, lease_until=0)
         except ValueError as error:
             code = str(error) if str(error) in {'INPUT_TOO_LARGE', 'CHECKSUM_MISMATCH', 'INVALID_TEXT',
-                'INVALID_AUDIO', 'INVALID_ARCHIVE', 'INVALID_TIMINGS', 'ALIGNMENT_FAILED'} else 'INVALID_ARCHIVE'
+                'INVALID_AUDIO', 'INVALID_ARCHIVE', 'INVALID_TIMINGS', 'ALIGNMENT_FAILED', 'TRACK_LIMIT_EXCEEDED',
+                'SOURCE_UNAVAILABLE', 'SOURCE_CHANGED', 'INVALID_SOURCE'} else 'INVALID_ARCHIVE'
             self.repo.change(row, 'failed', int(row['progress']), error_code=code, lease_until=0)
         except Exception:
             # Infrastructure failures remain retryable. The lease expires after the process stops.
