@@ -34,14 +34,8 @@ struct CatalogBook: Codable, Identifiable, Sendable, Hashable {
 }
 
 extension CloudAlignmentService {
-    private struct CatalogPage: Decodable { let books: [CatalogBook]; let cursor: String? }
-    func catalogBooks() async throws -> [CatalogBook] {
-        var books: [CatalogBook] = [], cursor: String?
-        repeat {
-            let page: CatalogPage = try await request("v1/catalog/books", cursor: cursor)
-            books += page.books; cursor = page.cursor
-        } while cursor != nil
-        return books
+    func catalogPage(cursor: String?) async throws -> CatalogPage {
+        try await request("v1/catalog/books", cursor: cursor)
     }
     func catalogDetail(_ id: String) async throws -> CatalogBook { try await request("v1/catalog/books/\(id)") }
     func importCatalogBook(_ id: String) async throws -> CloudAlignmentJob {
@@ -62,26 +56,81 @@ extension CloudAlignmentService {
     private var polling = false
     private let service = CloudAlignmentService()
     private let legacy = BuiltinLibraryService()
-    private var stateURL: URL { CloudAlignmentFiles.root.appending(path: "catalog-imports.json") }
+    private let browser: any CatalogBrowsing
+    private let cache: CatalogCache
+    private let directory: URL
+    private let now: @Sendable () -> Date
+    private var snapshot = CatalogSnapshot()
+    private var restored = false
+    private var stateURL: URL { directory.appending(path: "catalog-imports.json") }
 
-    init() {
+    init(browser: (any CatalogBrowsing)? = nil, cache: CatalogCache = CatalogCache(),
+         directory: URL = CloudAlignmentFiles.root, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.browser = browser ?? CatalogBrowser(service: service, library: legacy)
+        self.cache = cache; self.directory = directory; self.now = now
+        #if DEBUG
+        if CatalogNavigationUIFixture.enabled {
+            snapshot = CatalogNavigationUIFixture.snapshot
+            books = snapshot.catalog; pending = CatalogNavigationUIFixture.requests
+            restored = true
+            return
+        }
+        #endif
         if let data = try? Data(contentsOf: stateURL), let stored = try? JSONDecoder().decode([String: Pending].self, from: data) { pending = stored }
     }
     func save() throws {
-        try CloudAlignmentFiles.initialize()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(pending).write(to: stateURL, options: .atomic)
     }
-    func reload() async {
+    func reload(force: Bool = true) async {
         guard !loading else { return }
         loading = true; error = nil; legacyError = nil
         defer { loading = false }
-        do { books = try await service.catalogBooks() }
-        catch { self.error = error.localizedDescription }
+        if !restored {
+            if let saved = await cache.load() { snapshot = saved; display() }
+            restored = true
+        }
+        guard !Task.isCancelled else { return }
+        let date = now()
+        async let catalogChanged = refreshCatalog(force: force, at: date)
+        async let readyChanged = refreshReady(force: force, at: date)
+        let changed = await (catalogChanged, readyChanged)
+        if changed.0 || changed.1 { await cache.save(snapshot) }
+    }
+    private func display(catalog: [CatalogBook]? = nil) {
+        books = snapshot.ready.map(CatalogBook.ready) + (catalog ?? snapshot.catalog)
+    }
+    private func refreshCatalog(force: Bool, at date: Date) async -> Bool {
+        guard force || !CatalogSnapshot.isFresh(snapshot.catalogDate, at: date) else { return false }
+        var collected: [CatalogBook] = [], cursor: String?, seen: Set<String> = []
+        let showPages = snapshot.catalogDate == nil
         do {
-            let ready = try await legacy.books().map(CatalogBook.ready)
-            books.removeAll { $0.prepared != nil }
-            books.insert(contentsOf: ready, at: 0)
-        } catch { legacyError = error.localizedDescription }
+            repeat {
+                try Task.checkCancellation()
+                let page = try await browser.page(cursor: cursor)
+                try Task.checkCancellation()
+                collected += page.books
+                if showPages { display(catalog: collected) }
+                cursor = page.cursor
+                if let cursor, !seen.insert(cursor).inserted { throw CloudAlignmentFiles.invalid("Invalid catalog cursor.") }
+            } while cursor != nil
+            snapshot.catalog = collected; snapshot.catalogDate = date
+            display()
+            return true
+        } catch is CancellationError { return false }
+        catch { if !Task.isCancelled { self.error = error.localizedDescription }; return false }
+    }
+    private func refreshReady(force: Bool, at date: Date) async -> Bool {
+        guard force || !CatalogSnapshot.isFresh(snapshot.readyDate, at: date) else { return false }
+        do {
+            let ready = try await browser.readyBooks()
+            try Task.checkCancellation()
+            snapshot.ready = ready; snapshot.readyDate = date
+            // Preserve already visible first-load pages while the catalog is still arriving.
+            books = ready.map(CatalogBook.ready) + books.filter { $0.prepared == nil }
+            return true
+        } catch is CancellationError { return false }
+        catch { if !Task.isCancelled { legacyError = error.localizedDescription }; return false }
     }
     func start(_ book: CatalogBook) async {
         guard !downloading.contains(book.id) else { return }
@@ -95,6 +144,12 @@ extension CloudAlignmentService {
     }
     func suspendAutomaticDownloads() { automatic.removeAll() }
     func poll(context: ModelContext) async {
+        #if DEBUG
+        if CatalogNavigationUIFixture.enabled {
+            CatalogNavigationUIFixture.update(&pending)
+            return
+        }
+        #endif
         guard !polling else { return }
         polling = true
         defer { polling = false }

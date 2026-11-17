@@ -1,3 +1,37 @@
+## 2026-11-17 — Import catalog source and attribution resources in strict book packages
+
+- Fix catalog ZIP import rejecting `provenance.json` as an unreferenced file before reaching
+  existing source/attribution extraction. Define optional root-level `provenance.json` and
+  `source.epub` once for strict admission, size checks and extraction.
+- Preserve both files verbatim through prepare/retry and library move; retain the 2 MB/10 MB
+  limits and rejection of other unknown files. No backend change or reprocessing is needed.
+- Record the package-resource decision and contract. PROJECT.md purpose/workflows are unchanged.
+- Validation: all 336 local iOS unit tests passed, including three package-resource
+  regressions; generic iOS Release build passed with signing disabled.
+
+## 2026-11-17 — Stable navigation from catalog import requests
+
+- Use one typed catalog navigation stack for requests, genres and book details. Routes
+  identify books by stable IDs rather than mixing destination-view and value-based pushes.
+- Keep selected book details open while request statuses update, and preserve the return
+  path through the requests list. Add a UI regression for two books across polling updates.
+- Record the routing decision in DECISIONS.md. PROJECT.md purpose and workflows are unchanged.
+- Validation: simulator UI regression passed across two book selections and background
+  status updates; generic iOS Release build passed with signing disabled.
+
+## 2026-11-17 — Show cached catalog immediately and load first pages progressively
+
+- Persist complete catalog and ready-library metadata on device. Restore it when opening
+  the catalog, refresh after one hour, and let explicit Refresh bypass the interval.
+- Display pages as they arrive on the first load and load ready books independently.
+  Previously the client waited for every sequential 100-book page, followed by the library
+  request, before completing the initial catalog load.
+- Preserve complete cached data on network failures; never persist a partial page sequence
+  as a complete catalog. Document the cache boundary in DECISIONS.md and CATALOG.md.
+  Project purpose and supported workflows in PROJECT.md are unchanged. No backend changes.
+- Validation: 333 local iOS unit tests passed, including 8 cache/loading regressions;
+  generic iOS Release build passed with signing disabled. Device timing remains unmeasured.
+
 ## 2026-11-17 — Explicit pre-release development policy
 
 - AGENTS.md now records that the app is unpublished in the App Store; the first publication

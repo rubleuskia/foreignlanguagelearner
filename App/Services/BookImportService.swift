@@ -300,9 +300,17 @@ actor BookImportService {
         let manifestData = try extractData(manifestEntry, from: archive, maximumBytes: limits.maximumManifestBytes)
         var manifest = try BookManifestValidator.decode(manifestData, limits: limits)
         let byPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
-        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle, $0.wordTimings].compactMap { $0 } })
+        let allowed = Set(["manifest.json", manifest.transcript] + manifest.tracks.flatMap { [$0.audio, $0.subtitle, $0.wordTimings].compactMap { $0 } }
+            + BookPackageSupplement.allCases.map(\.rawValue))
         let unknown = entries.filter { $0.type == .file && !allowed.contains($0.path) && !BookCoverService.isCoverPath($0.path) && !isSystemMetadata($0.path) }
         guard unknown.isEmpty else { throw invalid("Strict package contains unreferenced file: \(unknown[0].path)") }
+        for supplement in BookPackageSupplement.allCases {
+            if let entry = byPath[supplement.rawValue] {
+                guard entry.type == .file, entry.uncompressedSize <= supplement.maximumBytes else {
+                    throw invalid("Package resource \(supplement.rawValue) exceeds its \(supplement.maximumBytes)-byte limit or is not a file.")
+                }
+            }
+        }
         guard let transcriptEntry = byPath[manifest.transcript], transcriptEntry.type == .file else { throw invalid("Manifest transcript is missing.") }
         let transcript = try extractData(transcriptEntry, from: archive, maximumBytes: limits.maximumTranscriptBytes)
         try BookManifestValidator.validate(manifest, transcriptData: transcript, limits: limits)
@@ -359,11 +367,10 @@ actor BookImportService {
                                        duration: duration, alignmentStatus: track.alignmentStatus,
                                        wordTimingsFilename: wordTimingsFilename))
         }
-        if let provenance = byPath["provenance.json"], provenance.type == .file {
-            try extractFile(provenance, from: archive, to: book.appending(path: "provenance.json"), maximumBytes: 2_000_000)
-        }
-        if let source = byPath["source.epub"], source.type == .file {
-            try extractFile(source, from: archive, to: book.appending(path: "source.epub"), maximumBytes: 10_000_000)
+        for supplement in BookPackageSupplement.allCases {
+            if let entry = byPath[supplement.rawValue] {
+                try extractFile(entry, from: archive, to: book.appending(path: supplement.rawValue), maximumBytes: supplement.maximumBytes)
+            }
         }
         let cover = try extractCover(archive: archive, entries: entries, book: book)
         manifest.title = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)

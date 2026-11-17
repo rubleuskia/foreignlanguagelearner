@@ -58,6 +58,19 @@ struct BookManifest: Codable, Equatable, Sendable {
     }
 }
 
+/// Optional root-level package resources, retained verbatim alongside manifest-referenced media.
+enum BookPackageSupplement: String, CaseIterable, Sendable {
+    case provenance = "provenance.json"
+    case sourceEPUB = "source.epub"
+
+    var maximumBytes: UInt64 {
+        switch self {
+        case .provenance: 2_000_000
+        case .sourceEPUB: 10_000_000
+        }
+    }
+}
+
 enum BookManifestError: LocalizedError, Equatable {
     case invalid(String)
     var errorDescription: String? {
