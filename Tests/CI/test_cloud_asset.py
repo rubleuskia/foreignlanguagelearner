@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 
 class CloudAssetTests(unittest.TestCase):
-    def test_operator_asset_contains_queue_api_and_dispatcher_without_test_code(self):
+    def test_operator_asset_contains_queue_and_catalog_without_test_code(self):
         root = Path(__file__).resolve().parents[2]
         specification = importlib.util.spec_from_file_location('cloud_asset_builder', root / 'scripts/build-cloud.py')
         module = importlib.util.module_from_spec(specification)
@@ -19,6 +19,8 @@ class CloudAssetTests(unittest.TestCase):
                 module.main()
             for name in ['api.py', 'dispatch.py', 'repository.py', 'contract.py']:
                 self.assertTrue((output / 'backend/book_alignment' / name).is_file(), name)
+            for name in ['__init__.py', 'api.py', 'repository.py', 'source.py', 'processing.py']:
+                self.assertTrue((output / 'backend/catalog' / name).is_file(), name)
             self.assertFalse(list(output.rglob('test_*.py')))
 
 
