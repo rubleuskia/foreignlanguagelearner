@@ -1,3 +1,15 @@
+## Catalog metadata freshness and first display (2026-11-17)
+
+Keep a versioned, API-scoped metadata snapshot in the iOS caches directory. Show it before
+network refresh and consider each of provider catalog and ready-library metadata fresh for
+one hour. Explicit refresh bypasses freshness. Fetch those two sources independently.
+On a first load, expose pages progressively; when refreshing a saved catalog, retain the
+complete old list until all pages succeed. Only complete source responses update disk cache
+and freshness; errors preserve the previous complete data. An empty successful response is
+valid and removes old books. Metadata is shared, contains no tokens or signed artifact URLs,
+and does not authorize imports/downloads. User import requests and progress stay separate.
+This is client caching over the existing authenticated cursor API, with no server changes.
+
 ## Pre-release compatibility policy (2026-11-17)
 
 The app has not been published in the App Store. Record the first publication date

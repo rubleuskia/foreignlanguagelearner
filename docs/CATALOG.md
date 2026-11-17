@@ -27,6 +27,15 @@ The Catalog tab replaces the dedicated Practice tab; dictionary-based learning r
 The Dictionary toolbar opens the existing Practice screen, including listening practice,
 saved rounds, round setup and cooldown settings. A book detail presents chapters, an excerpt when provided, source links, and import/status controls. Pending requests persist locally. While the app stays active after a request, successful results are downloaded and committed using the checked importer and source identity. After reopening or suspending the app, ready requests remain available for explicit download. Duplicate local imports preserve the existing book and progress.
 
+Catalog metadata is cached on device between launches. Opening the tab displays the saved
+catalog first and refreshes metadata older than one hour in the background. Refresh and
+pull-to-refresh bypass that interval. On a first load, pages appear as they arrive; searching
+the whole catalog is complete when loading finishes. Ready-to-download library metadata
+loads independently so it does not wait for all provider pages. A failed refresh preserves
+the last complete snapshot, and partial pagination never replaces that disk snapshot.
+The cache contains shared book metadata only, with no access tokens or signed download URLs,
+and is scoped to the configured API. Import requests and user progress remain separate.
+
 The client downloads prepared archives through the shared BookDownloadService used by the
 built-in library. S3 global and Stockholm regional signed URLs are accepted without rewriting
 the signature; redirects remain restricted to supported S3 destinations. Size and SHA-256

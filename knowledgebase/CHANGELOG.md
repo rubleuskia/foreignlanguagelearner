@@ -1,3 +1,16 @@
+## 2026-11-17 — Show cached catalog immediately and load first pages progressively
+
+- Persist complete catalog and ready-library metadata on device. Restore it when opening
+  the catalog, refresh after one hour, and let explicit Refresh bypass the interval.
+- Display pages as they arrive on the first load and load ready books independently.
+  Previously the client waited for every sequential 100-book page, followed by the library
+  request, before completing the initial catalog load.
+- Preserve complete cached data on network failures; never persist a partial page sequence
+  as a complete catalog. Document the cache boundary in DECISIONS.md and CATALOG.md.
+  Project purpose and supported workflows in PROJECT.md are unchanged. No backend changes.
+- Validation: 333 local iOS unit tests passed, including 8 cache/loading regressions;
+  generic iOS Release build passed with signing disabled. Device timing remains unmeasured.
+
 ## 2026-11-17 — Explicit pre-release development policy
 
 - AGENTS.md now records that the app is unpublished in the App Store; the first publication

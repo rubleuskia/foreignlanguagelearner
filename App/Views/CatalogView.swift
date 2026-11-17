@@ -62,7 +62,7 @@ struct CatalogView: View {
         .navigationDestination(for: CatalogBook.self) { CatalogDetailView(book: $0) }
         .toolbar { Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.reload() } }.disabled(model.loading) }
         .refreshable { await model.reload() }
-        .task { if model.books.isEmpty { await model.reload() } }
+        .task { await model.reload(force: false) }
     }
     private func chip(_ title: String, id: String?) -> some View {
         Button(AppLanguage.text(title)) { genre = id }
