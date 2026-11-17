@@ -124,20 +124,16 @@ actor BuiltinLibraryService {
            url.user == nil, url.password == nil, url.query == nil, url.fragment == nil { return url }
         return URL(string: "https://5h6q49tdi4.execute-api.eu-north-1.amazonaws.com")!
     }()
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForResource = 3600
-        return URLSession(configuration: config)
-    }()
+    private let downloads: BookDownloadService
     private struct Catalog: Decodable { let books: [LibraryBook] }
-    private struct Download: Decodable { let url: URL; let bytes: Int64; let sha256: String }
 
     private let authentication: OperatorSession
     private let client: any ContextAnalysisHTTPClient
     init(authentication: OperatorSession = .shared,
          client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient(
-            session: URLSession(configuration: .ephemeral))) {
+            session: URLSession(configuration: .ephemeral)), downloads: BookDownloadService = .shared) {
         self.authentication = authentication; self.client = client
+        self.downloads = downloads
     }
     private func request<T: Decodable>(_ path: String, as: T.Type) async throws -> T {
         var lease = try await authentication.lease()
@@ -162,29 +158,11 @@ actor BuiltinLibraryService {
         try await request("v1/library/books", as: Catalog.self).books
     }
     func download(_ book: LibraryBook) async throws -> URL {
-        let info = try await request("v1/library/books/\(book.id)/download", as: Download.self)
-        guard info.url.scheme == "https", info.url.host?.hasSuffix(".amazonaws.com") == true,
-              info.bytes == book.bytes, info.sha256 == book.sha256 else {
+        let info = try await request("v1/library/books/\(book.id)/download", as: BookDownload.self)
+        guard info.bytes == book.bytes, info.sha256.lowercased() == book.sha256.lowercased() else {
             throw failure("The catalog changed. Refresh the book list.")
         }
-        let (temporary, response) = try await session.download(from: info.url)
-        defer { try? FileManager.default.removeItem(at: temporary) }
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw failure("Could not download the book. Please try again.")
-        }
-        let handle = try FileHandle(forReadingFrom: temporary)
-        defer { try? handle.close() }
-        var hash = SHA256(); var count: Int64 = 0
-        while let chunk = try handle.read(upToCount: 1024 * 1024), !chunk.isEmpty {
-            try Task.checkCancellation()
-            hash.update(data: chunk); count += Int64(chunk.count)
-        }
-        guard count == book.bytes, hash.finalize().map({ String(format: "%02x", $0) }).joined() == book.sha256 else {
-            throw failure("The file is damaged. Download the book again.")
-        }
-        let destination = FileManager.default.temporaryDirectory.appending(path: "library-\(UUID()).zip")
-        try FileManager.default.moveItem(at: temporary, to: destination)
-        return destination
+        return try await downloads.download(info)
     }
     private func failure(_ message: String) -> NSError {
         NSError(domain: "BuiltinLibrary", code: 1, userInfo: [NSLocalizedDescriptionKey: AppLanguage.text(message)])

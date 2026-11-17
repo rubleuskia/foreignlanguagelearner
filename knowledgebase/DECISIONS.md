@@ -1,3 +1,12 @@
+## Pre-release compatibility policy (2026-11-17)
+
+The app has not been published in the App Store. Record the first publication date
+explicitly and separately; builds, tags, TestFlight distribution and backend deployments
+do not establish that milestone. Until publication is recorded, breaking changes are
+acceptable throughout the project. Prefer root-cause fixes and coherent redesigns,
+removing obsolete code rather than adding temporary workarounds, compatibility layers
+for old test versions, or migrations solely to preserve pre-release behavior.
+
 ## Strict sentence boundaries and yellow-word markers (2026-11-15)
 
 Supersede linguistic sentence grouping for automatic book translation with explicit
@@ -1088,3 +1097,17 @@ Existing report paths remain accepted for saved-config and old-tag compatibility
 CDK ignores them. Measurements remain useful evidence, not proof created by deployment.
 Design digest-bound automated benchmarks and quality acceptance in the release pipeline
 later, as tracked in DEFERRED_DECISIONS.md. Do not fabricate evidence to pass deployment.
+
+## 2026-11-17 — One client download boundary for book archives
+
+Use BookDownloadService for built-in library and synchronized/catalog ZIP results.
+Keep authenticated metadata requests in their existing services; never forward their bearer
+token to artifact storage. Validate AWS S3 destinations centrally for global and eu-north-1
+regional/dual-stack endpoints, including path-style URLs. Preserve signed URLs verbatim.
+Apply the same destination policy to redirects and cloud uploads; reject URL credentials,
+fragments, nonstandard ports, other services/Regions and lookalike host suffixes.
+
+Accept only positive download sizes up to 4 GiB and a 64-digit SHA-256. Verify actual bytes
+and checksum before moving a downloaded temporary file into an owned ZIP; remove temporary
+files on HTTP, integrity or cancellation failure. ZIP contents remain the importer's concern.
+The separate input-upload limits and server signing/storage configuration are unchanged.

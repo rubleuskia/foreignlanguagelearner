@@ -27,6 +27,12 @@ The Catalog tab replaces the dedicated Practice tab; dictionary-based learning r
 The Dictionary toolbar opens the existing Practice screen, including listening practice,
 saved rounds, round setup and cooldown settings. A book detail presents chapters, an excerpt when provided, source links, and import/status controls. Pending requests persist locally. While the app stays active after a request, successful results are downloaded and committed using the checked importer and source identity. After reopening or suspending the app, ready requests remain available for explicit download. Duplicate local imports preserve the existing book and progress.
 
+The client downloads prepared archives through the shared BookDownloadService used by the
+built-in library. S3 global and Stockholm regional signed URLs are accepted without rewriting
+the signature; redirects remain restricted to supported S3 destinations. Size and SHA-256
+are verified before handing an owned ZIP to the importer. Client download fixes need a new
+iOS build; existing completed alignment results can be reused.
+
 The provider worker aligns the full text/audio timeline, preserves the original audio chapter boundaries, and projects each aligned word once onto a chapter-local clock. Boundary clipping/empty narration chapters are marked for review. Each timed chapter has separate audio, subtitles, word-timing JSON and its original title. Publisher notices are separated from narrated TXT and retained in `provenance.json`; original EPUBs and available covers are retained in packages. Local book details expose retained source/attribution notices. Read/review uncertain timings before claiming acoustic quality.
 
 ## Delivery and remaining acceptance
