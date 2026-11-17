@@ -34,18 +34,20 @@ actor CloudAlignmentService {
     private let authentication: OperatorSession
     private let client: any ContextAnalysisHTTPClient
     private let session: URLSession
+    private let downloads: BookDownloadService
     private let baseURL: URL
     init(authentication: OperatorSession = .shared, baseURL: URL = BuiltinLibraryService.baseURL,
          client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient(
-            session: URLSession(configuration: .ephemeral))) {
+            session: URLSession(configuration: .ephemeral)), downloads: BookDownloadService = .shared) {
         self.authentication = authentication; self.client = client; self.baseURL = baseURL
+        self.downloads = downloads
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForResource = 3600
-        session = URLSession(configuration: config)
+        session = URLSession(configuration: config, delegate: S3RedirectPolicy(), delegateQueue: nil)
     }
+    deinit { session.invalidateAndCancel() }
     struct Jobs: Decodable { let jobs: [CloudAlignmentJob]; let cursor: String? }
     private struct Upload: Decodable { let url: URL; let headers: [String: String] }
-    private struct Download: Decodable { let url: URL; let bytes: Int; let sha256: String }
     func request<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,
                                         key: String? = nil, cursor: String? = nil) async throws -> T {
         var lease = try await authentication.lease()
@@ -123,20 +125,10 @@ actor CloudAlignmentService {
         return try await complete(id)
     }
     func download(_ id: String) async throws -> URL {
-        let info: Download = try await request("v1/book-alignments/\(id)/result")
-        try validateS3(info.url)
-        guard info.bytes > 0, info.bytes <= 4 * 1024 * 1024 * 1024 else { throw CloudAlignmentFiles.invalid("Invalid result size.") }
-        let (temporary, response) = try await session.download(from: info.url)
-        defer { try? FileManager.default.removeItem(at: temporary) }
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw CloudAlignmentFiles.invalid("Could not download the synchronized book.") }
-        let package = try await Task.detached { try CloudAlignmentFiles.inspect(temporary) }.value
-        guard package.bytes == info.bytes, package.sha256 == info.sha256 else { throw CloudAlignmentFiles.invalid("The downloaded book is damaged. Try again.") }
-        let result = FileManager.default.temporaryDirectory.appending(path: "alignment-result-\(UUID()).zip")
-        try FileManager.default.moveItem(at: temporary, to: result)
-        return result
+        let info: BookDownload = try await request("v1/book-alignments/\(id)/result")
+        return try await downloads.download(info)
     }
     private func validateS3(_ url: URL) throws {
-        guard url.scheme == "https", url.host?.hasSuffix(".s3.eu-north-1.amazonaws.com") == true,
-              url.user == nil, url.password == nil else { throw CloudAlignmentFiles.invalid("Invalid artifact address.") }
+        guard S3ArtifactURL.isAllowed(url) else { throw BookDownloadError.invalidAddress }
     }
 }

@@ -1,3 +1,17 @@
+## 2026-11-17 — Shared client download pipeline for synchronized and library books
+
+- Fix ready catalog books failing with “Invalid artifact address.” when the API returns
+  a valid global S3 signed URL. Accept global, Stockholm regional and dual-stack S3 URLs
+  in virtual-hosted and path-style forms without rewriting signed paths or query strings.
+- Share ZIP downloads, size/SHA-256 verification, cancellation and temporary-file cleanup
+  between the built-in library and cloud/catalog results. Validate redirect destinations
+  and reject non-S3 hosts, other Regions, URL credentials, fragments and nonstandard ports.
+- Record the shared transfer boundary in DECISIONS.md. PROJECT.md workflow and project
+  purpose are unchanged. This client fix requires a new iOS build; backend code is unchanged.
+- Validation: 325 local unit tests passed; the shared Swift downloader fetched the
+  existing 32,804,096-byte Antek artifact from its global S3 signed URL and matched
+  the published SHA-256. Physical-device installation remains unverified.
+
 ## 2026-11-17 — Include catalog modules in the deployed operator Lambda package
 
 - Fix authenticated catalog routes returning `INFRASTRUCTURE_FAILURE`: the operator
