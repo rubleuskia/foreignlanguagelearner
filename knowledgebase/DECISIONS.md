@@ -1,3 +1,11 @@
+## Catalog navigation owns one stable typed path (2026-11-17)
+
+The catalog tab owns one NavigationStack path of CatalogRoute values: requests, genre ID
+and book ID. Register destinations at the stack root outside lazy content. Resolve book
+metadata from the current catalog or saved import request; status updates must not define
+route identity. Use this path consistently for catalog screens, including links from the
+requests list and collections, so a value push does not discard a view-based destination.
+
 ## Catalog metadata freshness and first display (2026-11-17)
 
 Keep a versioned, API-scoped metadata snapshot in the iOS caches directory. Show it before

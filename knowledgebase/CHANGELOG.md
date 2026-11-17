@@ -1,3 +1,13 @@
+## 2026-11-17 — Stable navigation from catalog import requests
+
+- Use one typed catalog navigation stack for requests, genres and book details. Routes
+  identify books by stable IDs rather than mixing destination-view and value-based pushes.
+- Keep selected book details open while request statuses update, and preserve the return
+  path through the requests list. Add a UI regression for two books across polling updates.
+- Record the routing decision in DECISIONS.md. PROJECT.md purpose and workflows are unchanged.
+- Validation: simulator UI regression passed across two book selections and background
+  status updates; generic iOS Release build passed with signing disabled.
+
 ## 2026-11-17 — Show cached catalog immediately and load first pages progressively
 
 - Persist complete catalog and ready-library metadata on device. Restore it when opening

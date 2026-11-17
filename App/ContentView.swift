@@ -22,7 +22,7 @@ struct ContentView: View {
         TabView {
             library
                 .tabItem { Label("Library", systemImage: "books.vertical") }
-            NavigationStack { CatalogView() }
+            CatalogNavigationView()
                 .tabItem { Label("Catalog", systemImage: "square.grid.2x2") }
             NavigationStack { DictionaryView() }
                 .tabItem { Label("Dictionary", systemImage: "book.closed") }

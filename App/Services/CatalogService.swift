@@ -68,6 +68,14 @@ extension CloudAlignmentService {
          directory: URL = CloudAlignmentFiles.root, now: @escaping @Sendable () -> Date = { Date() }) {
         self.browser = browser ?? CatalogBrowser(service: service, library: legacy)
         self.cache = cache; self.directory = directory; self.now = now
+        #if DEBUG
+        if CatalogNavigationUIFixture.enabled {
+            snapshot = CatalogNavigationUIFixture.snapshot
+            books = snapshot.catalog; pending = CatalogNavigationUIFixture.requests
+            restored = true
+            return
+        }
+        #endif
         if let data = try? Data(contentsOf: stateURL), let stored = try? JSONDecoder().decode([String: Pending].self, from: data) { pending = stored }
     }
     func save() throws {
@@ -136,6 +144,12 @@ extension CloudAlignmentService {
     }
     func suspendAutomaticDownloads() { automatic.removeAll() }
     func poll(context: ModelContext) async {
+        #if DEBUG
+        if CatalogNavigationUIFixture.enabled {
+            CatalogNavigationUIFixture.update(&pending)
+            return
+        }
+        #endif
         guard !polling else { return }
         polling = true
         defer { polling = false }

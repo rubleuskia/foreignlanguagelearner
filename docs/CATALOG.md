@@ -36,6 +36,10 @@ the last complete snapshot, and partial pagination never replaces that disk snap
 The cache contains shared book metadata only, with no access tokens or signed download URLs,
 and is scoped to the configured API. Import requests and user progress remain separate.
 
+Catalog screens share one navigation path with stable request-list, genre and book-ID routes.
+Selecting an import request opens its book details and keeps the requests list in the back
+path, including while background polling updates statuses.
+
 The client downloads prepared archives through the shared BookDownloadService used by the
 built-in library. S3 global and Stockholm regional signed URLs are accepted without rewriting
 the signature; redirects remain restricted to supported S3 destinations. Size and SHA-256

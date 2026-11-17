@@ -1,6 +1,35 @@
 import SwiftUI
 import SwiftData
 
+enum CatalogRoute: Hashable {
+    case requests
+    case genre(String)
+    case book(String)
+}
+
+struct CatalogNavigationView: View {
+    @State private var path: [CatalogRoute] = []
+    @State private var model = CatalogModel.shared
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            CatalogView()
+                .navigationDestination(for: CatalogRoute.self) { route in
+                    switch route {
+                    case .requests: CatalogRequestsView()
+                    case .genre(let id): CatalogGenreView(id: id)
+                    case .book(let id):
+                        if let book = model.books.first(where: { $0.id == id }) ?? model.pending[id]?.book {
+                            CatalogDetailView(book: book)
+                        } else {
+                            ContentUnavailableView("No books found", systemImage: "books.vertical")
+                        }
+                    }
+                }
+        }
+    }
+}
+
 struct CatalogView: View {
     static let shelves: [(String, String)] = [("ready", "Ready to download"), ("novels", "Novels"),
         ("crime", "Crime"), ("adventure", "Adventure"), ("fairy-tales", "Fairy tales"),
@@ -21,7 +50,8 @@ struct CatalogView: View {
                 if let error = model.error { Text(error).foregroundStyle(.red); Button("Retry") { Task { await model.reload() } } }
                 if let error = model.legacyError { Text(error).font(.caption).foregroundStyle(.secondary) }
                 if !model.pending.isEmpty {
-                    NavigationLink { CatalogRequestsView() } label: { Label("Import requests", systemImage: "arrow.down.circle") }
+                    NavigationLink(value: CatalogRoute.requests) { Label("Import requests", systemImage: "arrow.down.circle") }
+                        .accessibilityIdentifier("catalog.requests")
                 }
                 ScrollView(.horizontal) {
                     HStack {
@@ -36,13 +66,13 @@ struct CatalogView: View {
                         let books = filtered.filter { $0.shelves.contains(shelf.0) }
                         if !books.isEmpty {
                             VStack(alignment: .leading, spacing: 14) {
-                                NavigationLink { CatalogGenreView(title: shelf.1, books: books) } label: {
+                                NavigationLink(value: CatalogRoute.genre(shelf.0)) {
                                     HStack { Text(AppLanguage.text(shelf.1)).font(.title2.bold()); Spacer(); Image(systemName: "chevron.right").font(.body) }
                                 }.buttonStyle(.plain)
                                 ScrollView(.horizontal) {
                                     LazyHStack(alignment: .top, spacing: 16) {
                                         ForEach(Array(books.prefix(20))) { book in
-                                            NavigationLink(value: book) { CatalogCard(book: book).frame(width: 148) }.buttonStyle(.plain)
+                                            NavigationLink(value: CatalogRoute.book(book.id)) { CatalogCard(book: book).frame(width: 148) }.buttonStyle(.plain)
                                         }
                                     }
                                 }.scrollIndicators(.hidden)
@@ -59,7 +89,6 @@ struct CatalogView: View {
         .background(BookLibraryDesign.background).preferredColorScheme(.dark)
         .navigationTitle("Catalog")
         .searchable(text: $search, prompt: "Search by title or author")
-        .navigationDestination(for: CatalogBook.self) { CatalogDetailView(book: $0) }
         .toolbar { Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.reload() } }.disabled(model.loading) }
         .refreshable { await model.reload() }
         .task { await model.reload(force: false) }
@@ -91,14 +120,16 @@ struct CatalogGrid: View {
     let books: [CatalogBook]
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .top)], alignment: .leading, spacing: 24) {
-            ForEach(books) { book in NavigationLink(value: book) { CatalogCard(book: book) }.buttonStyle(.plain) }
+            ForEach(books) { book in NavigationLink(value: CatalogRoute.book(book.id)) { CatalogCard(book: book) }.buttonStyle(.plain) }
         }
     }
 }
 
 private struct CatalogGenreView: View {
-    let title: String
-    let books: [CatalogBook]
+    let id: String
+    @State private var model = CatalogModel.shared
+    private var title: String { CatalogView.shelves.first { $0.0 == id }?.1 ?? "Catalog" }
+    private var books: [CatalogBook] { model.books.filter { $0.parentID == nil && $0.shelves.contains(id) } }
     var body: some View { ScrollView { CatalogGrid(books: books).padding() }.navigationTitle(AppLanguage.text(title)).background(BookLibraryDesign.background) }
 }
 
@@ -150,12 +181,15 @@ struct CatalogDetailView: View {
                 let children = model.books.filter { $0.parentID == book.id }
                 if !children.isEmpty {
                     Text("Works in this collection").font(.title2.bold())
-                    ForEach(children) { child in NavigationLink(value: child) { Text(child.title) } }
+                    ForEach(children) { child in NavigationLink(value: CatalogRoute.book(child.id)) { Text(child.title) } }
                 }
             }.padding()
         }
         .background(BookLibraryDesign.background).navigationTitle(book.title).navigationBarTitleDisplayMode(.inline)
-        .task { if book.prepared == nil { detail = try? await CloudAlignmentService().catalogDetail(book.id) } }
+        .task(id: book.id) {
+            if book.chapters != nil { detail = book }
+            else if book.prepared == nil { detail = try? await CloudAlignmentService().catalogDetail(book.id) }
+        }
     }
     private var startButton: some View {
         Button("Add to library") { starting = true; Task { await model.start(book); starting = false } }
@@ -167,9 +201,9 @@ private struct CatalogRequestsView: View {
     @State private var model = CatalogModel.shared
     var body: some View {
         List(Array(model.pending.values).sorted { $0.book.title < $1.book.title }, id: \.book.id) { value in
-            NavigationLink(value: value.book) {
+            NavigationLink(value: CatalogRoute.book(value.book.id)) {
                 VStack(alignment: .leading) { Text(value.book.title); Text(value.job.statusText).font(.caption).foregroundStyle(.secondary) }
-            }
+            }.accessibilityIdentifier("catalog.request.\(value.book.id)")
         }.navigationTitle("Import requests")
     }
 }
