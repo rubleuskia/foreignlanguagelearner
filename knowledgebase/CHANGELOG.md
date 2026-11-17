@@ -1,3 +1,14 @@
+## 2026-11-17 — Include catalog modules in the deployed operator Lambda package
+
+- Fix authenticated catalog routes returning `INFRASTRUCTURE_FAILURE`: the operator
+  Lambda builder omitted `backend/catalog` although the book API imports it at runtime.
+- Package the catalog API, repository, provider source and processing modules; keep tests
+  excluded. Extend the asset packaging regression to require all catalog source modules.
+- Validation: all 33 CI tests passed; a real hash-locked Linux Lambda asset was built,
+  and catalog API/processing imported from that asset in an isolated Python process.
+- No architectural/product decision or project overview changed; DECISIONS.md and
+  PROJECT.md remain unchanged. Deployment does not imply a real-book alignment test.
+
 ## 2026-11-17 — Defer manual alignment benchmark deployment gate
 
 - Remove mandatory image-matched benchmark reports from Cloud Control readiness, plan
