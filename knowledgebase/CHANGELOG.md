@@ -1,3 +1,15 @@
+## 2026-11-17 — Defer manual alignment benchmark deployment gate
+
+- Remove mandatory image-matched benchmark reports from Cloud Control readiness, plan
+  preparation and operator/subscription CDK synthesis. Remove the dashboard report field.
+- Keep immutable worker digest/contract checks, verified CI releases, authentication,
+  deployment review and existing runtime admission limits unchanged.
+- Preserve saved legacy configuration and optional existing report forwarding for old tags.
+- Validation: 75 existing/updated Cloud Control and benchmark-driver tests, an additional
+  full audio-plan preparation regression and all CDK type/infrastructure assertions passed.
+- Record the decision in DECISIONS.md, workflow in PROJECT.md and the future pipeline
+  integration work in DEFERRED_DECISIONS.md. Project purpose is unchanged.
+
 ## 2026-11-16 — Catalog integration regression fixes
 
 - Keep the standalone Practice tab removed while exposing the existing practice screen,

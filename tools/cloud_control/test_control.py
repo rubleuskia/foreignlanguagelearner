@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from http.server import ThreadingHTTPServer
 from .aws import AWS, api_url, deployable
-from .config import Configuration, ControlError, digest, validate, deployment_context, expected_stacks, validate_benchmark
+from .config import Configuration, ControlError, digest, validate, deployment_context, expected_stacks
 from .health import run
 from .jobs import Jobs, atomic_json, tree_digest, COMMAND_OUTPUT_LIMIT, OPERATION_LOG_LIMIT
 from .releases import Releases, parse_tag
@@ -157,36 +157,32 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(context['operatorUsername'],'operator')
         self.assertEqual(expected_stacks(config),['ForeignLanguageLearnerOperator-prod'])
         self.assertNotIn('appleClientId',context)
-        for extra in [{}, {'workerRepositoryName':'worker'},
-                      {'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}]:
+        for extra in [{}, {'workerRepositoryName':'worker'}]:
             with self.assertRaises(ControlError):
                 deployment_context({**config,'context':{'operatorAlignment':'true','openaiSecretArn':SECRET_ARN,**extra}})
+        audio={**config,'context':{'operatorAlignment':'true','openaiSecretArn':SECRET_ARN,
+               'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}}
+        self.assertEqual(deployment_context(audio)['workerImageDigest'],'sha256:'+'a'*64)
         for limit in ['0','1001','-1','1.5']:
             with self.assertRaises(ControlError): deployment_context({**config,'context':{'dailyModelLimit':limit,'openaiSecretArn':SECRET_ARN}})
 
-    def test_benchmark_rejects_unmatched_image_missing_languages_and_nonfinite_metrics(self):
-        digest_value='sha256:'+'a'*64
-        good={'workerImageDigest':digest_value,'maxJobCostUsd':1,'languages':{
-            language:{'qualityAccepted':True,'runtimeSeconds':300,'peakMemoryMiB':1024,'costUsd':0.1}
-            for language in ('en','fr','es','de','it','pl')}}
-        validate_benchmark(good,digest_value)
-        for changed in [{'workerImageDigest':'wrong'},{'languages':{}},{'maxJobCostUsd':float('nan')}]:
-            with self.assertRaises(ControlError): validate_benchmark({**good,**changed},digest_value)
-
-    def test_polish_pilot_report_requires_measured_scope_and_three_full_length_runs(self):
-        image='sha256:'+'a'*64
-        row={'qualityAccepted':True,'runtimeSeconds':300,'peakMemoryMiB':1024,
-             'costUsd':0.1,'audioSeconds':300,'runs':3}
-        report={'workerImageDigest':image,'scope':'operator-pl-300-v1','maxAudioSeconds':300,
-                'maxJobCostUsd':1,'languages':{'pl':row}}
-        validate_benchmark(report,image,operator=True)
-        with self.assertRaises(ControlError): validate_benchmark(report,image)
-        for changed in [{'qualityAccepted':False},{'audioSeconds':299},{'runs':2},
-                        {'runtimeSeconds':float('nan')},{'peakMemoryMiB':8193}]:
-            with self.subTest(changed=changed), self.assertRaises(ControlError):
-                validate_benchmark({**report,'languages':{'pl':{**row,**changed}}},image,operator=True)
-        for changed in [{'scope':'other'},{'maxAudioSeconds':3600},{'workerImageDigest':'wrong'}]:
-            with self.assertRaises(ControlError): validate_benchmark({**report,**changed},image,operator=True)
+    def test_audio_readiness_does_not_require_benchmark_report(self):
+        config={**CONFIG,'deployment_mode':'operator','context':{
+            'openaiSecretArn':SECRET_ARN,'operatorAlignment':'true',
+            'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}}
+        aws=AWS.__new__(AWS);aws.config=config
+        aws.identity=Mock(return_value=config['account_id'])
+        aws.require_bootstrap=Mock(return_value='found')
+        aws.require_book_worker=Mock(return_value={'source_revision':'a'*40})
+        secrets=Mock();secrets.describe_secret.return_value={'VersionIdsToStages':{'v':['AWSCURRENT']}}
+        aws.client=Mock(return_value=secrets)
+        for legacy in [None, '/missing/benchmark.json']:
+            if legacy: config['alignment_benchmark_file']=legacy
+            report=aws.readiness()
+            self.assertTrue(report['ready'],report)
+            self.assertFalse(any('Замеры' in c['name'] for c in report['cases']))
+        aws.require_book_worker.side_effect=ControlError('incompatible worker')
+        self.assertFalse(aws.readiness()['ready'])
 
     def test_operator_prepare_uses_verified_source_and_operator_builder_without_apple(self):
         self.config.save({**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}})
@@ -215,6 +211,42 @@ class ControlTests(unittest.TestCase):
         synth=next(c for c in commands if 'synth' in c)
         self.assertIn('node_modules/.bin/ts-node bin/operator.ts',synth)
         self.assertFalse(any('deploy' in c for c in commands))
+
+    def test_audio_plan_prepares_without_report_or_with_stale_legacy_path(self):
+        for legacy in [None, '/missing/old-benchmark.json']:
+            with self.subTest(legacy=legacy):
+                config={**CONFIG,'deployment_mode':'operator','context':{
+                    'openaiSecretArn':SECRET_ARN,'operatorAlignment':'true',
+                    'workerRepositoryName':'worker','workerImageDigest':'sha256:'+'a'*64}}
+                if legacy: config['alignment_benchmark_file']=legacy
+                self.config.save(config)
+                aws=Mock();aws.snapshot.return_value=[]
+                aws.require_book_worker.return_value={'source_revision':SHA,'contracts':['book-queue-v1','catalog-chapters-v1']}
+                aws.client.return_value.describe_availability_zones.return_value={'AvailabilityZones':[
+                    {'ZoneName':'eu-north-1a'},{'ZoneName':'eu-north-1b'}]}
+                release=Mock();release.verify.return_value={'tag':TAG,'sha':SHA}
+                jobs=Jobs(ROOT,self.config,aws_factory=lambda _:aws,releases=release)
+                commands=[]
+                def execute(key,argv,**kwargs):
+                    commands.append(argv)
+                    if argv[:2]==['git','archive']:
+                        with tarfile.open(argv[4],'w') as bundle:
+                            for name in ['scripts/build-cloud.py','infra/alignment/bin/cloud.ts',
+                                         'infra/alignment/bin/operator.ts','backend/book_alignment/api.py']:
+                                info=tarfile.TarInfo(name);info.size=1;bundle.addfile(info,io.BytesIO(b'x'))
+                    if 'synth' in argv:
+                        area=jobs.plans/key/'assembly';area.mkdir()
+                        (area/'template.json').write_text(json.dumps({'Resources':{}}))
+                        (area/'manifest.json').write_text(json.dumps({'artifacts':{name:{
+                            'type':'aws:cloudformation:stack','environment':'aws://123456789012/eu-north-1',
+                            'properties':{'templateFile':'template.json'}} for name in expected_stacks(config)}}))
+                jobs.execute=execute
+                result=self.wait(jobs,jobs.start('prepare',{'tag':TAG})['id'])
+                self.assertEqual(result['state'],'ready',result.get('error'))
+                aws.require_book_worker.assert_called_once()
+                synth=next(c for c in commands if 'synth' in c)
+                self.assertFalse(any('alignmentBenchmarkReport' in str(arg) for arg in synth))
+                self.assertFalse(any('deploy' in c for c in commands))
 
     def test_prepare_accepts_default_cdk_stack_names_without_weakening_scope_checks(self):
         config={**CONFIG,'deployment_mode':'operator','context':{'operatorAlignment':'false','openaiSecretArn':SECRET_ARN}}

@@ -64,13 +64,11 @@ record this as user acceptance with a waiver, never as completed listening revie
 requirements remain unchanged. See [the actual result](AUDIO_PILOT_BENCHMARK.md#measured-private-pilot-result--2026-11-10).
 The full six-language/60-minute matrix below applies to the broader release, not this pilot.
 
-The dashboard and operator CDK require a report matching the exact image digest, with
-`scope: "operator-pl-300-v1"`, `maxAudioSeconds: 300`, positive `maxJobCostUsd`, and `languages.pl`
-containing `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`, positive finite
-`runtimeSeconds` ≤13500 and `peakMemoryMiB` ≤8192, plus finite nonnegative `costUsd` within the
-stated budget. Attach the raw runs and review evidence; field validation is not quality review.
-Local Docker measurements must identify emulation/hardware and cannot be described as Fargate
-billed measurements. Leave unmeasured cost and unreviewed quality pending.
+Cloud Control and CDK no longer require or validate a manually supplied report before
+deployment. The former image-matched Polish-pilot and six-language report gates are
+removed. Existing benchmark drivers remain available for collecting evidence. Integration
+of digest-bound runs, metrics, durable artifacts and quality acceptance into the release
+pipeline is deferred in [DEFERRED_DECISIONS.md](../knowledgebase/DEFERRED_DECISIONS.md).
 
 Run preliminary offline Docker measurements with:
 

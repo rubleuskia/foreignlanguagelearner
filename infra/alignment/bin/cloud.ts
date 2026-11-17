@@ -57,8 +57,7 @@ if (app.node.tryGetContext("cloudComponents") !== "billing") {
 } else if (translations) throw new Error("Billing-only assembly cannot enable translations");
 if (paidAlignment) {
   if (!cloudPolicy) throw new Error("Paid alignment requires an explicit product policy");
-  const benchmarkReport = JSON.parse(fs.readFileSync(path.resolve(required("alignmentBenchmarkReport")), "utf8"));
   new AlignmentStack(app, `ForeignLanguageLearnerPaidAlignment-${stage}`, {
-    env, paidFoundation: foundation, cloudCode: code(), benchmarkReport,
+    env, paidFoundation: foundation, cloudCode: code(),
   });
 }

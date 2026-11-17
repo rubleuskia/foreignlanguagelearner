@@ -27,13 +27,6 @@ export interface AlignmentStackProps extends cdk.StackProps {
   readonly operatorFoundation?: OperatorStack;
   readonly workerAvailabilityZones?: string[];
   readonly cloudCode?: lambda.Code;
-  readonly benchmarkReport?: {
-    scope?: string;
-    maxAudioSeconds?: number;
-    workerImageDigest: string;
-    languages: Record<string, { qualityAccepted: boolean; runtimeSeconds: number; peakMemoryMiB: number; costUsd: number; audioSeconds?: number; runs?: number }>;
-    maxJobCostUsd: number;
-  };
 }
 
 export class AlignmentStack extends cdk.Stack {
@@ -51,19 +44,7 @@ export class AlignmentStack extends cdk.Stack {
     const paid = props?.paidFoundation;
     const operator = props?.operatorFoundation;
     if (paid && operator) throw new Error("Select one alignment authentication mode");
-    if (paid || operator) {
-      const report = props?.benchmarkReport;
-      if (!props?.cloudCode || report?.workerImageDigest !== workerImageDigest || !report ||
-          !Number.isFinite(report.maxJobCostUsd) || report.maxJobCostUsd <= 0 ||
-          (operator && (report.scope !== "operator-pl-300-v1" || report.maxAudioSeconds !== 300)) ||
-          (operator ? ["pl"] : ["en", "fr", "es", "de", "it", "pl"]).some(language => {
-            const metric = report.languages?.[language];
-            return !metric || (operator && (metric.audioSeconds !== 300 || !Number.isInteger(metric.runs) || (metric.runs ?? 0) < 3)) || metric.qualityAccepted !== true || !Number.isFinite(metric.runtimeSeconds) ||
-              metric.runtimeSeconds <= 0 || metric.runtimeSeconds > 13500 || !Number.isFinite(metric.peakMemoryMiB) ||
-              metric.peakMemoryMiB <= 0 || metric.peakMemoryMiB > 8192 || !Number.isFinite(metric.costUsd) ||
-              metric.costUsd < 0 || metric.costUsd > report.maxJobCostUsd;
-          })) throw new Error("Alignment requires an image-matched reviewed benchmark report for its release scope");
-    }
+    if ((paid || operator) && !props?.cloudCode) throw new Error("Authenticated alignment requires cloudCode");
     const backendTag = operator ? "alignment-operator-v1" : paid ? "alignment-account-v2" : "alignment-v1";
 
     const bucket = new s3.Bucket(this, "TemporaryBucket", {

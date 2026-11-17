@@ -1077,3 +1077,14 @@ settings remain reachable. Dictionary quick start and Learn remain available.
 UI scenarios enter practice through this navigation link rather than a tab.
 Backend discovery uses the repository import root so mocks and production imports
 share the canonical backend package identity.
+
+## 2026-11-17 — Benchmark evidence moves out of manual deployment gates
+
+Do not require a hand-maintained benchmark JSON to prepare or deploy operator or paid
+alignment. Cloud Control and CDK no longer validate qualityAccepted, language/run counts,
+image-matched measurement reports or their runtime/memory/cost thresholds. Keep image
+compatibility, source/release verification, security and runtime admission limits.
+Existing report paths remain accepted for saved-config and old-tag compatibility; current
+CDK ignores them. Measurements remain useful evidence, not proof created by deployment.
+Design digest-bound automated benchmarks and quality acceptance in the release pipeline
+later, as tracked in DEFERRED_DECISIONS.md. Do not fabricate evidence to pass deployment.

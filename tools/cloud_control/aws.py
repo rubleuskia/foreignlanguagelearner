@@ -88,7 +88,6 @@ class AWS:
 
     def readiness(self):
         """Metadata reads only. This does not invoke model APIs, bootstrap or publish images."""
-        from pathlib import Path
         cases = []
         def record(name, fn):
             try:
@@ -118,14 +117,6 @@ class AWS:
                     image = self.require_book_worker()
                     return 'Книжная очередь поддерживается; исходная ревизия ' + image['source_revision'][:12]
                 record('Образ обработчика аудио', image)
-                def benchmark():
-                    import json
-                    from .config import validate_benchmark
-                    path = self.config.get('alignment_benchmark_file')
-                    if not path: raise ControlError('Укажите файл реальных замеров образа.')
-                    validate_benchmark(json.loads(Path(path).read_text()), ctx.get('workerImageDigest'), operator=True)
-                    return 'Отчёт соответствует образу и ограничениям'
-                record('Замеры обработчика аудио', benchmark)
         return {'cases': cases, 'ready': all(c['state'] == 'passed' for c in cases),
                 'note': 'Перед публикацией нужен совместимый проверенный CI-тег. Эта проверка не вызывает модель и не подтверждает её качество.'}
 

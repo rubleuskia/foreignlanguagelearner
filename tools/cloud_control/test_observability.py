@@ -236,8 +236,7 @@ class TelemetryTests(unittest.TestCase):
 class WorkerImageTests(unittest.TestCase):
     def test_prepare_blocks_old_image_before_building_assets(self):
         with tempfile.TemporaryDirectory() as temp:
-            config=copy.deepcopy(CONFIG);benchmark=Path(temp)/'benchmark.json';benchmark.write_text('{}')
-            config['alignment_benchmark_file']=str(benchmark)
+            config=copy.deepcopy(CONFIG);config.pop('alignment_benchmark_file',None)
             aws=Mock();aws.snapshot.return_value=[]
             aws.client.return_value.describe_availability_zones.return_value={'AvailabilityZones':[{'ZoneName':'eu-north-1a'},{'ZoneName':'eu-north-1b'}]}
             aws.require_book_worker.side_effect=ControlError('old image: book-queue-v1')
@@ -250,7 +249,7 @@ class WorkerImageTests(unittest.TestCase):
                     item=tarfile.TarInfo('backend/book_alignment/api.py');item.size=1
                     bundle.addfile(item,io.BytesIO(b'x'))
             jobs.execute=Mock(side_effect=archive)
-            with patch('tools.cloud_control.jobs.validate_benchmark'),self.assertRaisesRegex(ControlError,'book-queue-v1'):
+            with self.assertRaisesRegex(ControlError,'book-queue-v1'):
                 jobs.prepare(key,config,{'tag':'test'})
             jobs.execute.assert_called_once();aws.require_book_worker.assert_called_once()
 

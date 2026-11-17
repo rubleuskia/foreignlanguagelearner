@@ -170,7 +170,7 @@ function fillConfig(c) {
   $('openai-secret-arn').value=ctx.openaiSecretArn || '';
   $('operator-username').value=ctx.operatorUsername || 'operator';$('daily-model-limit').value=ctx.dailyModelLimit || '50';
   $('operator-alignment').value=ctx.operatorAlignment || 'true';$('worker-repository').value=ctx.workerRepositoryName || '';
-  $('worker-digest').value=ctx.workerImageDigest || '';$('benchmark-file').value=c.alignment_benchmark_file || '';updateMode();
+  $('worker-digest').value=ctx.workerImageDigest || '';updateMode();
   $('account-id').value=c.account_id;$('profile').value=c.profile;$('access-token-file').value=c.access_token_file || '';
   const extra={...c};delete extra.deployment_mode;delete extra.account_id;delete extra.profile;delete extra.region;delete extra.access_token_file;
   $('deploy-config').value=JSON.stringify(extra,null,2);
@@ -182,7 +182,7 @@ $('config-form').onsubmit=async event=>{event.preventDefault();const finish=begi
     if($('worker-repository').value.trim())c.context.workerRepositoryName=$('worker-repository').value.trim();
     if($('worker-digest').value.trim())c.context.workerImageDigest=$('worker-digest').value.trim();
     delete c.apple_roots;delete c.root_sha256;delete c.policy_file;delete c.alignment_benchmark_file;
-    if($('benchmark-file').value.trim())c.alignment_benchmark_file=$('benchmark-file').value.trim();}
+  }
   if($('access-token-file').value.trim())c.access_token_file=$('access-token-file').value.trim();
   await api('/api/config',c);notice('Настройки сохранены. Проверяю подключение к AWS.');await refreshState(true);await refreshStatus();
 }catch(e){notice(e.message);}finally{finish();}};

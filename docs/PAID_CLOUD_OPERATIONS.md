@@ -210,12 +210,11 @@ product validation fail closed. Rebuild after adding it. Provider mode remains a
 
 ## Paid alignment gate
 
-The optional `paidAlignment=true` assembly also requires `workerRepositoryName`, immutable
-`workerImageDigest` and `alignmentBenchmarkReport` path. The report must match that exact image and
-contain `maxJobCostUsd` plus each language's `qualityAccepted`, finite positive `runtimeSeconds` (≤13,500),
-`peakMemoryMiB` (≤8,192) and nonnegative `costUsd` within the approved per-job cap. Record actual
-six-language audio measurements/review in [ALIGNMENT_BENCHMARKS.md](ALIGNMENT_BENCHMARKS.md) before
-providing such a report. Synthetic infrastructure-test values are not a benchmark approval.
+The optional `paidAlignment=true` assembly requires `workerRepositoryName` and an immutable
+`workerImageDigest`. A manual `alignmentBenchmarkReport` is no longer required or validated.
+Automated image-bound benchmarks and quality acceptance in the release pipeline are
+deferred in [DEFERRED_DECISIONS.md](../knowledgebase/DEFERRED_DECISIONS.md). Existing runtime
+limits and authentication remain enforced; deployment does not prove alignment quality.
 
 Paid alignment attaches only scoped `/v2/alignments` routes to the authenticated API; no anonymous
 `/v1` API is created in that stack. Owners are server-bound, old anonymous jobs cannot be adopted,

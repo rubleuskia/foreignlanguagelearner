@@ -29,6 +29,5 @@ if (app.node.tryGetContext("operatorAlignment") !== "false") {
   new AlignmentStack(app, "ForeignLanguageLearnerOperatorAlignment-prod", {
     env, cloudCode: code(), operatorFoundation: foundation,
     workerAvailabilityZones: zones,
-    benchmarkReport: JSON.parse(fs.readFileSync(path.resolve(app.node.tryGetContext("alignmentBenchmarkReport") ?? "missing-benchmark-report"), "utf8")),
   });
 }

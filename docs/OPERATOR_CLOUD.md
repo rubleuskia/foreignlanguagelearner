@@ -11,7 +11,7 @@ The existing subscription assembly remains the second-stage option.
   OpenAI Responses API requests using GPT-5 mini, a DynamoDB request/idempotency table, logs and alarms/SNS.
 - `ForeignLanguageLearnerOperatorAlignment-prod`: the same protected API's alignment routes,
   private versioned S3 storage, job/admission table, immutable worker image, Fargate/Step Functions,
-  finalizer/reconciliation and monitoring. This is included by default, with real image/measurement
+  finalizer/reconciliation and monitoring. This is included by default, with immutable worker-image
   prerequisites. Explicitly deferring audio creates only the first stack; it is not full-stage acceptance.
 
 Self-registration and OAuth redirects/implicit flow are disabled. You create the named operator in
@@ -88,7 +88,7 @@ saves only an access token for dashboard acceptance, so that test file must be r
    Trust only the current project, use the selected Region, and retain the toolkit for deployment.
    The panel does not bootstrap or grant itself permissions. No bootstrap/deployment is performed
    by opening it or checking readiness. Prepare/deploy still use the explicit named SDK profile.
-4. For audio, obtain an immutable ECR worker digest and matching actual measurements. Build from
+4. For audio, obtain an immutable ECR worker digest. Build from
    the chosen verified source revision using the existing Dockerfile and helper:
 
    ```sh
@@ -106,21 +106,12 @@ saves only an access token for dashboard acceptance, so that test file must be r
    storage usage. The helper does not create runtime/service roles or deploy the API. Docker context
    excludes local state/credentials; never add them to the build context.
 
-   The provenance file is not a benchmark/quality acceptance report. Record runtime, peak memory,
-   cost and manually reviewed Polish quality using [the pilot benchmark procedure](ALIGNMENT_BENCHMARKS.md#private-operator-pilot).
-   The retained legacy pilot is restricted to Polish and probed audio duration ≤300 seconds.
-   The next release replaces its HTTP routes with [queue-based whole-book alignment](CLOUD_BOOK_ALIGNMENT.md),
-   whose book worker has no five-minute duration admission cap. Rebuild the image and validate
-   representative full books separately; the pilot report is not full-book quality acceptance.
-   The retained pilot's report must contain
-   `workerImageDigest`, `scope: "operator-pl-300-v1"`, `maxAudioSeconds: 300`, positive `maxJobCostUsd`
-   and `languages.pl`: `audioSeconds: 300`, integer `runs` ≥3, `qualityAccepted: true`,
-   `runtimeSeconds` ≤13500, `peakMemoryMiB` ≤8192 and nonnegative `costUsd` ≤maxJobCostUsd.
-   Runtime/memory must be positive and finite. Record the slowest/highest measured values.
-   A missing or unaccepted report still blocks preparation. The private pilot user may explicitly
-   accept the measured result and waive listening checks; record the waiver without claiming review.
-   Do not substitute smoke checks or
-   synthetic infrastructure-test values. Stage two retains its six-language gate.
+   The provenance file proves build identity, not acoustic quality. A manual benchmark
+   report is no longer required by Cloud Control or CDK. Runtime/memory/cost measurement
+   and quality acceptance in CI are deferred in knowledgebase/DEFERRED_DECISIONS.md.
+   Keep the new image's book-queue-v1 and catalog-chapters-v1 compatibility checks.
+   Representative long-book quality acceptance remains separate from deployment.
+
 5. In AWS Secrets Manager in **eu-north-1**, store a secret of type **Other type of secret**
    with the key/value `api_key` and your OpenAI project API key. Use the Secrets Manager
    AWS-managed encryption key (`aws/secretsmanager`) for this setup, and copy only the complete
@@ -137,10 +128,10 @@ saves only an access token for dashboard acceptance, so that test file must be r
 
 1. Start `bash scripts/cloud-control.sh` and open http://127.0.0.1:8767.
 2. In **Настройка**, select **Первый этап**. Enter the project ID/profile, operator username (default
-   `operator`), daily model limit and OpenAI secret ARN. Keep audio enabled and provide ECR repository, sha256 digest
-   and absolute benchmark path. Apple settings are hidden and ignored for this assembly.
+   `operator`), daily model limit and OpenAI secret ARN. Keep audio enabled and provide the
+   ECR repository and sha256 digest. Apple settings are hidden and ignored for this assembly.
 3. Save, then **Версии и деплой → Проверить готовность**. It reads AWS identity, CDKToolkit, Secrets Manager
-   secret/version metadata, image existence and benchmark validity; it does not invoke models, publish images
+   secret/version metadata, image existence and worker compatibility; it does not invoke models, publish images
    or provision infrastructure. Missing artifacts are explicit failures, not dummy defaults.
 4. **Получить теги**, select a compatible verified release and **Подготовить план**. The panel archives
    that exact source, builds hash-locked Linux dependencies without Apple roots, synthesizes both

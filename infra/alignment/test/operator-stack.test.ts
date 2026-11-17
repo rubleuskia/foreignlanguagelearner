@@ -18,12 +18,9 @@ try {
   const operator = new OperatorStack(app, "Operator", { env, code: lambda.Code.fromAsset(area),
     operatorUsername: "operator", dailyModelLimit: 50,
     openaiSecretArn: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" });
-  const report = { workerImageDigest: digest, scope: "operator-pl-300-v1", maxAudioSeconds: 300, maxJobCostUsd: 1,
-    languages: Object.fromEntries(["pl"].map(language =>
-      [language, { qualityAccepted: true, audioSeconds: 300, runs: 3, runtimeSeconds: 300, peakMemoryMiB: 1024, costUsd: 0.1 }])) };
   const alignment = new AlignmentStack(app, "OperatorAlignment", { env, operatorFoundation: operator,
     workerAvailabilityZones: ["eu-north-1a", "eu-north-1b"],
-    cloudCode: lambda.Code.fromAsset(area), benchmarkReport: report });
+    cloudCode: lambda.Code.fromAsset(area) });
   const foundation = Template.fromStack(operator), audio = Template.fromStack(alignment);
   foundation.resourceCountIs("AWS::Cognito::UserPoolIdentityProvider", 0);
   foundation.resourceCountIs("AWS::SQS::Queue", 0);
@@ -94,7 +91,7 @@ try {
     operatorUsername: "operator", dailyModelLimit: 50,
     openaiSecretArn: "arn:aws:secretsmanager:eu-north-1:123456789012:secret:openai-AbCdEf" });
   assert.throws(() => new AlignmentStack(badApp, "BadAlignment", { env, operatorFoundation: badOperator,
-    cloudCode: lambda.Code.fromAsset(area), benchmarkReport: { ...report, workerImageDigest: "wrong" } }), /benchmark/);
+    }), /cloudCode/);
   console.log("operator API, OpenAI secret integration and authenticated alignment CDK assertions passed");
 } finally {
   fs.rmSync(area, { recursive: true, force: true });
