@@ -1,3 +1,12 @@
+## 2026-11-17 — Explicit pre-release development policy
+
+- AGENTS.md now records that the app is unpublished in the App Store; the first publication
+  date will be recorded separately. Until then, breaking changes and replacement of obsolete
+  code are acceptable. Prefer root-cause fixes and coherent redesigns over temporary
+  workarounds or compatibility solely for old test versions.
+- Record this development decision in DECISIONS.md. Project purpose and supported workflows
+  in PROJECT.md are unchanged.
+
 ## 2026-11-17 — Shared client download pipeline for synchronized and library books
 
 - Fix ready catalog books failing with “Invalid artifact address.” when the API returns

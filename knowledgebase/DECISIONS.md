@@ -1,3 +1,12 @@
+## Pre-release compatibility policy (2026-11-17)
+
+The app has not been published in the App Store. Record the first publication date
+explicitly and separately; builds, tags, TestFlight distribution and backend deployments
+do not establish that milestone. Until publication is recorded, breaking changes are
+acceptable throughout the project. Prefer root-cause fixes and coherent redesigns,
+removing obsolete code rather than adding temporary workarounds, compatibility layers
+for old test versions, or migrations solely to preserve pre-release behavior.
+
 ## Strict sentence boundaries and yellow-word markers (2026-11-15)
 
 Supersede linguistic sentence grouping for automatic book translation with explicit

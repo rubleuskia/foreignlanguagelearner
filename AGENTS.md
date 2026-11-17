@@ -1,5 +1,11 @@
 # Agent contribution rules
 
+## Pre-release development policy
+
+- The app has not yet been published in the App Store. The first publication date will be explicitly recorded separately; do not infer publication from a build, tag, TestFlight distribution or deployment.
+- Until that publication is recorded, breaking changes are acceptable across the project. Prefer fixing the root cause and making a coherent redesign when needed; obsolete code may be removed and replaced.
+- Do not introduce temporary workarounds, compatibility layers for old test versions, or migrations solely to preserve pre-release behavior. Prioritize a clean, maintainable implementation.
+
 ## Starting work in a new chat
 
 - At the start of a new chat, fetch the latest `origin/main` and create a new working branch from it before making changes. Use a descriptive branch name with the `codex/` prefix unless the user specifies another branch.
