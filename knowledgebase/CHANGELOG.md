@@ -1,3 +1,14 @@
+## 2026-11-17 — Import catalog source and attribution resources in strict book packages
+
+- Fix catalog ZIP import rejecting `provenance.json` as an unreferenced file before reaching
+  existing source/attribution extraction. Define optional root-level `provenance.json` and
+  `source.epub` once for strict admission, size checks and extraction.
+- Preserve both files verbatim through prepare/retry and library move; retain the 2 MB/10 MB
+  limits and rejection of other unknown files. No backend change or reprocessing is needed.
+- Record the package-resource decision and contract. PROJECT.md purpose/workflows are unchanged.
+- Validation: all 336 local iOS unit tests passed, including three package-resource
+  regressions; generic iOS Release build passed with signing disabled.
+
 ## 2026-11-17 — Stable navigation from catalog import requests
 
 - Use one typed catalog navigation stack for requests, genres and book details. Routes

@@ -1,3 +1,13 @@
+## Optional source resources in strict book packages (2026-11-17)
+
+Recognize exactly two optional root-level supplements alongside manifest-referenced media
+and covers: provenance.json (up to 2,000,000 bytes) and source.epub (up to 10,000,000 bytes).
+Keep their names and limits in BookPackageSupplement and use that contract for both strict
+file admission and extraction. Check resource limits before processing audio and retain
+the original bytes through staging, review and library commit. Other unreferenced files,
+including nested lookalike names, remain invalid. Do not discard attribution/source files
+or relax strict checking for the whole archive to make catalog imports pass.
+
 ## Catalog navigation owns one stable typed path (2026-11-17)
 
 The catalog tab owns one NavigationStack path of CatalogRoute values: requests, genre ID
