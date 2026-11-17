@@ -1,5 +1,9 @@
 # Foreign Language Learner
 
+Manual alignment benchmark reports are not required for deployment. Worker image compatibility
+and verified-release checks remain enforced. Automated measurement and quality acceptance in
+the release pipeline are deferred in [DEFERRED_DECISIONS.md](DEFERRED_DECISIONS.md).
+
 ## Practice navigation
 
 The main tabs are Library, Catalog, Dictionary and Activity. Open Practice from

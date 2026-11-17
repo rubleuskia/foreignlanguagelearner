@@ -9,6 +9,5 @@
     "operatorAlignment": "true",
     "workerRepositoryName": "fll-alignment-worker",
     "workerImageDigest": "sha256:REPLACE_WITH_REVIEWED_IMAGE_DIGEST"
-  },
-  "alignment_benchmark_file": "/absolute/path/to/reviewed-benchmark.json"
+  }
 }

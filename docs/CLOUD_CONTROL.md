@@ -40,8 +40,9 @@ reviewed Apple DER root directory/fingerprints, and absolute path to the reviewe
 Older first-stage tags contain a Polish-only pilot with a 300-second duration limit. New tags
 containing [cloud book alignment](CLOUD_BOOK_ALIGNMENT.md) replace its HTTP routes with queue-only
 book jobs, a 100 MB input ZIP limit and no five-minute duration limit. Deploying that workflow
-requires a new immutable worker image; legacy `alignment_benchmark_file` evidence does not prove
-long-book quality. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
+requires a new immutable worker image. Manual benchmark reports are no longer a deployment
+gate; automated pipeline measurements are deferred in knowledgebase/DEFERRED_DECISIONS.md.
+Deployment does not prove long-book quality. [Paid-cloud launch gates](PAID_CLOUD_OPERATIONS.md) still apply; the panel does not
 approve budgets/benefits or automatically turn admissions on. Unknown/credential fields are rejected.
 Configure account-level budget notifications separately before enabling paid work; the Stockholm
 regional templates omit the unsupported `AWS::Budgets::Budget` resource. No budget is provisioned by the panel.

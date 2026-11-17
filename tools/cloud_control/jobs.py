@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from . import health
 from .aws import AWS, clean_error, deployable
-from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks, is_operator, validate_benchmark
+from .config import ControlError, atomic_json, deployment_context, digest, expected_stacks, is_operator
 from .releases import Releases
 from .deployment import prepared_changes
 
@@ -189,8 +189,6 @@ class Jobs:
 
     def prepare(self, key, config, body):
         context = deployment_context(config)
-        if is_operator(config) and context.get('operatorAlignment') == 'true':
-            validate_benchmark(json.loads(Path(config['alignment_benchmark_file']).read_text()), context['workerImageDigest'], operator=True)
         release = self.releases.verify(body.get('tag'))
         self.update(key, **release)
         aws = self.aws_factory(config)
@@ -231,9 +229,11 @@ class Jobs:
             context['cloudPolicy'] = str(policy)
             build_args = ['--apple-roots', str(roots), *[arg for h in config['root_sha256'] for arg in ['--root-sha256', h]]]
         if context.get('paidAlignment') == 'true' or (operator and context.get('operatorAlignment') == 'true'):
-            if not config.get('alignment_benchmark_file'): raise ControlError('Нужен подтверждённый benchmark report для платного аудио.')
-            benchmark = area / 'benchmark.json'; shutil.copyfile(config['alignment_benchmark_file'], benchmark)
-            context['alignmentBenchmarkReport'] = str(benchmark)
+            # Optional compatibility artifact for older verified tags whose CDK still requires it.
+            previous_report = config.get('alignment_benchmark_file')
+            if previous_report and Path(previous_report).is_file():
+                benchmark = area / 'benchmark.json'; shutil.copyfile(previous_report, benchmark)
+                context['alignmentBenchmarkReport'] = str(benchmark)
         env = self.environment(config)
         self.execute(key, [sys.executable, str(source / 'scripts/build-cloud.py'),
             '--output', str(area / 'lambda'), *build_args],

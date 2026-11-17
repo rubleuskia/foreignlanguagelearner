@@ -105,10 +105,10 @@ const paidFoundation = new CloudFoundationStack(paidApp, "PaidFoundation", {
   appleClientId: "app", appleTeamId: "team", appleKeyId: "key", domainPrefix: "paid-test", callbackUrl: "fll://auth",
   appleSignInSecretArn: "arn:aws:secretsmanager:eu-north-1:111111111111:secret:login-AbCdEf",
 });
-assert.throws(() => new AlignmentStack(paidApp, "NoBenchmark", {
-  env: { region: "eu-north-1" }, paidFoundation, cloudCode: lambda.Code.fromAsset(asset),
-}), /benchmark/);
-// Independent app: a failed construct must not be synthesized. This is synthetic test data only.
+assert.throws(() => new AlignmentStack(paidApp, "NoCloudCode", {
+  env: { region: "eu-north-1" }, paidFoundation,
+}), /cloudCode/);
+// A separate app proves authenticated alignment synthesizes without a benchmark report.
 const measuredApp = new cdk.App({ context: { workerRepositoryName: "alignment-worker", workerImageDigest: `sha256:${"a".repeat(64)}` } });
 const measuredFoundation = new CloudFoundationStack(measuredApp, "MeasuredFoundation", {
   env: { account: "111111111111", region: "eu-north-1" }, stage: "dev", code: lambda.Code.fromAsset(asset),
@@ -117,9 +117,7 @@ const measuredFoundation = new CloudFoundationStack(measuredApp, "MeasuredFounda
 });
 const paid = new AlignmentStack(measuredApp, "PaidAlignment", {
   env: { account: "111111111111", region: "eu-north-1" }, paidFoundation: measuredFoundation,
-  cloudCode: lambda.Code.fromAsset(asset), benchmarkReport: { workerImageDigest: `sha256:${"a".repeat(64)}`,
-    maxJobCostUsd: 1, languages: Object.fromEntries(["en","fr","es","de","it","pl"].map(l =>
-      [l, { qualityAccepted: true, runtimeSeconds: 100, peakMemoryMiB: 1024, costUsd: 0.1 }])) },
+  cloudCode: lambda.Code.fromAsset(asset),
 });
 measuredApp.synth();
 const paidTemplate = Template.fromStack(paid);

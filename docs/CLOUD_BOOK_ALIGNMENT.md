@@ -84,19 +84,18 @@ Use `scripts/alignment-image.py` from a clean checkout to build/publish a replac
 stamps contracts/revision and runs `image_contract.py` in the built container with networking
 disabled, proving the entrypoint dispatches to the imported book consumer without loading ML or
 calling AWS. The build report is provenance, not a quality report. Publishing requires a clean
-checkout; a local-only dirty build remains available for development. The new digest needs new,
-real image-matched pilot measurements: do not change the digest in an old benchmark report.
+checkout; a local-only dirty build remains available for development. A manual image-matched benchmark report is no longer a deployment prerequisite;
+automated digest-bound measurement and quality acceptance are deferred to the release pipeline.
 Read checks additionally need `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer`; the panel does
 not change IAM or publish images automatically.
 
 After a failed mixed deployment, inspect both stacks separately. `UPDATE_ROLLBACK_COMPLETE` means
 the alignment update rolled back; the earlier API stack can already be on the newer release.
-Fix the image/measurement settings and prepare a fresh plan against that actual baseline.
+Fix the image settings and prepare a fresh plan against that actual baseline.
 Do not reuse a consumed plan or run rollback-recovery commands on an already completed rollback.
 
 Use the normal verified-release Cloud Control preparation/diff/deploy
-workflow for the operator stacks in eu-north-1, then build iOS. The existing image-matched Polish
-pilot benchmark gate remains a prerequisite for the retained legacy resources; it is not proof
+workflow for the operator stacks in eu-north-1, then build iOS. No manual benchmark report blocks deployment; deployment does not prove
 that arbitrary long books or six languages have passed acoustic review. Run representative long
 single/multi-track TXT/EPUB jobs, process-loss/recovery and authenticated API acceptance against the
 new image before announcing production readiness. Do not substitute the fake-engine tests for it.
