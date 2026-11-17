@@ -77,7 +77,7 @@ def main():
     with args.output.open('x') as stream:
         json.dump(report, stream, indent=2)
     print('Build provenance saved:', args.output.resolve())
-    print('Quality/runtime/memory/cost measurements are still required for this exact image.')
+    print('Build provenance is not quality acceptance; automated pipeline benchmarks are deferred.')
 
 
 if __name__ == '__main__':
