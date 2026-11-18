@@ -24,6 +24,8 @@ struct ContentView: View {
                 .tabItem { Label("Library", systemImage: "books.vertical") }
             CatalogNavigationView()
                 .tabItem { Label("Catalog", systemImage: "square.grid.2x2") }
+            ExamsNavigationView()
+                .tabItem { Label(AppLanguage.text("Exams"), systemImage: "doc.text") }
             NavigationStack { DictionaryView() }
                 .tabItem { Label("Dictionary", systemImage: "book.closed") }
             NavigationStack { ActivityDashboardView() }

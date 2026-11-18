@@ -1,12 +1,29 @@
 # Foreign Language Learner
 
+## Source-linked examinations
+
+`tools/exam-digitizer/` extracts official PDF evidence, compiles reviewed examination profiles
+to validated source-linked JSON import packages, marks actual audio repetitions using the
+existing local aligner, and serves a loopback interactive simulation. The first adult B1
+June 2024 package covers listening, reading and grammar; preserves writing alternatives for
+future AI assessment; and marks missing oral tasks explicitly. Objective scoring works locally;
+the web preview's grammar V/VI free-form/partial-credit evaluation remains a pending stub. This is an authoring/import
+prototype for reviewing source material. The native Exams tab adds JSON-driven sections,
+local answer/outbox persistence, audio recovery, timed submission and conflict review.
+An authenticated loopback API provides verified atomic imports, immutable revisions,
+SQLite-backed attempts and authoritative objective grading. Native grammar assessment
+uses the translation settings/transport; the web authoring preview retains AI placeholders.
+Production storage/file delivery, deployment and live assessment quality are not yet verified.
+See [the utility guide](../tools/exam-digitizer/README.md).
+See [local API/app workflow](../docs/EXAMS.md).
+
 Manual alignment benchmark reports are not required for deployment. Worker image compatibility
 and verified-release checks remain enforced. Automated measurement and quality acceptance in
 the release pipeline are deferred in [DEFERRED_DECISIONS.md](DEFERRED_DECISIONS.md).
 
 ## Practice navigation
 
-The main tabs are Library, Catalog, Dictionary and Activity. Open Practice from
+The main tabs are Library, Catalog, Exams, Dictionary and Activity. Open Practice from
 the Dictionary toolbar for listening, saved rounds, round setup and cooldown
 settings. Dictionary also retains its quick start and Learn actions.
 

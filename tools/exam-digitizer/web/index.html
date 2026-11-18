@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173f35">
+  <title>Próba · Egzamin z języka polskiego</title>
+  <meta name="description" content="Interaktywny egzamin z języka polskiego na podstawie oryginalnych arkuszy.">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Przejdź do zadań</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Nawigacja egzaminu">
+      <a class="brand" href="/" aria-label="Próba, strona egzaminu"><span class="brand-mark">p.</span><span>próba<span class="brand-caption">język polski</span></span></a>
+      <div class="sidebar-heading">TWÓJ EGZAMIN</div>
+      <div class="exam-label" id="exam-label">Wczytywanie…</div>
+      <nav id="section-nav" aria-label="Części egzaminu"></nav>
+      <div class="sidebar-bottom">
+        <p class="save-status" id="save-status" role="status">Odpowiedzi zapisują się na tym urządzeniu</p>
+        <button class="text-button" id="export-attempt" type="button">Pobierz moje odpowiedzi <span aria-hidden="true">↗</span></button>
+        <button class="text-button muted" id="reset-attempt" type="button">Rozpocznij od nowa</button>
+      </div>
+    </aside>
+    <main id="content" tabindex="-1">
+      <header class="topbar"><span class="eyebrow">PRZYGOTOWANIE DO EGZAMINU</span><span class="mode-badge" id="mode-badge"><span class="status-dot"></span>Wybierz tryb</span></header>
+      <div class="main-inner">
+        <div id="loading" class="loading"><span class="loading-mark">p.</span><p>Przygotowujemy Twój arkusz…</p></div>
+        <div id="error" class="notice error" hidden role="alert"></div>
+        <section id="attempt-setup" class="attempt-setup" hidden aria-labelledby="setup-title"><span class="eyebrow">ORYGINALNY ARKUSZ · POZIOM B1</span><h1 id="setup-title">Jak chcesz ćwiczyć?</h1><p id="setup-exam-title"></p><div class="mode-options"><label class="mode-option"><input type="radio" name="attempt-mode" value="training" checked><span><strong>Trening</strong><span>Własne tempo, pauza i przewijanie. Każde zadanie ma osobny odtwarzacz.</span></span></label><label class="mode-option"><input type="radio" name="attempt-mode" value="exam"><span><strong>Symulacja egzaminu</strong><span>Pełne nagranie jeden raz, bez pauzy i przewijania. Powtórzenia są już zawarte w oryginale.</span></span></label></div><p class="setup-note">Tryb wybierasz dla całej próby. Aby go zmienić, rozpocznij nową próbę.</p><button id="start-attempt" type="button" class="button primary">Rozpocznij próbę <span aria-hidden="true">→</span></button><p class="setup-note">Dostępne części: słuchanie, czytanie i gramatyka.</p></section>
+        <div id="exam-content" hidden>
+          <div class="breadcrumbs" id="breadcrumbs"></div>
+          <section class="section-intro" aria-labelledby="section-title">
+            <div><div class="eyebrow" id="section-kicker"></div><h1 id="section-title"></h1><p class="section-description" id="section-description"></p><div class="section-meta" id="section-meta"></div></div>
+            <div class="timer-card" id="timer-card"><span class="eyebrow">CZAS NA TĘ CZĘŚĆ</span><div class="timer" id="timer" aria-live="off">00:00</div><button id="timer-toggle" class="button secondary small" type="button">Rozpocznij</button><p id="timer-hint">Możesz zatrzymać czas.</p></div>
+          </section>
+          <div class="progress-row"><span id="progress-label"></span><progress class="progress-track" id="progress-fill" max="100" value="0" aria-label="Postęp odpowiedzi"></progress><span id="progress-percent"></span></div>
+          <section id="result" class="result-card" hidden aria-live="polite"></section>
+          <section id="audio-panel" class="audio-panel" hidden aria-label="Nagranie egzaminacyjne"><div class="audio-heading"><div><span class="eyebrow">NAGRANIE EGZAMINACYJNE</span><h2>Jedno odtworzenie pełnego nagrania</h2></div><span class="audio-symbol" aria-hidden="true">♫</span></div><audio id="exam-audio" preload="metadata"></audio><div class="exam-audio-controls"><button class="button secondary small" id="exam-audio-start" type="button">Rozpocznij nagranie</button><progress id="exam-audio-progress" class="progress-track" max="1" value="0" aria-label="Postęp nagrania"></progress><span id="exam-audio-time" class="audio-time">00:00</span></div><p id="audio-note">Nagrania nie można zatrzymać ani przewinąć. Oryginał zawiera już powtórzenia.</p></section>
+          <div id="task-tabs" class="task-tabs" aria-label="Przejdź do zadania"></div>
+          <div id="selection" hidden></div>
+          <div id="tasks"></div>
+          <footer class="section-footer"><p id="footer-note">Sprawdź odpowiedzi, gdy skończysz. Do tego czasu możesz je zmieniać.</p><button class="button primary" id="submit-section" type="button">Zakończ i sprawdź <span aria-hidden="true">→</span></button></footer>
+          <div class="provenance-note" id="provenance-note"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="action-dialog" class="action-dialog" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description"><form method="dialog"><h2 id="action-dialog-title"></h2><p id="action-dialog-description"></p><div class="dialog-actions"><button class="button secondary" type="submit" value="cancel" autofocus>Anuluj</button><button class="button primary" id="action-dialog-confirm" type="submit" value="confirm">Potwierdź</button></div></form></dialog>
+</body>
+</html>
