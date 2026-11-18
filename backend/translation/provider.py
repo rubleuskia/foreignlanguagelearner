@@ -34,10 +34,16 @@ class OpenAIProvider:
         self.timeout = timeout
 
     def run(self, kind, payload, model, output_tokens, reasoning_effort='minimal'):
+        if kind not in {'context', 'word', 'exam_assessment'}:
+            raise ProviderFailure()
         body = {'model': model, 'store': False, 'max_output_tokens': output_tokens,
             'reasoning': {'effort': reasoning_effort}, 'instructions': CONTEXT_PROMPT if kind == 'context' else WORD_PROMPT,
             'input': canonical({k: v for k, v in payload.items() if k not in {'model', 'reasoning_effort'}}), 'text': {'format': {'type': 'json_schema', 'strict': True,
-                'name': 'contextual_translation' if kind == 'context' else 'word_explanation', 'schema': output_schema(kind)}}}
+                'name': 'contextual_translation' if kind == 'context' else 'word_explanation', 'schema': output_schema(kind) if kind != 'exam_assessment' else {}}}}
+        if kind == 'exam_assessment':
+            from backend.exams.assessment import validate_prepared
+            validate_prepared(payload)
+            body.update(payload['assessment_request']['provider_body_template'])
         request = urllib.request.Request('https://api.openai.com/v1/responses', data=canonical(body).encode(),
             headers={'Authorization': f'Bearer {self.api_key}', 'Content-Type': 'application/json'}, method='POST')
         tokens = {}
@@ -50,6 +56,9 @@ class OpenAIProvider:
             usage = result.get('usage') or {}
             tokens = {k: max(0, int(usage.get(k, 0))) for k in ['input_tokens', 'output_tokens']}
             if result.get('status') != 'completed':
+                raise ProviderFailure(tokens=tokens)
+            if any(c.get('type') == 'refusal' for item in result.get('output', [])
+                   for c in item.get('content', [])):
                 raise ProviderFailure(tokens=tokens)
             output = ''.join(c.get('text', '') for item in result.get('output', [])
                              for c in item.get('content', []) if c.get('type') == 'output_text')

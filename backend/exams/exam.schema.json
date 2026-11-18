@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:foreign-language-learner:exam:1.1",
+  "title": "Source-linked examination import package",
+  "type": "object",
+  "required": ["schema_version", "id", "revision", "title", "language", "level", "audience", "session", "sources", "sections", "interactive_section_ids", "provenance"],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "id": {"type": "string", "minLength": 1},
+    "revision": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "title": {"type": "string", "minLength": 1},
+    "language": {"const": "pl"},
+    "level": {"enum": ["A1", "A2", "B1", "B2", "C1", "C2"]},
+    "audience": {"enum": ["adults", "children_youth"]},
+    "session": {"type": "object", "required": ["label", "start_date", "end_date"], "properties": {"label": {"type": "string"}, "start_date": {"type": "string", "format": "date"}, "end_date": {"type": "string", "format": "date"}}},
+    "sources": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/source"}},
+    "sections": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/section"}},
+    "interactive_section_ids": {"type": "array", "uniqueItems": true, "items": {"enum": ["listening", "reading", "grammar", "writing", "speaking"]}},
+    "provenance": {"type": "object", "required": ["profile_sha256", "archive_url", "generator"], "properties": {"profile_sha256": {"$ref": "#/$defs/sha256"}, "archive_url": {"type": "string", "format": "uri"}, "generator": {"type": "string"}}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "score": {"type": "integer", "minimum": 0},
+    "refs": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["source_id"], "properties": {"source_id": {"type": "string"}, "page": {"type": "integer", "minimum": 1}, "start_ms": {"type": "integer", "minimum": 0}, "end_ms": {"type": "integer", "minimum": 1}}}},
+    "source": {"type": "object", "required": ["id", "url", "path", "sha256", "bytes", "media_type"], "properties": {"id": {"type": "string"}, "url": {"type": "string", "format": "uri"}, "path": {"type": "string", "pattern": "^sources/[^/]+$"}, "sha256": {"$ref": "#/$defs/sha256"}, "bytes": {"type": "integer", "minimum": 1}, "media_type": {"enum": ["application/pdf", "audio/mpeg"]}, "page_count": {"type": "integer", "minimum": 1}}},
+    "section": {
+      "type": "object", "required": ["id", "title", "position", "max_score_units", "source_refs", "tasks"],
+      "properties": {
+        "id": {"enum": ["listening", "reading", "grammar", "writing", "speaking"]}, "title": {"type": "string", "minLength": 1}, "position": {"type": "integer", "minimum": 1}, "time_limit_seconds": {"type": ["integer", "null"], "minimum": 0}, "max_score_units": {"$ref": "#/$defs/score"}, "source_refs": {"$ref": "#/$defs/refs"}, "status": {"enum": ["ready", "ai_stub", "source_missing", "needs_review"]},
+        "selection": {"type": "object", "required": ["mode", "task_ids"], "properties": {"mode": {"const": "choose_one"}, "task_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}}},
+        "tasks": {"type": "array", "items": {"$ref": "#/$defs/task"}}
+      }
+    },
+    "task": {
+      "type": "object", "required": ["id", "label", "position", "instruction", "interaction_type", "max_score_units", "source_refs", "blocks", "options", "items"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "label": {"type": "string"}, "position": {"type": "integer", "minimum": 1}, "title": {"type": "string"}, "instruction": {"type": "string", "minLength": 1}, "interaction_type": {"type": "string", "minLength": 1}, "max_score_units": {"$ref": "#/$defs/score"}, "source_refs": {"$ref": "#/$defs/refs"},
+        "blocks": {"type": "array", "items": {"type": "object", "required": ["id", "type", "text", "source_refs"], "properties": {"id": {"type": "string"}, "type": {"enum": ["paragraph", "heading", "example", "table", "image"]}, "text": {"type": "string"}, "source_refs": {"$ref": "#/$defs/refs"}}}},
+        "options": {"type": "array", "items": {"type": "object", "required": ["id", "label", "text", "source_refs"], "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "text": {"type": "string"}, "source_refs": {"$ref": "#/$defs/refs"}}}},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+      }
+    },
+    "item": {
+      "type": "object", "required": ["id", "label", "position", "prompt", "response_type", "max_score_units", "source_refs", "grading"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "label": {"type": "string"}, "position": {"type": "integer", "minimum": 1}, "prompt": {"type": "string"}, "context": {"type": "string"}, "response_type": {"enum": ["single_choice", "multi_choice", "text", "long_text"]}, "option_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "max_score_units": {"anyOf": [{"$ref": "#/$defs/score"}, {"type": "null"}]}, "source_refs": {"$ref": "#/$defs/refs"},
+        "grading": {"type": "object", "required": ["mode", "accepted_answers", "source_refs"], "properties": {"mode": {"enum": ["exact", "set", "token_membership", "ai_stub", "manual"]}, "accepted_answers": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "array", "uniqueItems": true, "items": {"type": "string"}}]}}, "max_tokens": {"type": "integer", "minimum": 1}, "ignore_case": {"type": "boolean"}, "source_refs": {"$ref": "#/$defs/refs"}}}
+      }
+    }
+  }
+}

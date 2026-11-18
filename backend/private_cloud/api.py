@@ -34,12 +34,12 @@ def response(status, value):
             'body': json.dumps(value, ensure_ascii=False)}
 
 
-def parse_body(event):
+def parse_body(event, max_bytes=16384):
     raw = event.get('body') or ''
     try:
         if event.get('isBase64Encoded'):
             raw = base64.b64decode(raw, validate=True).decode()
-        if len(raw.encode()) > 16384:
+        if len(raw.encode()) > max_bytes:
             raise CloudError('BODY_TOO_LARGE', 413)
         return json.loads(raw)
     except (ValueError, TypeError, UnicodeError):
@@ -51,6 +51,13 @@ def handler(event, context):
         cognito, repo, provider = runtime()
         owner = authenticate(event, cognito, repo)
         route = event.get('routeKey')
+        if route and any(route.split(' ', 1)[-1].startswith(prefix) for prefix in
+                         ('/v1/exams', '/v1/exam-attempts', '/v1/exam-imports')):
+            from backend.exams.runtime import service as exams
+            from backend.exams.api import handle
+            body = parse_body(event, 262144) if event.get('body') else None
+            return response(200, handle(exams(), route, owner, body,
+                event.get('pathParameters') or {}, event.get('queryStringParameters') or {}))
         if route in {'GET /v1/library/books', 'GET /v1/library/books/{id}/download'}:
             return response(200, library.handle(route, event.get('pathParameters') or {}))
         if route == 'GET /v1/me':
@@ -66,10 +73,16 @@ def handler(event, context):
             if not row or row.get('owner') != owner:
                 raise CloudError('NOT_FOUND', 404)
             return response(200, repo.public(row, now))
-        kind = {'POST /v1/context-analyses': 'context', 'POST /v1/word-explanations': 'word'}.get(route)
+        kind = {'POST /v1/context-analyses': 'context', 'POST /v1/word-explanations': 'word',
+                'POST /v1/exam-assessments': 'exam_assessment'}.get(route)
         if not kind:
             raise CloudError('NOT_FOUND', 404)
-        payload = validate_input(kind, parse_body(event))
+        if kind == 'exam_assessment':
+            from backend.exams.assessment import prepare
+            from backend.exams.runtime import service as exams
+            payload = prepare(exams(), owner, parse_body(event))
+        else:
+            payload = validate_input(kind, parse_body(event))
         headers = {k.lower(): v for k, v in event.get('headers', {}).items()}
         key = headers.get('idempotency-key', '')
         try:
@@ -85,6 +98,12 @@ def handler(event, context):
             started = time.monotonic()
             try:
                 result, tokens = provider.run(kind, payload)
+                if kind == 'exam_assessment':
+                    exams().record_assessment(owner, payload['attempt_id'], payload['task_id'], result,
+                        {'provider': 'openai', 'mode': 'operator',
+                         'model': payload['model'], 'reasoning_effort': payload['reasoning_effort'],
+                         'revision': payload['assessment_request']['revision'],
+                         'contract_sha256': payload['assessment_contract']['contract_sha256']}, server_verified=True)
                 row = repo.finish(row, 'succeeded', result, tokens)
                 print(json.dumps({'event': 'model_completed', 'request_id': row['request_id'],
                                   'duration_ms': round((time.monotonic() - started) * 1000), **tokens}))
@@ -95,7 +114,8 @@ def handler(event, context):
         value = repo.public(row, int(time.time()))
         return response(200 if value['state'] == 'succeeded' else 202, value)
     except CloudError as error:
-        return response(error.status, {'error': {'code': error.code}})
+        return response(error.status, {'error': {'code': error.code,
+            **({'details': error.details} if getattr(error, 'details', None) else {})}})
     except Exception:
         print(json.dumps({'event': 'operator_api_error'}))
         return response(500, {'error': {'code': 'INFRASTRUCTURE_FAILURE'}})

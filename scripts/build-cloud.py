@@ -28,10 +28,11 @@ def main():
     subprocess.run([sys.executable, "-m", "pip", "install", "--require-hashes", "--only-binary=:all:",
         "--platform", "manylinux_2_34_x86_64", "--platform", "manylinux_2_28_x86_64",
         "--platform", "manylinux2014_x86_64", "--implementation", "cp", "--python-version", "3.12",
-        "--target", str(args.output), "-r", str(root / ('backend/private_cloud/requirements.lock' if args.mode == 'operator' else 'backend/billing/requirements.lock'))], check=True)
+        "--target", str(args.output), "-r", str(root / ('backend/private_cloud/requirements.lock' if args.mode == 'operator' else 'backend/billing/requirements.lock')),
+        "-r", str(root / 'backend/exams/requirements.lock')], check=True)
     (args.output / "backend").mkdir()
     (args.output / "backend/__init__.py").write_text("")
-    modules = ("private_cloud", "cloud", "translation", "alignment", "book_alignment", "catalog") if args.mode == 'operator' else ("billing", "cloud", "translation", "alignment", "paid_alignment")
+    modules = ("private_cloud", "cloud", "translation", "alignment", "book_alignment", "catalog", "exams") if args.mode == 'operator' else ("billing", "cloud", "translation", "alignment", "paid_alignment", "exams")
     for module in modules:
         if args.mode == 'operator' and module in ('cloud', 'translation'):
             destination = args.output / 'backend' / module

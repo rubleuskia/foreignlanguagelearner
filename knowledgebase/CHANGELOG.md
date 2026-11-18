@@ -1,3 +1,45 @@
+## 2026-11-18 — Native exams and persistent local backend pilot
+
+- Add a separate Exams tab with JSON-driven listening, reading and grammar layouts,
+  training/exam audio, interruption recovery and automatic timed submission.
+- Add local-first attempts/outbox, authenticated synchronization, explicit conflict review
+  and retained/exportable local drafts. Keep accounts/provider scopes separate.
+- Add immutable package dry-run/commit, persistent SQLite attempts, deterministic server
+  grading, student projections without keys and an authenticated loopback pilot API.
+- Connect grammar V/VI assessments to translation settings, personal-key transport and the
+  existing subscription request ledger/provider. Preserve strict score/rationale validation
+  and explicit pending/unknown outcomes; the web emulator still uses AI placeholders.
+- Place the verified package in ExamSources/generated and import its first revision into
+  ExamSources/backend-pilot. No production deployment or live model assessment is claimed.
+- Record storage/authentication/deadline decisions in DECISIONS.md and the supported exam
+  workflow in PROJECT.md. See docs/EXAMS.md for local commands and current boundaries.
+- Validation: 159 backend tests passed (2 skipped), 31 digitizer tests passed, real-profile
+  web checks passed, and actual server JSON decoded/round-tripped through the native models.
+  The final iOS simulator build and all six new unit tests passed. Manual exam UI flows,
+  two-device UI recovery, system-call interruption and live AI grading remain unverified.
+
+## 2026-11-17 — Source-linked examination imports and local simulation
+
+- Add reusable PDF evidence extraction, reviewed-profile compilation, JSON Schema and
+  semantic validation for backend exam import packages. Retain originals, stable item IDs,
+  physical-page references, official keys, alternative writing sets and assessment rubrics.
+- Digitize adult B1, 22–23 June 2024: 125 listening/reading/grammar response fields plus six
+  writing prompts. Preserve speaking as source_missing because oral tasks are not supplied.
+- Add local JSON-driven simulation with persistent responses/timers, objective scoring,
+  explicit pending AI placeholders, original-page links and byte-range audio playback.
+- Match PDF layouts with statement/matching tables, inline fields and visible clickable
+  word choices. Preserve original answer identities when displaying reading IV as numbers.
+- Score listening V's numeric partial answers deterministically with deduplication and
+  original slot limits. Prepare strict score/rationale AI contracts for grammar V/VI.
+- Select training/exam before starting; provide bounded task players in training and one
+  full original recording without manual pause/seek in exam mode, with interruption resume.
+  Keep writing in the import only. Document planned local-first/cross-device synchronization.
+- Add source-hash-bound audio transcription, occurrence matching and reuse of the existing
+  aligner: five tasks/nine actual playbacks. Retain timing/repetition review flags rather
+  than interpreting successful alignment as completed acoustic review.
+- Record the import/assessment boundary in DECISIONS.md and the local authoring workflow in
+  PROJECT.md. No backend deployment, production database import or iOS screen is included.
+
 ## 2026-11-17 — Import catalog source and attribution resources in strict book packages
 
 - Fix catalog ZIP import rejecting `provenance.json` as an unreferenced file before reaching

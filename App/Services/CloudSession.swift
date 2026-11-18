@@ -180,13 +180,13 @@ actor CloudSession {
         }
     }
     func send(_ path: String, method: String = "GET", body: Data? = nil, idempotencyKey: UUID? = nil,
-              expected: Lease? = nil) async throws -> Data {
+              expected: Lease? = nil, timeout: TimeInterval = 25) async throws -> Data {
         let lease = try expected ?? self.lease()
         try validate(lease)
         guard let configuration else { throw CloudAPIError(code: "NOT_CONFIGURED") }
         let token = try await accessToken(); try validate(lease)
         var request = URLRequest(url: configuration.apiURL.appendingPathComponent(path))
-        request.httpMethod = method; request.httpBody = body; request.timeoutInterval = 25
+        request.httpMethod = method; request.httpBody = body; request.timeoutInterval = timeout
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let idempotencyKey { request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key") }

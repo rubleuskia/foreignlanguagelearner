@@ -61,6 +61,8 @@ struct CloudRequestEnvelope: Decodable, Sendable {
         let definition: String?
         let meaningInContext: String?
         let examples: [WordExplanation.Example]?
+        let score_units: Int?
+        let rationale: String?
     }
     let schema_version: Int
     let request_id: String
@@ -141,12 +143,17 @@ actor CloudRemoteRequestClient {
     }
     func run(kind: String, payload: CloudTranslationPayload) async throws -> CloudRequestEnvelope {
         try payload.validate(kind:kind)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try await run(kind: kind, body: encoder.encode(payload))
+    }
+    func runAssessment(body: Data) async throws -> CloudRequestEnvelope {
+        try await run(kind: "exam_assessment", body: body)
+    }
+    private func run(kind: String, body: Data) async throws -> CloudRequestEnvelope {
         let lease = try await session.lease()
         struct Policy: Decodable { let policy_version: String }
         let statusData = try await session.send("v1/me/entitlements", expected: lease)
         let policy = try JSONDecoder().decode(Policy.self, from: statusData)
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let body = try encoder.encode(payload)
         let digest = SHA256.hash(data: Data("\(kind)|".utf8) + body).map { String(format: "%02x", $0) }.joined()
         guard var legacy = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             throw ContextAnalysisError.invalidOutput
@@ -156,7 +163,13 @@ actor CloudRemoteRequestClient {
         let legacyDigest = SHA256.hash(data: Data("\(kind)|".utf8) + legacyBody).map { String(format: "%02x", $0) }.joined()
         let entry = try await ledger.entry(lease, fingerprint: digest, kind: kind,
             policyVersion: policy.policy_version, legacyFingerprint: legacyDigest)
-        let path = kind == "context" ? "v1/context-analyses" : "v1/word-explanations"
+        let path: String
+        switch kind {
+        case "context": path = "v1/context-analyses"
+        case "word": path = "v1/word-explanations"
+        case "exam_assessment": path = "v1/exam-assessments"
+        default: throw ContextAnalysisError.invalidOutput
+        }
         guard CloudProviderMode.current == .subscription else { throw CloudAPIError(code: "ACCOUNT_CHANGED") }
         let data = try await session.send(path, method: "POST", body: body, idempotencyKey: entry.idempotencyKey, expected: lease)
         var envelope = try JSONDecoder().decode(CloudRequestEnvelope.self, from: data)

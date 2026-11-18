@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "exam_id": "pl-b1-2024-06-adults",
+  "audio": {
+    "source_id": "audio",
+    "path": "originals/2024/22-23_czerwca/B1/22-23.06.2024-B1_pilk_dzwiekowy.mp3",
+    "sha256": "9abb0d205b559819420541ed80f3e4721f0d88c3efcab1c354cd1f2dcd430669",
+    "url": "https://certyfikatpolski.pl/wp-content/uploads/2025/02/22-23.06.2024-B1_pilk_dzwiekowy.mp3"
+  },
+  "transcript": {
+    "source_id": "keys",
+    "path": "originals/2024/22-23_czerwca/B1/22-23.06.2024-B1_transkrypcja.pdf",
+    "sha256": "fe4b68e2566eb55cc8b59803a2d2d6daad1699cd47de66745744427e61bb7ddc",
+    "url": "https://certyfikatpolski.pl/wp-content/uploads/2025/02/22-23.06.2024-B1_transkrypcja.pdf"
+  },
+  "tasks": [
+    {
+      "task_label": "I",
+      "text": "Poproszę drożdżówkę i mały kawałek sernika. Wypożyczone książki należy oddać w ciągu miesiąca. Bardzo się cieszę na wspólny wyjazd nad jezioro. CV i list motywacyjny prosimy wysłać na podany adres. Coś przerwało, możesz to powiedzieć jeszcze raz? Okulista przyjmuje we wtorki i piątki od 14.00 do 17.00. Mam trzydzieści dziewięć stopni i dreszcze. Od jutra koniec ze słodyczami i tłustym jedzeniem. Cena wycieczki nie obejmuje wejść do muzeów. Mamy złoto! Nasi siatkarze mistrzami świata! Stopy razem, ręce na biodrach, plecy prosto i skaczemy! W naszym biurze jest świetny klimat, wszyscy się lubimy. Dzień dobry państwu, proszę bilety do kontroli. Do twarzy ci w zielonym, ładnie wyglądasz. Pani córka często się spóźnia i nie uważa na lekcjach.",
+      "original_extracted_text": "Przykład: Poproszę drożdżówkę i mały kawałek sernika. (K) \n1. Wypożyczone książki należy oddać w ciągu miesiąca. (M) \n2. Bardzo się cieszę na wspólny wyjazd nad jezioro. (K) \n3. CV i list motywacyjny prosimy wysłać na podany adres. (M) \n4. Coś przerwało, możesz to powiedzieć jeszcze raz? (K) \n5. Okulista przyjmuje we wtorki i piątki od 14.00 do 17.00. (M) \n6. Mam trzydzieści dziewięć stopni i dreszcze. (K) \n7. Od jutra koniec ze słodyczami i tłustym jedzeniem. (M) \n8. Cena wycieczki nie obejmuje wejść do muzeów. (K) \n9. Mamy złoto! Nasi siatkarze mistrzami świata! (K) \n10. Stopy razem, ręce na biodrach, plecy prosto i skaczemy! (M) \n11.  W naszym biurze jest świetny klimat, wszyscy się lubimy. (K) \n12. Dzień dobry państwu, proszę bilety do kontroli. (M) \n13. Do twarzy ci w zielonym, ładnie wyglądasz. (K) \n14. Pani córka często się spóźnia i nie uważa na lekcjach. (M)",
+      "text_corrections": [],
+      "expected_occurrences": 1,
+      "start_anchor": "Poproszę drożdżówkę i mały kawałek sernika",
+      "end_anchor": "Pani córka często się spóźnia i nie uważa na lekcjach",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "task_label": "II",
+      "text": "Czy jest inny kolor spodni w tym rozmiarze? Ten model jest tylko w granatowym kolorze. Przepraszam za spóźnienie. Były duże korki w centrum. To już kolejny raz. Podoba mi się ten obraz, czy jest na sprzedaż? Niestety, nie. O której godzinie kończy się seans? Nie pamiętam dobrze. Jak najszybciej dojechać do ogrodu zoologicznego? Nie polecam autobusu, lepiej będzie taksówką. Nie powinnaś przyjmować tej oferty pracy. Masz rację, proponują niezbyt dobre warunki finansowe. Może przeprowadzimy się do większego mieszkania? Muszę o tym pomyśleć. To poważna decyzja.",
+      "original_extracted_text": "Przykład: – Czy jest inny kolor spodni w tym rozmiarze? (K) \n– Ten model jest tylko w granatowym kolorze. (K) \n \n1. – Przepraszam za spóźnienie. Były duże korki w centrum. (M) \n– To już kolejny raz. (K) \n \n2. – Podoba mi się ten obraz, czy jest na sprzedaż? (M) \n– Niestety, nie. (K)  \n \n3. – O której godzinie kończy się seans? (K) \n– Nie pamiętam dobrze. (M) \n \n4. – Jak najszybciej dojechać do ogrodu zoologicznego? (K) \n– Nie polecam autobusu, lepiej będzie taksówką. (M) \n \n5. – Nie powinnaś przyjmować tej oferty pracy. (M) \n– Masz rację, proponują niezbyt dobre warunki finansowe. (K) \n \n6. – Może przeprowadzimy się do większego mieszkania? (M) \n– Muszę o tym pomyśleć. To poważna decyzja. (K)",
+      "text_corrections": [],
+      "expected_occurrences": 2,
+      "start_anchor": "Czy jest inny kolor spodni w tym rozmiarze",
+      "end_anchor": "Muszę o tym pomyśleć To poważna decyzja",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "task_label": "III",
+      "text": "Czym jest program „Dom za 1 euro”? To nietypowy sposób, w jaki włoskie miasteczka starają się znaleźć nowych mieszkańców. Co jakiś czas wystawiają na sprzedaż nieruchomości i oferują je za cenę włoskiej kawy. Jakie warunki trzeba spełnić, żeby kupić dom? Warunki programu różnią się w zależności od miasteczka lub gminy . Ale najważniejszym elementem jest remont, który trzeba zrobić w ciągu 3 lat od momentu akceptacji planu napraw przez gminę. Dopiero, kiedy dana osoba skończy renowację na czas , może kupić nieruchomość. Gdzie można znaleźć te domy? Przede wszystkim w regionach o niewielkim zainteresowaniu turystycznym. Głównie w miasteczkach, gdzie z roku na rok żyje coraz mniej mieszkańców . Młodzi ludzie przeprowadzają się do większych miast na studia lub do pracy, a starsi umierają. Czy dużo osób korzysta z programu „Dom za 1 euro”? Program jest skierowany do wszystkich i popularny w wielu krajach . Bardzo dużo ludzi z Europy kupuje te domy we Włoszech, jednak wiem, że nikt z Polski nie był zainteresowany. Wiele osób woli jednak tradycyjny zakup domu z wolnego rynku, który może być łatwiejszy i tańszy, zwłaszcza na południu Włoch.",
+      "original_extracted_text": "Dziennikarz: Czym jest program „Dom za 1 euro”? \nEkspert: To nietypowy sposób, w jaki włoskie miasteczka starają się znaleźć nowych \nmieszkańców.  Co jakiś czas wystawiają na sprzedaż nieruchomości i oferują je za cenę włoskiej \nkawy. \nDz: Jakie warunki trzeba spełnić, żeby kupić dom? \nE: Warunki programu różnią się w zależności od miasteczka lub gminy . Ale najważniejszym \nelementem jest remont, który trzeba zrobić w ciągu 3 lat  od momentu akceptacji planu \nnapraw przez gminę. Dopiero, kiedy dana osoba skończy renowację na czas , może kupić \nnieruchomość.  \nDz: Gdzie można znaleźć te domy? \nE: Przede wszystkim  w regionach o niewielkim zainteresowaniu turystycznym. Głównie  \nw miasteczkach, gdzie z roku na rok żyje coraz mniej mieszkańców . Młodzi ludzie \nprzeprowadzają się do większych miast na studia lub do pracy, a starsi umierają.  \nDz: Czy dużo osób korzysta z programu „Dom za 1 euro”? \nE: Program jest skierowany do wszystkich  i popularny w wielu krajach . Bardzo dużo ludzi  \nz Europy kupuje te domy we Włoszech, jednak wiem, że nikt z Polski nie był zainteresowany. \nWiele osób woli jednak tradycyjny zakup domu z wolnego rynku, który może być łatwiejszy  \ni tańszy, zwłaszcza na południu Włoch. \nNa podstawie: https://wloskiedomy.pl/domy-za-1-euro-we-wloszech/",
+      "text_corrections": [],
+      "expected_occurrences": 2,
+      "start_anchor": "Czym jest program Dom za 1 euro",
+      "end_anchor": "zwłaszcza na południu Włoch",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "task_label": "IV",
+      "text": "Jak wrócić do formy po zimie? Jestem zwolennikiem biegania, które jest prostą formą ruszania się, natomiast nie wszyscy mogą biegać, nawet w wolnym tempie. Każdy ruch na świeżym powietrzu jest ważny. Jak poprawić kondycję? T.: Dla początkujących spacery z kijkami, a osoby już aktywne namawiam do intensywnego biegania. Mam dużo lat, ale ciągle regularnie biegam, łącznie z bieganiem półmaratonów i maratonów. W każdym wieku jest to możliwe. Można też skorzystać z roweru. W naszym mieście jest wiele siłowni zewnętrznych zachęcam do ćwiczenia na nich. A przygotowanie do treningu? T.: Rozgrzanie mięśni zarówno przed, jak i po treningu jest ważne, żeby uniknąć kontuzji. Jest też istotne, kiedy wybieramy marsz. Czy 10-minutowe treningi mają sens? T.: To za mało. 10 minut może trwać rozciąganie. Żeby był efekt, potrzebujemy 30-40 minut. Wiosną warto stosować suplementy diety? T.: Można zażywać minerały, ale wraz ze słońcem mamy więcej naturalnej witaminy D. Nie potrzebujemy dodatkowej chemii. Wystarczy prawidłowe, zróżnicowane jedzenie. Codziennie należy ćwiczyć? T.: To zależy od naszego organizmu. Jeśli chcemy pozostać w dobrej kondycji fizycznej, trenujmy 3 razy w tygodniu. Codzienne treningi są dobre dla zawodowców.",
+      "original_extracted_text": "Dziennikarka: Jak wrócić do formy po zimie? \nTrener: Jestem zwolennikiem biegania, które jest prostą formą ruszania się, natomiast nie \nwszyscy mogą biegać, nawet w wolnym tempie. Każdy ruch na świeżym powietrzu jest ważny. \nDz.: Jak poprawić kondycję? \nT.: Dla początkujących spacery z kijkami, a osoby już aktywne namawiam do intensywnego \nbiegania. Mam dużo lat,  ale ciągle regularnie biegam, łącznie z bieganiem półmaratonów  \ni maratonów. W każdym wieku jest to możliwe. Można też skorzystać z roweru. W naszym \nmieście jest wiele siłowni zewnętrznych – zachęcam do ćwiczenia na nich. \nDz.: A przygotowanie do treningu? \nT.: Rozgrzanie mięśni zarówno przed, jak i po treningu jest ważne, żeby uniknąć kontuzji. Jest \nteż istotne, kiedy wybieramy marsz. \nDz.: Czy 10-minutowe treningi mają sens? \nT.: To za mało. 10 minut może trwać rozciąganie. Żeby był efekt, potrzebujemy 30-40 minut. \nDz.: Wiosną warto stosować suplementy diety? \nT.: Można zażywać minerały, ale wraz ze słońcem  mamy więcej naturalnej witam iny D. Nie \npotrzebujemy dodatkowej chemii. Wystarczy prawidłowe, zróżnicowane jedzenie.  \nDz.: Codziennie należy ćwiczyć? \nT.: To zależy od naszego organizmu. Jeśli chcemy pozostać w dobrej kondycji fizycznej, \ntrenujmy 3 razy w tygodniu. Codzienne treningi są dobre dla zawodowców. \nNa podstawie: https://trendyradio.pl/pl/audycje-gosc-dnia/1/krosno/22579/wiosna-to-dobry-czas-na-sport",
+      "text_corrections": [
+        {
+          "from": "witam iny",
+          "to": "witaminy",
+          "reason": "PDF text extraction splits a printed word"
+        }
+      ],
+      "expected_occurrences": 2,
+      "start_anchor": "Jak wrócić do formy po zimie",
+      "end_anchor": "treningi są dobre dla zawodowców",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "task_label": "V",
+      "text": "Uwielbiam kupować ubrania z nowych kolekcji. Szukam zawsze czegoś nietypowego, co będzie inne, niż mają wszyscy. Zakupy robię nie tylko dlatego, że muszę . To co , kupuję, daje mi możliwość pokazania tego, kim jestem. Dla mnie liczy się przede wszystkim to, co praktyczne. Najczęściej wybieram stacjonarne sklepy, gdzie mogę dokładnie obejrzeć produkt, sprawdzić, ile kosztuje i kupić tańszy. Elektronika i nowoczesne rozwiązania to moja pasja i nie wyobrażam sobie życia bez gadżetów. Dla mnie zakupy online to nie tylko wygoda, ale również szansa na kupienie sprzętów, które niedawno pojawiły się na rynku. Szukanie dobrych okazji to dla mnie prawdziwa przyjemność! Najpierw porównuję ceny produktów w różnych sklepach i staram się znaleźć najlepsze oferty. Bardzo cieszy mnie, że oszczędzam, a jednocześnie kupuję rzeczy wysokiej jakości. Zdrowy styl życia jest dla mnie najważniejszy . Regularnie korzystam z dostawy do domu świeżych owoców i warzyw od rolnika. Wybieram produkty ekologiczne, które są przyjazne dla środowiska. Dla mnie to ważny aspekt każdego zakupu.",
+      "original_extracted_text": "Osoba 1 (K) \nUwielbiam kupować ubrania z nowych kolekcji. Szukam zawsze czegoś nietypowego, co będzie \ninne, niż maj ą wszyscy. Zakupy robię nie tylko dlatego, że muszę . To co , kupuję, daje mi \nmożliwość pokazania tego, kim jestem. \nOsoba 2 (M) \nDla mnie licz y się przede wszystkim to, co praktyczne. Najczęściej wybieram stacjonarne \nsklepy, gdzie mogę dokładnie obejrzeć produkt, sprawdzić, ile kosztuje i kupić tańszy. \nOsoba 3 (K) \nElektronika i nowoczesne rozwiązania to  moja p asja i nie wyobrażam sobie życia bez \ngadżetów. Dla mnie zakupy online to nie tylko wygoda, ale również szansa na kupienie \nsprzętów, które niedawno pojawiły się na rynku. \nOsoba 4 (M) \nSzukanie dobrych okazji to dla mnie prawdziwa przyjemność! Najpierw porównuję ceny \nproduktów w różnych sklepach i staram się znaleźć najlepsze oferty. Bardzo cieszy mnie, że \noszczędzam, a jednocześnie kupuję rzeczy wysokiej jakości. \nOsoba 5 (K) \nZdrowy styl życia jest dla mnie najważniejszy . Regularnie korzystam z dostawy do domu \nświeżych owoców i warzyw od rolnika. Wybieram produkty ekologiczne, które są przyjazne dla \nśrodowiska. Dla mnie to ważny aspekt każdego zakupu.",
+      "text_corrections": [
+        {
+          "from": "maj ą",
+          "to": "mają",
+          "reason": "PDF text extraction splits a printed word"
+        },
+        {
+          "from": "licz y",
+          "to": "liczy",
+          "reason": "PDF text extraction splits a printed word"
+        },
+        {
+          "from": "p asja",
+          "to": "pasja",
+          "reason": "PDF text extraction splits a printed word"
+        }
+      ],
+      "expected_occurrences": 2,
+      "start_anchor": "Uwielbiam kupować ubrania z nowych kolekcji",
+      "end_anchor": "Dla mnie to ważny aspekt każdego zakupu",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 3
+        }
+      ]
+    }
+  ],
+  "path_base": "exam_sources_root"
+}

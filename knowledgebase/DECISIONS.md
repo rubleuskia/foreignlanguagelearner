@@ -1,3 +1,63 @@
+## Native exam persistence and execution boundaries (2026-11-18)
+
+Use a dedicated Exams tab and keep exam packages/audio separate from book imports.
+Persist local answers and their outbox atomically as account/provider-scoped files.
+Synchronize immutable revision-pinned attempts with optimistic versions, idempotent change
+IDs and explicit device takeover. Preserve local drafts on conflicts; never silently replace
+an answer or advance a recording by choosing the largest cursor from multiple devices.
+
+The first runnable backend uses explicitly configured durable SQLite plus immutable files.
+Package staging is invisible until atomic publication. Active student projections whitelist
+presentation fields and exclude keys/rubrics; objective grading loads server-owned content.
+No implicit ephemeral Lambda storage is introduced. Production storage/file delivery and
+deployment remain separate from this local implementation.
+
+Exam deadlines are wall-clock deadlines that survive background/restart. Server expiry
+retains already synchronized answers; late offline edits remain visible local conflicts,
+rather than trusting unverifiable device timestamps or losing them silently.
+
+Reuse translation provider settings, personal key store/HTTP transport and subscription
+admission/recovery for assessment. Compile source-bound official task contracts on the server
+after submission. Personal-key results have explicit client provenance; server execution
+has separate provenance. Persist personal submission intent before external POST, retain
+unknown outcomes, and recover subscription results without a duplicate inference.
+The structured result is only integer score_units and rationale, with task bounds/25-unit
+steps. Do not infer per-item scores from rationale. The authoring web preview remains a stub.
+
+## Source-linked exam packages and pending AI assessment (2026-11-17)
+
+Use versioned JSON import packages compiled from reviewed per-exam profiles and immutable
+official PDF/audio originals. Keep source URLs, SHA-256, physical PDF pages, full module/task
+structure, worked examples, alternative sets and partial-credit rubrics. Reusable extraction
+does not imply automatic semantic conversion of arbitrary PDFs. Validate identities, references,
+score totals and source hashes before emitting an import. Preserve missing original modules
+explicitly instead of fabricating content. Keep existing content revisions for old attempts.
+
+Evaluate objective answers deterministically from official keys. Listening V uses numeric token
+membership, deduplication, original slot limits and proportional points per correct token;
+it needs no AI. Grammar V/VI's free formulations and partial-credit evaluation are AI stubs
+with strict source-bound score/rationale contracts: pending awards and nonfinal totals
+are null; separately report known objective points. Do not invent rubric interpretation,
+writing subtask weights, correctness explanations or final pass/fail. The local simulation
+contains keys for review and is not a production student delivery boundary.
+
+Locate actual audio occurrences before forced alignment because printed transcripts omit
+repetitions/instructions. Bind cached ASR, reference text and derived timings to original hashes.
+Store occurrences relative to the full original MP3, preserve machine-review flags and distinguish
+word-timing validity from acoustic correctness. Original full playback remains available.
+
+Present only listening, reading and grammar in the initial interface; retain writing in JSON.
+Use PDF-like tables and inline fields/visible word choices driven by presentation metadata.
+Keep original A–H answer identities when displaying reading IV with user-requested codes 1–8.
+Choose training or exam before starting. Training permits bounded task playback controls;
+exam plays the complete original recording once without manual pause or seek, resuming the
+same attempt from its persisted cursor after interruption. The implementation plan requires
+local-first answer/result persistence and backend synchronization between devices; those
+native/backend features are planned, not implemented by the local prototype.
+The native entry point is a separate Exams tab. Reading/grammar exam-mode timers automatically
+submit on expiry. Resume after forced audio interruption and cross-device synchronization are
+accepted requirements; they are not reopened by the remaining implementation-plan choices.
+
 ## Optional source resources in strict book packages (2026-11-17)
 
 Recognize exactly two optional root-level supplements alongside manifest-referenced media

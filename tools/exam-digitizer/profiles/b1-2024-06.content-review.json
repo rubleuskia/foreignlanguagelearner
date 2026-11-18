@@ -1,0 +1,427 @@
+{
+  "id": "pl-b1-2024-06-adults",
+  "originals": [
+    {
+      "source_id": "paper",
+      "original_path": "/Users/arublevsky/dev/ExamSources/originals/2024/22-23_czerwca/B1/22-23.06.2024-B1_arkusz_egzaminacyjny.pdf",
+      "sha256": "473ee7eb14c329dfafdebfe0b85f9c5553330ac27bb8b2a0b504d3dadc70f3c4"
+    },
+    {
+      "source_id": "keys",
+      "original_path": "/Users/arublevsky/dev/ExamSources/originals/2024/22-23_czerwca/B1/22-23.06.2024-B1_transkrypcja.pdf",
+      "sha256": "fe4b68e2566eb55cc8b59803a2d2d6daad1699cd47de66745744427e61bb7ddc"
+    }
+  ],
+  "rendering_engine": "pypdfium2",
+  "rendered_pages": [
+    {
+      "path": "keys-04.png",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 4
+        }
+      ],
+      "sha256": "c1239363f3c5ffa01cf68a53f1a1f3e725606f043477e04b849ff17347c70e84"
+    },
+    {
+      "path": "keys-05.png",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 5
+        }
+      ],
+      "sha256": "50ce64a7ceb0776e1d823b4ad140efb6e7935901dde5a9e4201547d23c3de9b8"
+    },
+    {
+      "path": "keys-06.png",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 6
+        }
+      ],
+      "sha256": "7fe436ea89875810dc8f898ccae6516f088d4ad306bd6e81ab5ca6d49bfcb0aa"
+    },
+    {
+      "path": "keys-07.png",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 7
+        }
+      ],
+      "sha256": "a2620beb19745c52ac5370ba0f4b34bf874a842b9950296f8dc95c9229ca18cc"
+    },
+    {
+      "path": "paper-04.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 4
+        }
+      ],
+      "sha256": "16394e4ae74233b2c46a3282f45f16cf72c5aa430de8d2c2e819a468f1355c7c"
+    },
+    {
+      "path": "paper-05.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 5
+        }
+      ],
+      "sha256": "c23cbd66afc5163770e067b13035bc4e493a23e417113c21f15b774caea514fe"
+    },
+    {
+      "path": "paper-06.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 6
+        }
+      ],
+      "sha256": "194e6075d4723a7edc0f042fe05c2a53694b4057c01036085136eaf50772733b"
+    },
+    {
+      "path": "paper-07.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 7
+        }
+      ],
+      "sha256": "f057efa99d5ac3855fc8d79768c3d7ed24f7f6bd29222599f9a507ca86735946"
+    },
+    {
+      "path": "paper-08.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 8
+        }
+      ],
+      "sha256": "6b482c646d82655b920bbcf93a97efc0623b2b421b18f7145aa5677f9429eae0"
+    },
+    {
+      "path": "paper-13.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 13
+        }
+      ],
+      "sha256": "b2a0bd9f4c90030a9fdd344ca3c0487631af15be3fe0fd31eeed9e83f6bd70f8"
+    },
+    {
+      "path": "paper-14.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 14
+        }
+      ],
+      "sha256": "c42ddb60e6e574ac381e16c1713ba14260c018c43ca2032f500c0a8efc401a47"
+    },
+    {
+      "path": "paper-15.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 15
+        }
+      ],
+      "sha256": "631e3b3cb4f1fd923f2a45527e37110cf62cb74d3c9e478c82c87c38ea5d8b24"
+    },
+    {
+      "path": "paper-17.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 17
+        }
+      ],
+      "sha256": "08d715d75785a1f4a49f4caf259d2d6d1d11b993593c6c9c0cf7ba4aa3d70862"
+    },
+    {
+      "path": "paper-18.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 18
+        }
+      ],
+      "sha256": "f172cb1e7810527e65c071704710d9d8ca01c8443664146a5f7412c508d33244"
+    },
+    {
+      "path": "paper-19.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 19
+        }
+      ],
+      "sha256": "ef46657a485850f3e78539f11b2ebc6c5d5ef67db89455fe7a9b533e1b8331e2"
+    },
+    {
+      "path": "paper-21.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 21
+        }
+      ],
+      "sha256": "1c71e060ae1a93fca53358a4860663115d74da6fcae5a4cd90d2a3a1e0abb3a2"
+    },
+    {
+      "path": "paper-23.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 23
+        }
+      ],
+      "sha256": "2661a1477e79bbc456df2266aa3141a58dfdc6c06ae87db001507bce766fd6f2"
+    },
+    {
+      "path": "paper-24.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 24
+        }
+      ],
+      "sha256": "eb30cbb1d6b52ecfe012f93186760ce361c94f70a8785cacdf005268150bbfd3"
+    },
+    {
+      "path": "paper-29.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 29
+        }
+      ],
+      "sha256": "40f1cc35bd315d3a58fa300286f207338ebfeb9033ccca3ddb5f6a959a6bc890"
+    },
+    {
+      "path": "paper-30.png",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 30
+        }
+      ],
+      "sha256": "64f3c6e72bf22a108c2ac1f3d42fdb7105dae8438373892c755d24f7d27c2522"
+    }
+  ],
+  "visual_checks": [
+    {
+      "check": "two-column MCQ numbering and all choices",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 4
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "listening TAK/NIE table, key sequence NIE TAK NIE TAK TAK NIE",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 4
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "reading TAK/NIE table, key sequence TAK NIE TAK NIE TAK NIE",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 5
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "all objective keys I–VIII and partial scoring rubric",
+      "source_refs": [
+        {
+          "source_id": "keys",
+          "page": 6
+        },
+        {
+          "source_id": "keys",
+          "page": 7
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "grammar V underlined fragments and sentence templates",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 19
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "worked examples preserve their selected answers, unscored",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 4
+        },
+        {
+          "source_id": "paper",
+          "page": 5
+        },
+        {
+          "source_id": "paper",
+          "page": 6
+        },
+        {
+          "source_id": "paper",
+          "page": 13
+        },
+        {
+          "source_id": "paper",
+          "page": 15
+        },
+        {
+          "source_id": "paper",
+          "page": 17
+        },
+        {
+          "source_id": "paper",
+          "page": 18
+        },
+        {
+          "source_id": "paper",
+          "page": 21
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "writing three alternative sets, full prompts and word targets",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 24
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "writing scoring source preserved, A/B interpretation deliberately not inferred",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 23
+        },
+        {
+          "source_id": "paper",
+          "page": 30
+        }
+      ],
+      "status": "needs_review"
+    },
+    {
+      "check": "PDF-like task presentations preserve original source labels and paired rows; reading IV display code mapping A–H to 1–8 is an explicit user-requested transform",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 14
+        },
+        {
+          "source_id": "keys",
+          "page": 5
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "Listening V B/C score token membership with deduplication and max two tokens, one point per matched official speaker number",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 8
+        },
+        {
+          "source_id": "keys",
+          "page": 4
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "check": "Reading III heading, five narrative paragraphs, final attribution and A–H bank after text follow physical PDF page 13; inline unscored example C is preserved. Text identity and all seven gap IDs verified after splitting.",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 13
+        }
+      ],
+      "status": "passed"
+    }
+  ],
+  "invariants": {
+    "listening_score_units": 3000,
+    "reading_score_units": 3000,
+    "grammar_score_units": 3000,
+    "primary_items": 125,
+    "writing_prompts": 6,
+    "speaking_tasks": 0
+  },
+  "known_source_issues": [
+    {
+      "text": "Instrukcja listening V zawiera A–E, podczas gdy druk i klucz mają wiersze A–D; zachowano różnicę.",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 8
+        },
+        {
+          "source_id": "keys",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "text": "Usunięto artefakty ekstrakcji (spacje wewnątrz słów, łamanie wierszy). Oryginalne treści i numeracja zachowane.",
+      "source_refs": [
+        {
+          "source_id": "paper",
+          "page": 15
+        },
+        {
+          "source_id": "paper",
+          "page": 17
+        },
+        {
+          "source_id": "paper",
+          "page": 18
+        },
+        {
+          "source_id": "paper",
+          "page": 21
+        }
+      ]
+    }
+  ],
+  "scope": "Content transcription and key review only; audio alignment is verified by a separate report.",
+  "rendered_evidence_directory": "/private/tmp/exam-digitizer-content",
+  "profile_path": "b1-2024-06.json",
+  "presentation_revision": "1.1",
+  "grading_counts": {
+    "exact": 113,
+    "token_membership": 2,
+    "ai_stub": 16
+  }
+}

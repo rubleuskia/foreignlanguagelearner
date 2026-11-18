@@ -63,6 +63,8 @@ class TranslationService:
             content = self.repo.content(request_id)
             if not content or content['expires_at'] <= now: raise CloudError('RESULT_EXPIRED', 410)
             response.update(result=content['result'], result_expires_at=content['expires_at'])
+            if record['kind'] == 'exam_assessment':
+                self._save_assessment(owner, content['input'], content['result'])
         return response
 
     def cancel(self, owner, request_id):
@@ -99,6 +101,18 @@ class TranslationService:
             self.repo.finish(claimed, 'outcome_unknown', int(self.clock()))
             return
         self.repo.finish(claimed, 'succeeded', int(self.clock()), result, tokens)
+        if record['kind'] == 'exam_assessment':
+            self._save_assessment(record['user_id'], payload, result)
+
+    @staticmethod
+    def _save_assessment(owner, payload, result):
+        # Also retried by status(): recovery never submits another inference if this write fails.
+        from backend.exams.runtime import service as exams
+        exams().record_assessment(owner, payload['attempt_id'], payload['task_id'], result,
+            {'provider': 'openai', 'mode': 'subscription',
+             'model': payload['model'], 'reasoning_effort': payload['reasoning_effort'],
+             'revision': payload['assessment_request']['revision'],
+             'contract_sha256': payload['assessment_contract']['contract_sha256']}, server_verified=True)
 
     def maintain(self, record, enqueue):
         now = int(self.clock())

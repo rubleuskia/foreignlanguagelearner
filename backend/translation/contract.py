@@ -49,6 +49,9 @@ def fingerprint(value):
 
 
 def validate_input(kind, value):
+    if kind == 'exam_assessment':
+        from backend.exams.assessment import validate_prepared
+        return validate_prepared(value)
     common = {'schema_version', 'selected_text', 'context', 'selection_location_utf16',
               'selection_length_utf16', 'source_language', 'target_language'}
     extra = {'words_to_explain'} if kind == 'context' else {'lemma'}
@@ -91,6 +94,9 @@ def validate_input(kind, value):
 
 
 def validate_output(kind, value, request):
+    if kind == 'exam_assessment':
+        from backend.exams.assessment import validate_result
+        return validate_result(value, request)
     if not isinstance(value, dict):
         raise CloudError('INVALID_OUTPUT')
     try:
