@@ -1,3 +1,48 @@
+## 2026-11-19 — Cloud examinations, external source archive and retained web prototype
+
+- Add durable DynamoDB attempts/catalog and private, version-pinned S3 examination
+  packages, authenticated operator/subscription routes and an administrator publication CLI.
+  Validate locally before AWS initialization, verify immutable uploads and publish catalog,
+  revision and idempotency receipt atomically. No live resources or exam data are deployed by this PR.
+- Download native PDF/audio directly from signed S3 URLs without API credentials, verify
+  their size/hash, and retain explicit draft recovery after definitive update rejection.
+- Render examination illustration blocks from their referenced page in the verified local
+  original PDF; retain the source page link and never fetch arbitrary image addresses.
+- Keep unresolved manual-review fields pending even when AI fields in the same task have
+  a result; exclude manual work from AI requests and avoid inferring task identity from prefixes.
+- Extend source-declared partial credit to numeric and letter tokens; compile bounded
+  free-text assessment contracts from task rubrics rather than grammar task numbers,
+  including cross-response distinct-answer rules. Writing stays inactive.
+- Keep actual profiles/packages/originals in external ExamSources; remove the previously
+  tracked pilot profiles from the current tree and use synthetic exam fixtures in CI.
+  Preserve the local web authoring interface and add a tested transport for its future
+  authenticated backend client; hosted student UI remains future work.
+- Document publication, versioning, access boundaries, interruption recovery and receipts
+  in docs/EXAM_AWS_IMPORT.md. Update DECISIONS.md and PROJECT.md for cloud storage and
+  the separation of code releases from examination data publication.
+- Validation: all 181 backend contracts/integration tests, 62 digitizer tests, Node web
+  checks and CDK synthesis assertions passed. The iOS simulator build and eight exam tests
+  passed; deployed authenticated flows, real two-device recovery and live AI quality
+  remain unverified.
+
+## 2026-11-18 — Archive batch preparation and additional B1 packages
+
+- Add resumable, source-bound PDF evidence extraction and sequential cached-model ASR
+  with atomic output, locks, integrity checks, progress records and explicit review states.
+- Complete evidence and rough recognition for the other 43 archive sets: 1,690 PDF pages
+  and 22.649 hours of audio. Independently audit original and derived hashes; extracted
+  evidence and recognition remain distinct from reviewed interactive exam imports.
+- Curate adult B1 February/April 2024 and June/November 2023 with their actual item counts,
+  slot limits, examples, official keys and literal publisher inconsistencies. Run the
+  existing aligner on all nine recorded occurrences for each set, retaining acoustic flags.
+- Make assessment ambiguity notes depend on actual unresolved rubrics instead of a June
+  task number. New packages use the generic source-bound assessment contract. Handle typo/split-word ASR anchors
+  with recorded match evidence and retain review-image subdirectories without collisions.
+- Update DECISIONS.md with stage/provenance boundaries and PROJECT.md with batch coverage.
+  No cloud exam publication, live grading or claim of human acoustic acceptance is made.
+- Validation: 56 digitizer tests and 24 backend assessment/import tests passed; five
+  source-linked packages, including the original pilot, passed full package validation.
+
 ## 2026-11-18 — Native exams and persistent local backend pilot
 
 - Add a separate Exams tab with JSON-driven listening, reading and grammar layouts,

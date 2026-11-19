@@ -291,6 +291,13 @@ import Foundation
                     try await validateScope(identity.scopeID)
                     try recordConflict(attemptID: event.attemptID, message: error.localizedDescription, remote: remote)
                     break
+                } catch let error as ExamAPIError where error.isRejectedChange {
+                    // A definitive rejection has not applied the event. Keep the draft
+                    // and expose recovery instead of permanently blocking newer answers.
+                    let remote = try? await remoteAttempt(event.attemptID, scope: identity.scopeID)
+                    try await validateScope(identity.scopeID)
+                    try recordConflict(attemptID: event.attemptID, message: error.localizedDescription, remote: remote)
+                    break
                 }
             }
             syncMessage = local?.outbox.isEmpty == true ? "Progress is synchronized." : "Local answers are saved. Synchronization is pending."
@@ -388,7 +395,7 @@ import Foundation
             await synchronize()
             guard let a = currentAttempt, a.submittedSectionIDs.contains(sectionID), !hasConflict,
                   let section = a.result?.sections.first(where: { $0.sectionID == sectionID }) else { return }
-            let pending = Set(section.items.filter { $0.awardedScoreUnits == nil }.map(\.taskID))
+            let pending = Set(section.items.filter { $0.status == "pending_ai" }.map(\.taskID))
             for taskID in pending.sorted() where a.aiResults?[taskID] == nil {
                 let value = try await assessment.assess(examID: a.examID, revision: a.revision, attemptID: a.id, taskID: taskID, responses: a.responseTexts)
                 try await validateScope(identity.scopeID)

@@ -42,8 +42,8 @@ class AudioMarkupTests(unittest.TestCase):
             audio.locate({'tasks': [task, dict(task, task_label='II')]}, transcription, 100000)
 
     def test_zero_length_anchor_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'four words'):
-            audio.find_anchor([], 'trzy krótkie słowa', 1)
+        with self.assertRaisesRegex(ValueError, 'three words'):
+            audio.find_anchor([], 'krótkie słowa', 1)
 
     def test_reordered_tasks_fail_even_when_both_passages_exist(self):
         first = 'pierwszy fragment zaczyna sie teraz tutaj pierwszy fragment konczy sie teraz'

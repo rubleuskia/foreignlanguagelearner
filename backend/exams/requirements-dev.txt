@@ -1,0 +1,2 @@
+# Exercise actual boto3 request serialization and versioned S3 checksums offline.
+moto[s3,dynamodb]==5.1.17

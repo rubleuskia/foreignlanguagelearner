@@ -57,12 +57,13 @@ jobs:
           python -m pip install --require-hashes -r backend/billing/requirements.lock
           python -m pip install -r backend/billing/requirements-dev.txt
           python -m pip install --require-hashes -r backend/exams/requirements.lock
+          python -m pip install -r backend/exams/requirements-dev.txt
           python -m pip install -r tools/exam-digitizer/requirements.txt
       - name: Python contracts and existing aligner regression suite
         run: |
           PYTHON=python bash scripts/test-cloud-contracts.sh
           python -m unittest discover -s tools/exam-digitizer -p 'test*.py' -v
-          node tools/exam-digitizer/web/test.mjs tools/exam-digitizer/profiles/b1-2024-06.json
+          node tools/exam-digitizer/web/test.mjs
           python -m unittest discover -s tools/subtitle-aligner -p 'test_*.py' -v
           python -m unittest tools.cloud_control.test_control tools.cloud_control.test_observability scripts.test_alignment_benchmark -v
           python -m unittest discover -s Tests/CI -p 'test_*.py' -v

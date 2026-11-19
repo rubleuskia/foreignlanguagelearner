@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from backend.exams.testing import synthetic_profile
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('ai_assessment', HERE/'ai_assessment.py')
@@ -13,7 +14,7 @@ spec.loader.exec_module(ai)
 class AssessmentContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.profile = json.loads((HERE/'profiles/b1-2024-06.json').read_text())
+        cls.profile = synthetic_profile()
 
     def exam(self):
         exam = copy.deepcopy(self.profile)
@@ -58,6 +59,69 @@ class AssessmentContractTests(unittest.TestCase):
             self.assertEqual(contract['response_format']['schema'], schema)
             self.assertTrue(contract['response_format']['strict'])
 
+    def test_source_bound_listening_task_has_no_task_name_allowlist(self):
+        task=self.task('grammar-VI')
+        task['id']='listening-V'
+        task['grading']={'mode':'ai_stub','rubric':{
+            'text':'Accept any answer consistent with the transcript.',
+            'source_text':'Official original transcript.',
+            'source_refs':[{'source_id':'keys','page':4}]}}
+        task['assessment_groups']=[{
+            'id':'distinct-reasons','item_ids':[task['items'][0]['id'],task['items'][1]['id']],
+            'max_score_units':200,'rubric':'Two different reasons; do not award duplicate semantic reasons twice.',
+            'source_refs':[{'source_id':'keys','page':5}]}]
+        self.assertTrue(ai.is_assessment_task(task))
+        contract=ai.compile_assessment(task,self.profile['id'])
+        group=contract['official_key']['assessment_groups'][0]
+        self.assertEqual(group['reference_id'],'distinct-reasons')
+        self.assertIn('different reasons',group['rubric'])
+        self.assertEqual(contract['official_key']['task_grading']['rubric']['source_text'],
+                         'Official original transcript.')
+        self.assertIn({'source_id':'keys','page':4},contract['source_refs'])
+        self.assertIn('repeated semantic answer',contract['instructions_template'])
+        altered=copy.deepcopy(task);altered['assessment_groups'][0]['rubric']='Different official rule.'
+        self.assertNotEqual(contract['contract_sha256'],ai.compile_assessment(altered,self.profile['id'])['contract_sha256'])
+
+    def test_shared_writing_and_objective_work_remain_ineligible(self):
+        self.assertFalse(ai.is_assessment_task(self.task('grammar-IV')))
+        writing=copy.deepcopy(self.task('grammar-V'))
+        writing['id']='writing-I';writing['items'][0]['max_score_units']=None
+        self.assertFalse(ai.is_assessment_task(writing))
+        with self.assertRaises(ai.InvalidAssessment):ai.compile_assessment(writing,self.profile['id'])
+
+    def test_mixed_task_contract_cannot_double_count_objective_points(self):
+        exam=self.exam();task=next(t for s in exam['sections'] for t in s['tasks'] if t['id']=='grammar-VI')
+        task['items'][0]['grading']={'mode':'exact','accepted_answers':['answer'],'source_refs':[{'source_id':'keys','page':1}]}
+        contract=ai.compile_assessment(task,exam['id'])
+        self.assertEqual(contract['max_score_units'],400)
+        self.assertEqual(contract['official_key']['task_max_score_units'],500)
+        self.assertEqual(len(contract['official_key']['items']),4)
+        request=ai.build_grading_request(exam,task['id'],{task['items'][0]['id']:'objective-answer'})
+        self.assertEqual(len(request['payload']['responses']),4)
+        self.assertNotIn('objective-answer',request['provider_body_template']['input'])
+        from backend.exams.contract import grade_sections
+        isolated={'id':exam['id'],'revision':exam['revision'],'sections':[
+            {'id':'grammar','max_score_units':500,'tasks':[task]}]}
+        result=grade_sections(isolated,{task['items'][0]['id']:'answer'},['grammar'],
+                              {task['id']:{'score_units':200}})['sections'][0]
+        self.assertEqual(result['objective_score_units'],100)
+        self.assertEqual(result['score_units'],300)
+        self.assertEqual(result['status'],'graded')
+        self.assertEqual(len(result['task_assessments']),1)
+
+    def test_generic_assessment_requires_source_rubric_and_valid_groups(self):
+        task=self.task('grammar-VI');task['id']='listening-new'
+        del task['items'][0]['grading']['rubric']
+        with self.assertRaises(ai.InvalidAssessment):ai.compile_assessment(task,self.profile['id'])
+        for group in [
+            {'id':'group','item_ids':['unknown'],'max_score_units':100,'rubric':'Source rule','source_refs':[{'source_id':'keys','page':5}]},
+            {'id':'group','item_ids':['grammar-VI-1'],'max_score_units':200,'rubric':'Source rule','source_refs':[{'source_id':'keys','page':5}]},
+            {'id':'group','item_ids':['grammar-VI-1'],'max_score_units':100,'rubric':'Source rule','source_refs':[]},
+        ]:
+            task=self.task('grammar-VI');task['id']='listening-new';task['assessment_groups']=[group]
+            with self.subTest(group=group),self.assertRaises(ai.InvalidAssessment):
+                ai.compile_assessment(task,self.profile['id'])
+
     def test_valid_result_boundary_values(self):
         for task_id, maximum in [('grammar-V', 250), ('grammar-VI', 500)]:
             contract = self.contract(task_id)
@@ -91,6 +155,27 @@ class AssessmentContractTests(unittest.TestCase):
         contract['max_score_units'] = 500
         with self.assertRaisesRegex(ai.InvalidAssessment, 'fingerprint'):
             ai.validate_assessment_result(contract, {'score_units': 500, 'rationale': 'ok'})
+
+    def test_other_exam_does_not_inherit_june_ambiguity_from_task_number(self):
+        task = self.task()
+        item = task['items'][3]
+        item['grading']['reference_answer'] = 'Z czego…?'
+        item['grading']['rubric'].pop('interpretation_status', None)
+        item['grading']['rubric']['source_text'] = 'Z czego…?'
+        contract = ai.compile_assessment(task, 'another-exam')
+        self.assertEqual(contract['prompt_verification']['unresolved_source_notes'], [])
+
+    def test_unresolved_rubric_in_another_task_retains_its_own_source(self):
+        task = self.task('grammar-VI')
+        item = task['items'][3]
+        item['grading']['rubric']['interpretation_status'] = 'needs_review'
+        item['grading']['rubric']['source_text'] = '4 transformacje (2 x 0,25)'
+        contract = ai.compile_assessment(task, 'april-exam')
+        notes = contract['prompt_verification']['unresolved_source_notes']
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0]['item_id'], item['id'])
+        self.assertIn('4 transformacje (2 x 0,25)', notes[0]['note'])
+        self.assertEqual(notes[0]['source_refs'], item['grading']['rubric']['source_refs'])
 
     def test_request_uses_responses_text_format_and_existing_execution_settings(self):
         exam = self.exam()

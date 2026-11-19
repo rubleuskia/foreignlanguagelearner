@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {activeTasks,createAttempt,examResumePosition,gradeItem,gradeSection,normalizeText,secondsElapsed,trainingAudioWindow} from './logic.mjs';
+import {ExamBackendClient} from './backend-client.mjs';
+
+const requests=[];
+const backend=new ExamBackendClient({baseURL:'https://api.example.test',accessToken:async()=> 'synthetic-token',
+  fetchImpl:async(url,options)=>{requests.push({url:String(url),options});return {ok:true,json:async()=>({exams:[]})};}});
+await backend.catalog();
+await backend.updateAttempt('attempt',{base_version:2,change_id:'fixed-id',responses:{a:'answer'}});
+assert.equal(requests[0].url,'https://api.example.test/v1/exams');
+assert.equal(requests[0].options.credentials,'omit');
+assert.equal(requests[0].options.redirect,'error');
+assert.equal(requests[1].options.method,'PUT');
+assert.equal(JSON.parse(requests[1].options.body).base_version,2);
+await assert.rejects(()=>backend.request('v1/exams/../../private'));
+assert.throws(()=>new ExamBackendClient({baseURL:'http://untrusted.example',accessToken:async()=>''}));
+let calls=0;
+const conflict=new ExamBackendClient({baseURL:'https://api.example.test',accessToken:async()=> 'synthetic-token',
+  fetchImpl:async()=>{calls++;return {ok:false,status:409,json:async()=>({error:'EXAM_ATTEMPT_CONFLICT'})};}});
+await assert.rejects(()=>conflict.updateAttempt('attempt',{}),e=>e.status===409);
+assert.equal(calls,1);
 
 const choice = {id:'a', max_score_units:50, grading:{mode:'exact',accepted_answers:['option-b']}};
 assert.equal(gradeItem(choice,'option-b').score_units,50);

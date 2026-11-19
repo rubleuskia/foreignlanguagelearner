@@ -10,7 +10,8 @@ import unicodedata
 from urllib.parse import quote, urlsplit
 
 from backend.cloud.errors import CloudError
-from .assessment_contract import SUPPORTED_TASKS, compile_assessment
+from .assessment_contract import is_assessment_task, compile_assessment
+from .token_membership import normalize_token, tokens, validate_membership
 
 HERE = Path(__file__).resolve().parent
 ACTIVE_SECTIONS = {'listening', 'reading', 'grammar'}
@@ -134,7 +135,7 @@ def validate_exam(exam, audio=None):
                     raise ExamError('SCORED_EXAM_EXAMPLE')
                 if not set(re.findall(r'\{\{([^{}]+)\}\}', block['text'])).issubset(item_ids):
                     raise ExamError('UNKNOWN_EXAM_GAP')
-            if task['id'] in SUPPORTED_TASKS and any(i['grading']['mode']=='ai_stub' for i in items):
+            if is_assessment_task(task):
                 if task.get('ai_assessment') != compile_assessment(task, exam['id']):
                     raise ExamError('INVALID_EXAM_AI_CONTRACT')
             display_codes = task.get('presentation',{}).get('display_codes',{})
@@ -155,10 +156,10 @@ def validate_exam(exam, audio=None):
                     if mode == 'exact' and (not isinstance(answer,str) or (allowed and answer not in allowed)):
                         raise ExamError('INVALID_EXAM_KEY')
                 if mode == 'token_membership':
-                    if (item['response_type']!='text' or any(not isinstance(a,str) or not a.isascii() or not a.isdigit() for a in accepted)
-                            or len(accepted)!=len(set(accepted)) or item['max_score_units']%len(accepted)
-                            or grading.get('max_tokens',len(accepted))!=len(accepted)):
-                        raise ExamError('INVALID_EXAM_MEMBERSHIP_RULE')
+                    try:
+                        validate_membership(item)
+                    except ValueError:
+                        raise ExamError('INVALID_EXAM_MEMBERSHIP_RULE') from None
                 originals = grading.get('source_accepted_option_ids',[])
                 if display_codes and originals and (not set(originals).issubset(display_codes) or
                         set(accepted)!={display_codes[x] for x in originals}):
@@ -338,7 +339,7 @@ def validate_response(item,answer):
         if allowed and answer and answer not in allowed:
             raise ExamError('INVALID_EXAM_RESPONSE_OPTION')
         if item['grading']['mode']=='token_membership':
-            if len(set(re.findall(r'[0-9]+',answer)))>item['grading'].get('max_tokens',len(item['grading']['accepted_answers'])):
+            if len(tokens(answer,item['grading']))>item['grading'].get('max_tokens',len(item['grading']['accepted_answers'])):
                 raise ExamError('TOO_MANY_EXAM_TOKENS')
     return copy.deepcopy(answer)
 
@@ -364,11 +365,12 @@ def grade_sections(exam,responses,section_ids,assessments=None):
                 grading=item['grading']; mode=grading['mode']; maximum=item['max_score_units']
                 row={'item_id':item['id'],'task_id':task['id'],'max_score_units':maximum}
                 if mode in {'ai_stub','manual'}:
-                    row.update(status='assessed_at_task_level' if assessment else ('pending_ai' if mode=='ai_stub' else 'pending_manual'),awarded_score_units=None)
-                    pending |= assessment is None
+                    assessed = mode == 'ai_stub' and assessment is not None
+                    row.update(status='assessed_at_task_level' if assessed else ('pending_ai' if mode=='ai_stub' else 'pending_manual'),awarded_score_units=None)
+                    pending |= not assessed
                 else:
                     if mode=='token_membership':
-                        accepted=set(grading['accepted_answers']); matched=len(set(re.findall(r'[0-9]+',answer))&accepted)
+                        accepted={normalize_token(a,grading) for a in grading['accepted_answers']}; matched=len(tokens(answer,grading)&accepted)
                         score=matched*maximum//len(accepted)
                         row['matched_token_count']=matched
                     elif mode=='set':

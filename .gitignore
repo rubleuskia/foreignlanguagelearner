@@ -88,5 +88,10 @@ App/Configuration/CloudConfiguration.plist
 # Local AWS control panel configuration, prepared releases, logs and credentials
 .cloud-control/
 
+# Digitized examination content stays in the external ExamSources archive.
+/tools/exam-digitizer/profiles/*.json
+/ExamSources/
+/tools/exam-digitizer/output/
+
 # Local terminal session recordings
 /typescript

@@ -44,6 +44,23 @@ def waveform_probe(primary, repeated, position, sr=8000):
             'duration_ms': 8000}
 
 
+def compare_repeated(primary, repeated):
+    # Both probes must fit both passages; differing anchor padding is evidence
+    # to assess, not an indexing error or a reason to declare a match.
+    duration = min(len(primary), len(repeated)) / 8000
+    if duration < 23:
+        return {'status': 'requires_review', 'probes': [],
+                'reason': 'insufficient_common_duration_for_two_independent_probes',
+                'offset_consistent_within_25ms': False}
+    probes = [waveform_probe(primary, repeated, 3),
+              waveform_probe(primary, repeated, duration - 12)]
+    offsets = [p['repeat_local_start_ms'] - p['primary_local_start_ms'] for p in probes]
+    agrees = abs(offsets[0] - offsets[1]) <= 25
+    passed = min(p['correlation'] for p in probes) >= .98 and agrees
+    return {'status': 'passed' if passed else 'requires_review', 'probes': probes,
+            'offset_consistent_within_25ms': agrees}
+
+
 def audit(folder):
     audio_path = folder / 'audio.json'
     audio = json.loads(audio_path.read_text())
@@ -89,16 +106,12 @@ def audit(folder):
                 first = occurrences[0]
                 primary = read_wave(folder / 'work' / (first['id'] + '.wav'))
                 repeated = read_wave(folder / 'work' / (occurrence['id'] + '.wav'))
-                probes = [waveform_probe(primary, repeated, 3),
-                          waveform_probe(primary, repeated, len(primary)/8000 - 12)]
-                for probe in probes:
+                comparison = compare_repeated(primary, repeated)
+                for probe in comparison['probes']:
                     probe['primary_original_start_ms'] = first['start_ms'] + probe['primary_local_start_ms']
                     probe['repeat_original_start_ms'] = occurrence['start_ms'] + probe['repeat_local_start_ms']
                     probe['repeat_offset_ms'] = probe['repeat_original_start_ms'] - probe['primary_original_start_ms']
-                agrees = abs(probes[0]['repeat_offset_ms'] - probes[1]['repeat_offset_ms']) <= 25
-                passed = min(p['correlation'] for p in probes) >= .98 and agrees
-                report['repeat_waveform'] = {'status': 'passed' if passed else 'requires_review',
-                                            'probes': probes, 'offset_consistent_within_25ms': agrees}
+                report['repeat_waveform'] = comparison
                 occurrence['evidence']['repeat_waveform'] = report['repeat_waveform']
             task_report['occurrences'].append(report)
         text_path = evidence / f'task-{task["task_label"]}.txt'

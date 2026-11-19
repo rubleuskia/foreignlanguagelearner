@@ -18,10 +18,10 @@ model, AWS credentials, or network once the downloaded source archive is availab
 python3 -m venv /private/tmp/exam-digitizer-venv
 /private/tmp/exam-digitizer-venv/bin/pip install -r tools/exam-digitizer/requirements.txt
 /private/tmp/exam-digitizer-venv/bin/python tools/exam-digitizer/exam_digitizer.py build \
-  --profile tools/exam-digitizer/profiles/b1-2024-06.json \
+  --profile /Users/arublevsky/dev/ExamSources/profiles/b1-2024-06.json \
   --sources-root /Users/arublevsky/dev/ExamSources \
   --audio-alignment /private/tmp/exam-digitizer-audio/aligned/audio.json \
-  --output tools/exam-digitizer/output/pl-b1-2024-06-adults-v1
+  --output /Users/arublevsky/dev/ExamSources/generated/pl-b1-2024-06-adults-v1
 ```
 
 Outputs must be new directories; existing packages and originals are never overwritten.
@@ -67,6 +67,9 @@ keys. The local simulation is not an anti-cheating or production student deliver
 
 ## New examinations
 
+For archive-wide extraction, resumable ASR, independent stage statuses and curation
+boundaries, see [the batch guide](BATCH.md).
+
 Extract evidence directly from another archive selection:
 
 ```sh
@@ -92,9 +95,9 @@ existing aligner, and bind all cached data to the original audio hash.
 
 ```sh
 /private/tmp/exam-digitizer-venv/bin/python tools/exam-digitizer/exam_digitizer.py validate \
-  tools/exam-digitizer/output/pl-b1-2024-06-adults-v1
+  /Users/arublevsky/dev/ExamSources/generated/pl-b1-2024-06-adults-v1
 /private/tmp/exam-digitizer-venv/bin/python tools/exam-digitizer/exam_digitizer.py serve \
-  tools/exam-digitizer/output/pl-b1-2024-06-adults-v1 --port 8773
+  /Users/arublevsky/dev/ExamSources/generated/pl-b1-2024-06-adults-v1 --port 8773
 ```
 
 Open `http://127.0.0.1:8773/`. The server binds only to loopback and supports MP3 byte-range
