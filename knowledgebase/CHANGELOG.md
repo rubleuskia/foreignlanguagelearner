@@ -1,3 +1,12 @@
+## 2026-11-19 — Preserve long examination audio passages
+
+- Accept source listening passages longer than six minutes, including C2 news blocks,
+  while rejecting measured anchors outside the original recording. Preserve the full
+  source task rather than imposing a fixed duration cap.
+- Validation: all 63 digitizer tests passed, including long-passage preservation and
+  rejection of anchors beyond the recording. No architectural decision or project
+  overview changed.
+
 ## 2026-11-19 — Cloud examinations, external source archive and retained web prototype
 
 - Add durable DynamoDB attempts/catalog and private, version-pinned S3 examination

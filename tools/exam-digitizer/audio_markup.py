@@ -110,9 +110,11 @@ def locate(reference, transcription, duration_ms):
         ends = find_anchor(words, task['end_anchor'], count)
         occurrences = []
         for number, (start, end) in enumerate(zip(starts, ends), 1):
+            if not 0 <= start['start'] <= start['end'] <= end['end'] <= duration_ms / 1000:
+                raise ValueError(f'Task {task["task_label"]} anchors exceed original audio bounds.')
             begin_ms = max(0, round(start['start'] * 1000) - 750)
             end_ms = min(duration_ms, round(end['end'] * 1000) + 750)
-            if begin_ms < previous_end or not 3000 <= end_ms - begin_ms <= 360000:
+            if begin_ms < previous_end or not 3000 <= end_ms - begin_ms <= duration_ms:
                 raise ValueError(f'Unusable or unordered task {task["task_label"]} interval.')
             previous_end = end_ms
             occurrences.append({

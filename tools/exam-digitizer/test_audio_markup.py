@@ -45,6 +45,19 @@ class AudioMarkupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'three words'):
             audio.find_anchor([], 'krótkie słowa', 1)
 
+    def test_long_source_passage_keeps_its_original_bounds(self):
+        task = {'task_label': 'I', 'expected_occurrences': 1,
+                'start_anchor': 'pierwszy komunikat zaczyna sie',
+                'end_anchor': 'ostatni komunikat konczy sie', 'source_refs': []}
+        transcript = {'segments': [{'words': [
+            {'word': w['token'], 'start': w['start'], 'end': w['end']}
+            for w in words(task['start_anchor'], 160) + words(task['end_anchor'], 713)
+        ]}]}
+        occurrence = audio.locate({'tasks': [task]}, transcript, 900000)[0]['occurrences'][0]
+        self.assertEqual((occurrence['start_ms'], occurrence['end_ms']), (159250, 717250))
+        with self.assertRaisesRegex(ValueError, 'original audio bounds'):
+            audio.locate({'tasks': [task]}, transcript, 700000)
+
     def test_reordered_tasks_fail_even_when_both_passages_exist(self):
         first = 'pierwszy fragment zaczyna sie teraz tutaj pierwszy fragment konczy sie teraz'
         second = 'drugi fragment zaczyna sie teraz tutaj drugi fragment konczy sie teraz'
