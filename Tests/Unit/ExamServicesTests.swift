@@ -1,10 +1,28 @@
 import Foundation
 import XCTest
+import UIKit
 @testable import ForeignLanguageLearner
 
 @MainActor final class ExamServicesTests: XCTestCase {
     private let scopeA = String(repeating: "a", count: 64)
     private let scopeB = String(repeating: "b", count: 64)
+
+    func testSourceIllustrationsRenderOnlyAnExistingLocalPDFPage() throws {
+        let file = FileManager.default.temporaryDirectory.appending(path: "exam-picture-\(UUID()).pdf")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
+        try renderer.pdfData { context in
+            context.beginPage()
+            UIColor.black.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 20, y: 20, width: 60, height: 60)).fill()
+        }.write(to: file)
+        var components = URLComponents(url: file, resolvingAgainstBaseURL: false)!
+        components.fragment = "page=1"
+        XCTAssertNotNil(ExamSourcePageRenderer.thumbnail(url: components.url!, page: 1))
+        XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 0))
+        XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 2))
+        XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: URL(string: "https://example.test/paper.pdf")!, page: 1))
+    }
 
     func testAnswerAndFrozenOutboxSurviveRelaunchAndRemainOwnerScoped() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "exam-state-\(UUID())")

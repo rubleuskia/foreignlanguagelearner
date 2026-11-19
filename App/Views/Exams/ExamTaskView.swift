@@ -1,4 +1,37 @@
 import SwiftUI
+import PDFKit
+import UIKit
+
+@MainActor enum ExamSourcePageRenderer {
+    static func thumbnail(url: URL, page: Int) -> UIImage? {
+        guard url.isFileURL, page > 0 else { return nil }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.fragment = nil
+        guard let file = components?.url, let document = PDFDocument(url: file),
+              page <= document.pageCount, let original = document.page(at: page - 1) else { return nil }
+        return original.thumbnail(of: CGSize(width: 900, height: 1280), for: .mediaBox)
+    }
+}
+
+private struct ExamSourcePageImage: View {
+    let url: URL
+    let page: Int
+    let label: String
+    @State private var image: UIImage?
+    @State private var finished = false
+
+    var body: some View {
+        Group {
+            if let image { Image(uiImage: image).resizable().scaledToFit().accessibilityLabel(label) }
+            else if !finished { ProgressView() }
+            else { Text(AppLanguage.text("Open original exam page")).font(.caption).foregroundStyle(.secondary) }
+        }
+        .task(id: "\(url.absoluteString)|\(page)") {
+            image = ExamSourcePageRenderer.thumbnail(url: url, page: page)
+            finished = true
+        }
+    }
+}
 
 @MainActor
 struct ExamTaskView: View {
@@ -148,7 +181,13 @@ struct ExamTaskView: View {
     }
 
     @ViewBuilder private func blockView(_ block: ExamBlock) -> some View {
-        if block.type == "heading" { Text(block.text).font(.system(.title3, design: .serif)).fontWeight(.semibold) }
+        if block.type == "image" {
+            if let ref = block.sourceRefs.first(where: { $0.sourceID == "paper" && $0.page != nil }),
+               let url = store.sourceURL(ref), let page = ref.page {
+                ExamSourcePageImage(url: url, page: page, label: block.text)
+            }
+            sourceLink(block.sourceRefs)
+        } else if block.type == "heading" { Text(block.text).font(.system(.title3, design: .serif)).fontWeight(.semibold) }
         else if block.role == "attribution" { Text(block.text).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled) }
         else if block.type == "example" {
             VStack(alignment: .leading, spacing: 7) {
