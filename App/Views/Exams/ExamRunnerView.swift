@@ -33,12 +33,13 @@ struct ExamRunnerView: View {
                             }
                         }
                         if let result = attempt.objectiveResult {
+                            let rows = attempt.result?.sections.first(where: { $0.sectionID == section.id })?.items ?? []
                             ExamScoreSummary(objective: result.objectiveScoreUnits ?? 0,
                                              objectiveMaximum: result.autoMaxScoreUnits ?? 0,
                                              pendingMaximum: result.pendingScoreUnits ?? 0,
                                              overallMaximum: result.maxScoreUnits ?? section.maxScoreUnits,
                                              total: result.totalScoreUnits)
-                            if (result.pendingScoreUnits ?? 0) > 0 {
+                            if rows.contains(where: { $0.status == "pending_ai" && attempt.aiResults?[$0.taskID] == nil }) {
                                 Button {
                                     grading = true
                                     Task { await store.gradeAI(sectionID: section.id); grading = false }
@@ -47,6 +48,10 @@ struct ExamRunnerView: View {
                                 }.buttonStyle(.borderedProminent).disabled(grading || store.isLoading || store.hasConflict)
                                     .accessibilityIdentifier("exam.assess-ai")
                                 Text(AppLanguage.text("AI assessment uses your current translation provider, model and reasoning settings."))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if rows.contains(where: { $0.status == "pending_manual" }) {
+                                Text(AppLanguage.text("Some answers require manual review. Their score remains pending."))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         } else if !store.canEdit {

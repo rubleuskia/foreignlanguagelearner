@@ -427,11 +427,11 @@ struct ExamAttemptResult: Codable, Sendable {
         let objectiveMax = s.items.filter { $0.awardedScoreUnits != nil }.reduce(0) { $0 + $1.maxScoreUnits }
         let taskResults = Dictionary(s.taskAssessments.map { ($0.taskID, $0.scoreUnits) }, uniquingKeysWith: { _, b in b })
             .merging(assessments.mapValues(\.scoreUnits)) { _, local in local }
-        let relevantAI = taskResults.filter { $0.key.hasPrefix(sectionID + "-") }
-        let pendingGroups = Set(pendingItems.map(\.taskID))
-        let remaining = pendingGroups.subtracting(Set(relevantAI.keys))
-        let pendingMax = pendingItems.filter { remaining.contains($0.taskID) }.reduce(0) { $0 + $1.maxScoreUnits }
-        let total = remaining.isEmpty ? s.objectiveScoreUnits + relevantAI.values.reduce(0, +) : s.scoreUnits
+        let aiTaskIDs = Set(pendingItems.filter { ["pending_ai", "assessed_at_task_level"].contains($0.status) }.map(\.taskID))
+        let relevantAI = taskResults.filter { aiTaskIDs.contains($0.key) }
+        let remaining = pendingItems.filter { $0.status == "pending_manual" || relevantAI[$0.taskID] == nil }
+        let pendingMax = remaining.reduce(0) { $0 + $1.maxScoreUnits }
+        let total = remaining.isEmpty ? s.objectiveScoreUnits + relevantAI.values.reduce(0, +) : nil
         return ExamObjectiveResult(objectiveScoreUnits: s.objectiveScoreUnits, autoMaxScoreUnits: objectiveMax,
             maxScoreUnits: s.maxScoreUnits, pendingScoreUnits: pendingMax, totalScoreUnits: total)
     }

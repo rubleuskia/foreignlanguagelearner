@@ -101,7 +101,7 @@ struct ExamTaskView: View {
         return store.currentAttempt?.result?.sections.flatMap(\.items).filter { ids.contains($0.itemID) } ?? []
     }
     private var assessmentMaximum: Int {
-        let pending = itemResults.filter { $0.awardedScoreUnits == nil }
+        let pending = itemResults.filter { ["pending_ai", "assessed_at_task_level"].contains($0.status) }
         return pending.isEmpty ? task.maxScoreUnits : pending.reduce(0) { $0 + $1.maxScoreUnits }
     }
     private func resultTitle(_ status: String) -> String {

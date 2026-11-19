@@ -79,6 +79,21 @@ import UIKit
         XCTAssertEqual(completed?.pendingScoreUnits, 0)
     }
 
+    func testAIResultDoesNotCompleteManualFieldsInTheSameOpaqueTask() {
+        let rows = [
+            ExamItemResult(itemID: "closed", taskID: "opaque-task", status: "correct", awardedScoreUnits: 50, maxScoreUnits: 50),
+            ExamItemResult(itemID: "free", taskID: "opaque-task", status: "pending_ai", awardedScoreUnits: nil, maxScoreUnits: 100),
+            ExamItemResult(itemID: "ambiguous", taskID: "opaque-task", status: "pending_manual", awardedScoreUnits: nil, maxScoreUnits: 50)]
+        let section = ExamSectionResult(sectionID: "grammar", status: "pending", scoreUnits: nil,
+            objectiveScoreUnits: 50, maxScoreUnits: 200, items: rows, taskAssessments: [])
+        let result = ExamAttemptResult(examID: "synthetic", revision: "revision", sections: [section])
+        let summary = result.summary(for: "grammar", assessments: ["opaque-task": ExamAssessmentResult(scoreUnits: 75, rationale: "AI fields only.")])
+        XCTAssertEqual(summary?.pendingScoreUnits, 50)
+        XCTAssertEqual(summary?.objectiveScoreUnits, 50)
+        XCTAssertEqual(summary?.autoMaxScoreUnits, 50)
+        XCTAssertNil(summary?.totalScoreUnits)
+    }
+
     func testTrainingAudioIsBoundedAndExamUsesOriginalFullTimeline() {
         let windows = ["listening-I": 10.0...35.0]
         let training = ExamAudioPlaybackPolicy(mode: .training, duration: 100, windows: windows)

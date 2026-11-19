@@ -8,6 +8,8 @@
   their size/hash, and retain explicit draft recovery after definitive update rejection.
 - Render examination illustration blocks from their referenced page in the verified local
   original PDF; retain the source page link and never fetch arbitrary image addresses.
+- Keep unresolved manual-review fields pending even when AI fields in the same task have
+  a result; exclude manual work from AI requests and avoid inferring task identity from prefixes.
 - Extend source-declared partial credit to numeric and letter tokens; compile bounded
   free-text assessment contracts from task rubrics rather than grammar task numbers,
   including cross-response distinct-answer rules. Writing stays inactive.
@@ -18,8 +20,8 @@
 - Document publication, versioning, access boundaries, interruption recovery and receipts
   in docs/EXAM_AWS_IMPORT.md. Update DECISIONS.md and PROJECT.md for cloud storage and
   the separation of code releases from examination data publication.
-- Validation: all 180 backend contracts/integration tests, 62 digitizer tests, Node web
-  checks and CDK synthesis assertions passed. The iOS simulator build and seven exam tests
+- Validation: all 181 backend contracts/integration tests, 62 digitizer tests, Node web
+  checks and CDK synthesis assertions passed. The iOS simulator build and eight exam tests
   passed; deployed authenticated flows, real two-device recovery and live AI quality
   remain unverified.
 

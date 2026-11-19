@@ -14,6 +14,9 @@ Expose authenticated student projections without keys or private rubrics and sig
 sources. Preserve signed URLs and never forward API bearer credentials to object storage.
 Render source-page illustration blocks from the already verified local PDF rather than
 substituting generated imagery or fetching arbitrary image URLs.
+Manual-review fields remain pending independently of AI fields in the same task. Never send
+them through paid inference merely because a section has an unknown total; use explicit result
+statuses and source task IDs to select AI work.
 Use the existing translation identity/provider routes for source-bound AI task assessments;
 derive contracts from actual bounded free-text items, including declared grouped rules,
 rather than fixed grammar task numbers. Preserve declared numeric or letter token alphabets.

@@ -7,7 +7,7 @@ import unittest
 import uuid
 
 from backend.exams.assessment_contract import compile_assessment
-from backend.exams.contract import ExamError, file_digest, fingerprint, validate_package
+from backend.exams.contract import ExamError, file_digest, fingerprint, validate_package, grade_sections
 from backend.exams.service import Service
 from backend.exams.testing import synthetic_profile
 
@@ -67,6 +67,18 @@ def fixture(folder):
 
 
 class ExamServiceTests(unittest.TestCase):
+    def test_ai_assessment_does_not_grade_manual_fields_in_the_same_task(self):
+        exam=synthetic_profile()
+        exam['revision']='c'*64
+        task=next(t for s in exam['sections'] for t in s['tasks'] if t['id']=='grammar-V')
+        task['items'][0]['grading']['mode']='manual'
+        result=grade_sections(exam,{},['grammar'],{'grammar-V':{'task_id':'grammar-V','score_units':25}})
+        section=result['sections'][0]
+        row=next(i for i in section['items'] if i['item_id']=='grammar-V-1')
+        self.assertEqual(row['status'],'pending_manual')
+        self.assertIsNone(section['score_units'])
+        self.assertIsNone(row['awarded_score_units'])
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.root=Path(self.temp.name)

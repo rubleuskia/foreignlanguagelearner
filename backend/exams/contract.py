@@ -365,8 +365,9 @@ def grade_sections(exam,responses,section_ids,assessments=None):
                 grading=item['grading']; mode=grading['mode']; maximum=item['max_score_units']
                 row={'item_id':item['id'],'task_id':task['id'],'max_score_units':maximum}
                 if mode in {'ai_stub','manual'}:
-                    row.update(status='assessed_at_task_level' if assessment else ('pending_ai' if mode=='ai_stub' else 'pending_manual'),awarded_score_units=None)
-                    pending |= assessment is None
+                    assessed = mode == 'ai_stub' and assessment is not None
+                    row.update(status='assessed_at_task_level' if assessed else ('pending_ai' if mode=='ai_stub' else 'pending_manual'),awarded_score_units=None)
+                    pending |= not assessed
                 else:
                     if mode=='token_membership':
                         accepted={normalize_token(a,grading) for a in grading['accepted_answers']}; matched=len(tokens(answer,grading)&accepted)

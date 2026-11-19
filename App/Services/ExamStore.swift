@@ -395,7 +395,7 @@ import Foundation
             await synchronize()
             guard let a = currentAttempt, a.submittedSectionIDs.contains(sectionID), !hasConflict,
                   let section = a.result?.sections.first(where: { $0.sectionID == sectionID }) else { return }
-            let pending = Set(section.items.filter { $0.awardedScoreUnits == nil }.map(\.taskID))
+            let pending = Set(section.items.filter { $0.status == "pending_ai" }.map(\.taskID))
             for taskID in pending.sorted() where a.aiResults?[taskID] == nil {
                 let value = try await assessment.assess(examID: a.examID, revision: a.revision, attemptID: a.id, taskID: taskID, responses: a.responseTexts)
                 try await validateScope(identity.scopeID)
