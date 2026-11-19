@@ -70,7 +70,9 @@ for (const stage of ["dev", "prod"] as const) {
   const ai = Template.fromStack(translation);
   ai.resourceCountIs("AWS::EC2::NatGateway", 0);
   ai.resourceCountIs("AWS::ECS::TaskDefinition", 0);
-  ai.resourceCountIs("AWS::ApiGatewayV2::Route", 5);
+  ai.resourceCountIs("AWS::ApiGatewayV2::Route", 17);
+  ai.hasResourceProperties("AWS::DynamoDB::Table", { DeletionProtectionEnabled: true,
+    PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true } });
   ai.hasResourceProperties("AWS::DynamoDB::Table", { PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: false },
     TimeToLiveSpecification: { AttributeName: "delete_after", Enabled: true } });
   const resources = ai.toJSON().Resources;

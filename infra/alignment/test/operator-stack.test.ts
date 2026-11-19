@@ -24,7 +24,13 @@ try {
   const foundation = Template.fromStack(operator), audio = Template.fromStack(alignment);
   foundation.resourceCountIs("AWS::Cognito::UserPoolIdentityProvider", 0);
   foundation.resourceCountIs("AWS::SQS::Queue", 0);
-  foundation.resourceCountIs("AWS::DynamoDB::Table", 1);
+  foundation.resourceCountIs("AWS::DynamoDB::Table", 2);
+  foundation.hasResourceProperties("AWS::DynamoDB::Table", { DeletionProtectionEnabled: true,
+    KeySchema: [{ AttributeName: "pk", KeyType: "HASH" }, { AttributeName: "sk", KeyType: "RANGE" }],
+    PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true } });
+  foundation.hasResourceProperties("AWS::S3::Bucket", { VersioningConfiguration: { Status: "Enabled" },
+    PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true,
+      IgnorePublicAcls: true, RestrictPublicBuckets: true } });
   foundation.hasResourceProperties("AWS::Cognito::UserPool", {
     AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
     Policies: { PasswordPolicy: { MinimumLength: 14 } },
@@ -45,7 +51,7 @@ try {
     assert.equal(Object.values(template.findResources("AWS::EC2::NatGateway")).length, 0);
     assert.doesNotMatch(JSON.stringify(template.toJSON()), /APPLE_API_SECRET_ARN/);
   }
-  foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 8);
+  foundation.resourceCountIs("AWS::ApiGatewayV2::Route", 20);
   audio.resourceCountIs("AWS::ApiGatewayV2::Route", 12);
   audio.resourceCountIs("AWS::ECS::Service", 1);
   audio.resourceCountIs("AWS::SQS::Queue", 2);

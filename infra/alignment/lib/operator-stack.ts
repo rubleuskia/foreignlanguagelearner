@@ -13,6 +13,7 @@ import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as secrets from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import { DEPLOYMENT_REGION } from "./region";
+import { ExamStorage, EXAM_ROUTES } from "./exams";
 
 export const OPERATOR_MODEL = "gpt-5-mini";
 
@@ -80,9 +81,15 @@ export class OperatorStack extends cdk.Stack {
     libraryBucket.grantRead(api, "library/*");
     new cdk.CfnOutput(this, "BookLibraryBucket", { value: libraryBucket.bucketName });
     this.table.grantReadWriteData(api);
+    const exams = new ExamStorage(this, "Exams");
+    exams.bind(api);
     api.addEnvironment("OPENAI_SECRET_ARN", props.openaiSecretArn);
     secrets.Secret.fromSecretCompleteArn(this, "OpenAIKey", props.openaiSecretArn).grantRead(api);
     const integration = new HttpLambdaIntegration("OperatorIntegration", api);
+    for (const [method, path] of EXAM_ROUTES) {
+      this.api.addRoutes({ path, methods: [method], authorizer: this.authorizer,
+        authorizationScopes: ["aws.cognito.signin.user.admin"], integration });
+    }
     for (const [method, path] of [[apigw.HttpMethod.GET, "/v1/library/books"],
       [apigw.HttpMethod.GET, "/v1/library/books/{id}/download"], [apigw.HttpMethod.GET, "/v1/health"], [apigw.HttpMethod.GET, "/v1/me"],
       [apigw.HttpMethod.POST, "/v1/context-analyses"], [apigw.HttpMethod.POST, "/v1/word-explanations"],

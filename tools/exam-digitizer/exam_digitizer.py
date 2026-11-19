@@ -15,7 +15,8 @@ import tempfile
 import unicodedata
 from urllib.parse import unquote, urlsplit
 
-from ai_assessment import SUPPORTED_TASKS, build_grading_request, compile_assessment
+from ai_assessment import is_assessment_task, build_grading_request, compile_assessment, InvalidAssessment
+from backend.exams.token_membership import normalize_token, tokens as membership_tokens, validate_membership
 
 HERE = Path(__file__).resolve().parent
 ARCHIVE_URL = "https://certyfikatpolski.pl/o-egzaminie/testy-egzaminacyjne-z-poprzednich-lat/"
@@ -126,6 +127,31 @@ def descendants(value):
             yield from descendants(child)
 
 
+def copy_review_images(content_review, stage):
+    """Retain review-relative paths so paper/page-001 and keys/page-001 stay distinct."""
+    stage = Path(stage).resolve()
+    review_root = Path(content_review['rendered_evidence_directory']).resolve()
+    for row in content_review.get('rendered_pages', []):
+        source = inside(review_root, row['path'])
+        if source.is_file() and digest(source) != row['sha256']:
+            raise InvalidExam(f'Content-review evidence differs: {source}')
+        if source.is_file():
+            target = inside(stage / 'evidence/content-review', source.relative_to(review_root))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists() and digest(target) != row['sha256']:
+                raise InvalidExam(f'Content-review images collide: {target}')
+            shutil.copy2(source, target)
+            row['path'] = target.relative_to(stage).as_posix()
+        else:
+            ref = row['source_refs'][0]
+            target = stage / 'evidence' / ref['source_id'] / f"page-{ref['page']:03}.png"
+            row['original_review_image_sha256'] = row.pop('sha256')
+            row['historical_image_name'] = row.pop('path')
+            row['image_status'] = 'regenerated_from_original' if target.is_file() else 'see_original_pdf_page'
+            if target.is_file():
+                row.update(path=target.relative_to(stage).as_posix(), sha256=digest(target))
+
+
 def validate_exam(exam, root=None):
     from jsonschema import Draft202012Validator, FormatChecker
 
@@ -181,10 +207,15 @@ def validate_exam(exam, root=None):
         elif sum(task["max_score_units"] for task in tasks) != section["max_score_units"]:
             raise InvalidExam(f"Task totals differ from section maximum: {section['id']}")
         for task in tasks:
-            if task["id"] in SUPPORTED_TASKS and any(item["grading"]["mode"] == "ai_stub" for item in task["items"]) and not task.get("ai_assessment"):
+            if is_assessment_task(task) and not task.get("ai_assessment"):
                 raise InvalidExam(f"Missing source-bound AI contract: {task['id']}")
-            if task.get("ai_assessment") is not None and task["ai_assessment"] != compile_assessment(task, exam["id"]):
-                raise InvalidExam(f"AI contract differs from official task material: {task['id']}")
+            if task.get("ai_assessment") is not None:
+                try:
+                    compiled = compile_assessment(task, exam["id"])
+                except InvalidAssessment as error:
+                    raise InvalidExam(f"Invalid source-bound assessment: {error}") from None
+                if task["ai_assessment"] != compiled:
+                    raise InvalidExam(f"AI contract differs from official task material: {task['id']}")
             options = {option["id"] for option in task["options"]}
             display_codes = task.get("presentation", {}).get("display_codes", {})
             if display_codes:
@@ -227,13 +258,10 @@ def validate_exam(exam, root=None):
                 if item["max_score_units"] is None and mode in ("exact", "set", "token_membership"):
                     raise InvalidExam("Objective items require a maximum score")
                 if mode == "token_membership":
-                    accepted = grading["accepted_answers"]
-                    if item["response_type"] != "text" or any(not isinstance(a, str) or not a.isascii() or not a.isdigit() for a in accepted):
-                        raise InvalidExam("Membership rules require explicit numeric tokens and a text input")
-                    if len(accepted) != len(set(accepted)) or item["max_score_units"] % len(accepted):
-                        raise InvalidExam("Membership points must divide exactly across distinct accepted tokens")
-                    if grading.get("max_tokens", len(accepted)) != len(accepted):
-                        raise InvalidExam("Token input capacity must match the original number of answer slots")
+                    try:
+                        validate_membership(item)
+                    except ValueError as error:
+                        raise InvalidExam(str(error)) from None
                 for accepted in grading["accepted_answers"]:
                     if mode == "set":
                         if not isinstance(accepted, list) or not set(accepted).issubset(allowed):
@@ -315,7 +343,7 @@ def build(profile_path, sources_root, output, audio_path=None, render=True):
     exam["interactive_section_ids"] = [s["id"] for s in exam["sections"] if s["id"] in ("listening", "reading", "grammar") and s.get("status") != "source_missing"]
     for section in exam["sections"]:
         for task in section["tasks"]:
-            if task["id"] in SUPPORTED_TASKS and any(item["grading"]["mode"] == "ai_stub" for item in task["items"]):
+            if is_assessment_task(task):
                 task["ai_assessment"] = compile_assessment(task, exam["id"])
     audio = read_json(audio_path) if audio_path else None
     if audio:
@@ -338,24 +366,7 @@ def build(profile_path, sources_root, output, audio_path=None, render=True):
         content_review = None
         if review_path.is_file():
             content_review = read_json(review_path)
-            review_root = Path(content_review["rendered_evidence_directory"])
-            for row in content_review.get("rendered_pages", []):
-                source = inside(review_root, row["path"])
-                if source.is_file() and digest(source) != row["sha256"]:
-                    raise InvalidExam(f"Content-review evidence differs: {source}")
-                if source.is_file():
-                    target = stage / "evidence" / "content-review" / source.name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(source, target)
-                    row["path"] = target.relative_to(stage).as_posix()
-                else:
-                    ref = row["source_refs"][0]
-                    target = stage / "evidence" / ref["source_id"] / f"page-{ref['page']:03}.png"
-                    row["original_review_image_sha256"] = row.pop("sha256")
-                    row["historical_image_name"] = row.pop("path")
-                    row["image_status"] = "regenerated_from_original" if target.is_file() else "see_original_pdf_page"
-                    if target.is_file():
-                        row.update(path=target.relative_to(stage).as_posix(), sha256=digest(target))
+            copy_review_images(content_review, stage)
             content_review.update(original_review_sha256=digest(review_path),
                                   rendered_evidence_directory="evidence/content-review",
                                   full_page_index="evidence/page-index.json")
@@ -486,10 +497,10 @@ def grade_attempt(exam, request):
                                  "awarded_score_units": None, "max_score_units": item["max_score_units"]})
                     continue
                 if mode == "token_membership":
-                    tokens = set(re.findall(r"[0-9]+", answer or ""))
-                    accepted = set(item["grading"]["accepted_answers"])
+                    tokens = membership_tokens(answer or "", item["grading"])
+                    accepted = {normalize_token(a,item["grading"]) for a in item["grading"]["accepted_answers"]}
                     if len(tokens) > item["grading"].get("max_tokens", len(accepted)):
-                        raise InvalidExam(f"Too many numeric answers: {item['id']}")
+                        raise InvalidExam(f"Too many token answers: {item['id']}")
                     matched = len(tokens & accepted)
                     score = matched * item["max_score_units"] // len(accepted)
                     status = "correct" if score == item["max_score_units"] else "partial" if score else "incorrect"

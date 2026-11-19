@@ -24,7 +24,7 @@ RUN_DIRECTORY=/private/tmp/exam-audio-rebuild
   --model base --language pl --threads 6
 
 python3 tools/exam-digitizer/audio_markup.py \
-  --reference tools/exam-digitizer/profiles/b1-2024-06.audio-reference.json \
+  --reference /Users/arublevsky/dev/ExamSources/profiles/b1-2024-06.audio-reference.json \
   --audio "$EXAM_AUDIO" \
   --transcription "$RUN_DIRECTORY/rough-transcription.json" \
   --output "$RUN_DIRECTORY/aligned" \
@@ -57,6 +57,18 @@ Every derived text/subtitle/JSON artifact has a source chain: its per-task or pe
 
 ## Pilot verification result
 
+The reusable anchor search requires at least three normalized tokens. It preserves
+the full-anchor token score threshold of 0.75; the first token may match exactly or
+with character similarity of at least 0.66. A split-word fallback requires exact
+concatenated-token equality of at least 16 characters. Matching evidence records
+the policy; official reference text and raw ASR are never rewritten to fit anchors.
+Occurrence-count, order, source bounds and overlap checks still apply.
+
+If rough ASR omitted an opening, targeted recognition of an original-audio crop may
+recover it. Keep the crop's original bounds/hash, the raw recovery JSON, provenance,
+original-time offset and portable evidence mapping in the alignment package. WAV
+working files may remain temporary. Recognition recovery is not a listening review.
+
 The real existing aligner was run separately on all nine recorded occurrences and all nine calls succeeded. The official reference text was preserved in each result. This verifies text coverage and structural validity, not perfect word timing.
 
 - Five tasks: task I once, tasks II-V twice.
@@ -68,3 +80,45 @@ The real existing aligner was run separately on all nine recorded occurrences an
 - Task III has correlations 0.91833063 and 0.95490981, below that deliberately strict threshold; both probes find the same repeat offset of 138,824 ms. It remains `requires_review`, not silently certified.
 
 All machine-generated ranges retain `requires_listening_review`, and `human_listening_review_performed` is false. The pilot demonstrates that the current aligner can produce useful passage mappings and review subtitles for exam recordings. It does not certify every word boundary or replace listening review. In the exam emulator, use whole-passage playback and the unchanged original full recording; do not require word-level timing to take the exam.
+
+## Resumable archive-wide rough recognition
+
+`audio_batch.py` consumes the immutable `batch-index.json` prepared by the archive
+batch extractor. It recognizes one recording at a time on the local CPU and loads
+the cached Whisper model once for the run. It never submits source audio to a cloud
+provider. This is a preparation stage: it does **not** invent task intervals,
+repetition counts or reviewed answers and does not replace forced alignment against
+a curated official reference.
+
+```sh
+/Users/arublevsky/dev/foreignlanguagelearner/tools/subtitle-aligner/.venv/bin/python \
+  tools/exam-digitizer/audio_batch.py \
+  --sources-root /Users/arublevsky/dev/ExamSources \
+  --batch-root /Users/arublevsky/dev/ExamSources/digitization \
+  --model base --language pl --threads 6
+```
+
+The run holds `audio-run.lock`; a second writer is refused. Progress is written
+atomically to `audio-run-status.json` with the PID, current source selection,
+counts and a five-second heartbeat. Each examination has `audio/status.json` and
+an attempt journal in `audio/attempts/`. Ctrl-C or SIGTERM records interruption;
+after a hard process stop, the kernel releases the lock and the same command can
+resume. A completed original pilot package is skipped only after checking that
+its audio SHA-256 matches the selected original recording.
+
+An examination's recognition is staged privately, validated, and published as
+the `audio/asr/` directory in one rename. It contains raw recognition JSON, TXT,
+source-bound provenance, quality metadata and an artifact manifest. SRT is emitted
+only when the unmodified segment timestamps pass bounds/order checks. Invalid
+timings remain in the raw JSON with explicit review issues, without fabricated
+subtitle times. All timestamps refer to the unchanged original MP3.
+
+The original size/SHA-256 is checked both before and after recognition. A resumed
+run checks every cached artifact's size/hash, provenance, source URL/hash and
+model/language/thread settings; it does not trust the presence of a filename.
+Valid caches need no model load. Invalid caches are retained and reported failed;
+`--retry-invalid` explicitly quarantines them as `audio/rejected-asr-<attempt>/`
+before regenerating. Failures of individual originals do not stop other jobs.
+Every recognition remains `machine_transcript_requires_review`, with
+`forced_alignment_executed: false`, `task_occurrences_verified: false` and
+`human_review_performed: false`.

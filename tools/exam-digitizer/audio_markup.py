@@ -56,29 +56,40 @@ def timed_tokens(transcription):
 def find_anchor(words, phrase, expected_count, threshold=0.75):
     """Find independent repeated occurrences; fail rather than guess a count."""
     expected = tokens(phrase)
-    if len(expected) < 4:
-        raise ValueError('Anchors need at least four words.')
+    if len(expected) < 3:
+        raise ValueError('Anchors need at least three words.')
     actual = [w['token'] for w in words]
     candidates = []
     for start, token in enumerate(actual):
-        if token != expected[0]:
+        first_exact = token == expected[0]
+        if not first_exact and difflib.SequenceMatcher(
+                None, expected[0], token, autojunk=False).ratio() < 0.66:
             continue
         best = None
-        for length in range(max(4, len(expected) - 2), len(expected) + 3):
+        for length in range(max(3, len(expected) - 2), len(expected) + 3):
             end = start + length
             if end > len(actual):
                 continue
             score = difflib.SequenceMatcher(None, expected, actual[start:end],
                                            autojunk=False).ratio()
+            policy = 'token_sequence_with_first_token_typo_gate'
+            # Exact concatenation tolerates ASR splitting one printed word.
+            # It never rewrites source text or infers a word timestamp.
+            if (len(''.join(expected)) >= 16
+                    and ''.join(expected) == ''.join(actual[start:end])):
+                score = 1.0
+                policy = 'exact_concatenated_tokens'
             if best is None or score > best['score']:
                 best = {'start': words[start]['start'], 'end': words[end-1]['end'],
                         'score': score, 'observed_text': ' '.join(actual[start:end]),
-                        'reference_text': phrase}
+                        'reference_text': phrase, 'match_policy': policy,
+                        'first_token_exact': first_exact,
+                        'full_anchor_threshold': threshold}
         if best and best['score'] >= threshold:
             candidates.append(best)
     # Suppress windows around the same spoken phrase; retain distinct repeats.
     selected = []
-    for candidate in sorted(candidates, key=lambda x: x['score'], reverse=True):
+    for candidate in sorted(candidates, key=lambda x: (x['score'], x['first_token_exact']), reverse=True):
         if all(abs(candidate['start'] - old['start']) > 20 for old in selected):
             selected.append(candidate)
     if len(selected) != expected_count:

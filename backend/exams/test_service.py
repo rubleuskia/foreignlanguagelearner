@@ -9,6 +9,7 @@ import uuid
 from backend.exams.assessment_contract import compile_assessment
 from backend.exams.contract import ExamError, file_digest, fingerprint, validate_package
 from backend.exams.service import Service
+from backend.exams.testing import synthetic_profile
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -33,7 +34,7 @@ def refresh_package(folder,change_title=None):
 
 def fixture(folder):
     folder.mkdir()
-    exam=json.loads((ROOT/'tools/exam-digitizer/profiles/b1-2024-06.json').read_text())
+    exam=synthetic_profile()
     exam.pop('source_selection',None)
     exam['schema_version']='1.1'
     exam['interactive_section_ids']=['listening','reading','grammar']
@@ -241,6 +242,28 @@ class ExamServiceTests(unittest.TestCase):
         self.assertEqual(saved['state'],'grading_pending')
         self.assertEqual(self.service.record_assessment('alice',attempt['id'],'grammar-V',{'score_units':25,'rationale':'Partial according to official source.'},provenance)['version'],saved['version'])
         self.assert_code('INVALID_EXAM_ASSESSMENT_RESULT',lambda:self.service.record_assessment('alice',attempt['id'],'grammar-VI',{'score_units':999,'rationale':'no'},provenance|{'contract_sha256':compile_assessment(self.service.assessment_context('alice',attempt['id'],'grammar-VI')['task'],self.exam['id'])['contract_sha256']}))
+
+    def test_source_bound_listening_assessment_uses_generic_mode_after_submission(self):
+        exam=copy.deepcopy(self.exam)
+        task=copy.deepcopy(next(t for s in exam['sections'] for t in s['tasks'] if t['id']=='grammar-VI'))
+        task.update(id='listening-V',label='V',position=5)
+        for index,item in enumerate(task['items'],1):item['id']=f'listening-V-open-{index}'
+        task['ai_assessment']=compile_assessment(task,exam['id'])
+        listening=next(s for s in exam['sections'] if s['id']=='listening')
+        listening['tasks']=[task if t['id']=='listening-V' else t for t in listening['tasks']]
+        listening['max_score_units']=sum(t['max_score_units'] for t in listening['tasks'])
+        write_json(self.package/'exam.json',exam)
+        self.exam=refresh_package(self.package)
+        self.publish();attempt=self.attempt(sections=('listening',))
+        self.assert_code('EXAM_ASSESSMENT_NOT_READY',lambda:self.service.assessment_context('alice',attempt['id'],'listening-V'))
+        self.service.submit_attempt('alice',attempt['id'],self.patch(attempt))
+        context=self.service.assessment_context('alice',attempt['id'],'listening-V')
+        self.assertEqual(context['task']['id'],'listening-V')
+        compiled=self.service.assessment_input('alice',attempt['id'],'listening-V')
+        self.assertEqual(compiled['contract']['max_score_units'],500)
+        self.assertEqual(len(compiled['request']['payload']['responses']),5)
+        self.assertTrue(all(r['item_id'].startswith('listening-V-open-')
+                            for r in compiled['request']['payload']['responses']))
 
     def test_bad_answers_cannot_submit_unknown_items_or_overfill_numeric_slots(self):
         self.publish(); attempt=self.attempt(sections=('listening',))

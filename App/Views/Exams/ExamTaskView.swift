@@ -52,7 +52,7 @@ struct ExamTaskView: View {
                 if let assessment = store.currentAttempt?.aiResults?[task.id] {
                     VStack(alignment: .leading, spacing: 7) {
                         Label(AppLanguage.text("AI assessment"), systemImage: "sparkles").font(.headline)
-                        Text("\(ExamDisplay.points(assessment.scoreUnits)) / \(ExamDisplay.points(task.maxScoreUnits))")
+                        Text("\(ExamDisplay.points(assessment.scoreUnits)) / \(ExamDisplay.points(assessmentMaximum))")
                             .font(.title3.weight(.semibold)).monospacedDigit()
                         Text(assessment.rationale).font(.subheadline).textSelection(.enabled)
                     }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -66,6 +66,10 @@ struct ExamTaskView: View {
     private var itemResults: [ExamItemResult] {
         let ids = Set(task.items.map(\.id))
         return store.currentAttempt?.result?.sections.flatMap(\.items).filter { ids.contains($0.itemID) } ?? []
+    }
+    private var assessmentMaximum: Int {
+        let pending = itemResults.filter { $0.awardedScoreUnits == nil }
+        return pending.isEmpty ? task.maxScoreUnits : pending.reduce(0) { $0 + $1.maxScoreUnits }
     }
     private func resultTitle(_ status: String) -> String {
         switch status {
@@ -99,7 +103,10 @@ struct ExamTaskView: View {
         case "true_false_table":
             ForEach(task.blocks.filter { $0.type != "example" }) { block in blockView(block) }
             ExamTrueFalseGrid(options: choices(task.options), rows: trueFalseRows, disabled: !store.canEdit) { itemID, value in store.setAnswer(itemID: itemID, value: value) }
-        case "token_table": tokenTable
+        case "token_table":
+            ForEach(task.blocks.filter { $0.type != "example" }) { block in blockView(block) }
+            if !task.options.isEmpty { optionBank }
+            tokenTable
         case "matching_table": matchingTable
         case "source_form":
             ForEach(visibleBlocks) { block in blockView(block) }
@@ -234,8 +241,8 @@ struct ExamTaskView: View {
     private var tokenTable: some View {
         Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
-                tableCell { Text("Opinia").font(.caption.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading) }
-                tableCell { Text("O tym mówi").font(.caption.weight(.semibold)).frame(width: 115) }
+                tableCell { Text(task.presentation?.promptHeader ?? "Opinia").font(.caption.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading) }
+                tableCell { Text(task.presentation?.answerHeader ?? "O tym mówi").font(.caption.weight(.semibold)).frame(width: 115) }
             }.background(Color.secondary.opacity(0.07))
             if let example = task.blocks.first(where: { $0.type == "example" }) {
                 GridRow {
@@ -248,8 +255,8 @@ struct ExamTaskView: View {
                     tableCell { Text("\(item.label). \(item.prompt)").font(.system(.body, design: .serif)).frame(maxWidth: .infinity, alignment: .leading) }
                     tableCell {
                         VStack(spacing: 4) {
-                            ExamAnswerInput(label: "Osoby: \(item.label)", value: binding(item.id), disabled: !store.canEdit, identifier: "exam.answer.\(item.id)")
-                            if let count = item.input?.object?["slot_count"]?.int { Text("\(count) numery").font(.caption2).foregroundStyle(.secondary) }
+                            ExamAnswerInput(label: "Odpowiedź: \(item.label)", value: binding(item.id), disabled: !store.canEdit, identifier: "exam.answer.\(item.id)")
+                            if let count = item.input?.object?["slot_count"]?.int { Text("\(count) odpowiedzi").font(.caption2).foregroundStyle(.secondary) }
                         }.frame(width: 115)
                     }
                 }
@@ -273,7 +280,7 @@ struct ExamTaskView: View {
                     }
                 }
             }
-            Text("Wpisz numery odpowiedzi").font(.caption).foregroundStyle(.secondary)
+            Text(task.presentation?.inputFormat == "letter" ? "Wpisz litery odpowiedzi" : "Wpisz numery odpowiedzi").font(.caption).foregroundStyle(.secondary)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 8) {
                     VStack(spacing: 9) { Text("PRZYKŁAD").font(.caption2); Text(task.presentation?.exampleAnswer ?? "").frame(height: 35) }.frame(width: 75).foregroundStyle(.secondary)

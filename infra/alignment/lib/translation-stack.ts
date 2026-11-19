@@ -15,6 +15,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as secrets from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import { CloudFoundationStack } from "./cloud-stack";
+import { ExamStorage, EXAM_ROUTES } from "./exams";
 
 interface TranslationProps extends cdk.StackProps {
   readonly foundation: CloudFoundationStack;
@@ -61,6 +62,14 @@ export class CloudTranslationStack extends cdk.Stack {
     const worker = fn("Inference", "backend.translation.worker.worker_handler", 90, { OPENAI_SECRET_ARN: props.openaiSecretArn });
     const sweep = fn("Maintenance", "backend.translation.worker.maintenance_handler", 300,
       { TRANSLATION_QUEUE_URL: queue.queueUrl, TRANSLATION_MAINTENANCE_URL: maintenance.queueUrl });
+    const exams = new ExamStorage(this, "Exams");
+    exams.bind(api);
+    exams.bind(worker);
+    for (const [method, path] of EXAM_ROUTES) {
+      new apigw.HttpRoute(this, `Exam${method}${path}`, { httpApi: f.api,
+        routeKey: apigw.HttpRouteKey.with(path, method), authorizer: f.authorizer,
+        authorizationScopes: [f.scopeName], integration: new HttpLambdaIntegration(`Exam${method}${path}`, api) });
+    }
     for (const target of [api, worker, sweep]) {
       requests.grantReadWriteData(target); contents.grantReadWriteData(target); f.usage.grantReadWriteData(target);
       f.accounts.grantReadData(target); f.subscriptions.grantReadData(target);

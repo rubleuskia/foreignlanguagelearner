@@ -12,7 +12,7 @@ import time
 import uuid
 
 from backend.translation.contract import inference_settings
-from .assessment_contract import build_grading_request, compile_assessment, validate_assessment_result
+from .assessment_contract import build_grading_request, compile_assessment, validate_assessment_result, is_assessment_task
 from .contract import (ExamError, ACTIVE_SECTIONS, PUBLIC_SOURCES, canonical, fingerprint,
                        file_digest, identity, safe_file, validate_package, student_projection,
                        student_audio, source_download_path, validate_response, grade_sections)
@@ -196,15 +196,32 @@ class Service:
         if set(submitted)==set(data['section_ids']):
             data['state']='grading_pending' if any(s['status']=='pending' for s in data['result']['sections']) else 'graded'
 
-    def _expire(self,connection,owner,data,exam):
+    def _expire_data(self,data,exam):
         due=[section for section,deadline in data['section_deadlines'].items()
              if section not in data['submitted_section_ids'] and self.now()>=epoch(deadline)]
         if due:
             data['submitted_section_ids'] += due
             for section in due: data['section_submission_reasons'][section]='deadline'
             data['version']+=1; data['updated_at']=iso(self.now())
-            self._refresh_result(data,exam); self._save(connection,owner,data)
+            self._refresh_result(data,exam)
         return bool(due)
+
+    def _expire(self,connection,owner,data,exam):
+        changed=self._expire_data(data,exam)
+        if changed: self._save(connection,owner,data)
+        return changed
+
+    def _new_attempt(self,owner,attempt_id,device,exam,selected,mode,initial):
+        first=selected[0]; section=next(s for s in exam['sections'] if s['id']==first)
+        data={'id':attempt_id,'owner_id':owner,'exam_id':exam['id'],'revision':exam['revision'],
+              'mode':mode,'device_id':device,'active_device_id':device,'section_ids':selected,'version':1,'state':'in_progress',
+              'responses':{},'progress':{'section_id':first,'task_id':section['tasks'][0]['id'],
+                'audio_cursor_ms':0,'elapsed_ms':{}},'submitted_section_ids':[],
+              'section_submission_reasons':{},'section_started_at':{},'section_deadlines':{},
+              'assessments':{},'result':None,'created_at':iso(self.now()),'updated_at':iso(self.now()),
+              'started_at':iso(self.now()),'creation_fingerprint':initial}
+        self._start_section(data,exam,first)
+        return data
 
     def create_attempt(self,owner,payload):
         owner=owner_id(owner)
@@ -224,15 +241,7 @@ class Service:
                 if data['creation_fingerprint']!=initial: raise ExamError('EXAM_ATTEMPT_ID_CONFLICT',409)
                 self._expire(connection,owner,data,exam)
                 return self._snapshot(data)
-            first=selected[0]; section=next(s for s in exam['sections'] if s['id']==first)
-            data={'id':attempt_id,'owner_id':owner,'exam_id':exam['id'],'revision':exam['revision'],
-                  'mode':payload['mode'],'device_id':device,'active_device_id':device,'section_ids':selected,'version':1,'state':'in_progress',
-                  'responses':{},'progress':{'section_id':first,'task_id':section['tasks'][0]['id'],
-                    'audio_cursor_ms':0,'elapsed_ms':{}},'submitted_section_ids':[],
-                  'section_submission_reasons':{},'section_started_at':{},'section_deadlines':{},
-                  'assessments':{},'result':None,'created_at':iso(self.now()),'updated_at':iso(self.now()),
-                  'started_at':iso(self.now()),'creation_fingerprint':initial}
-            self._start_section(data,exam,first)
+            data=self._new_attempt(owner,attempt_id,device,exam,selected,payload['mode'],initial)
             connection.execute('INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?)',
                 (owner,attempt_id,exam['id'],exam['revision'],1,canonical(data),self.now(),self.now()))
         return self._snapshot(data)
@@ -250,6 +259,56 @@ class Service:
         with self.repository.transaction() as connection:
             ids=[row['attempt_id'] for row in connection.execute('SELECT attempt_id FROM attempts WHERE owner=? ORDER BY updated_at DESC,attempt_id',(owner,))]
         return {'attempts':[self.get_attempt(owner,value) for value in ids]}
+
+    def _change_data(self,data,exam,audio,payload,submit,device):
+        if payload['base_version']!=data['version']:
+            raise ExamError('EXAM_ATTEMPT_CONFLICT',409,{'current_version':data['version'],'attempt':self._snapshot(data)})
+        if device!=data['active_device_id'] and not payload.get('takeover'):
+            raise ExamError('EXAM_DEVICE_CONFLICT',409,{'current_version':data['version'],'attempt':self._snapshot(data)})
+        if not submit and set(data['submitted_section_ids'])==set(data['section_ids']):
+            raise ExamError('EXAM_ATTEMPT_SUBMITTED',409)
+        changed=copy.deepcopy(data)
+        changed['active_device_id']=device
+        if submit:
+            selected=[payload['section_id']] if 'section_id' in payload else changed['section_ids']
+            if any(not isinstance(s,str) for s in selected) or not set(selected).issubset(changed['section_ids']): raise ExamError('INVALID_EXAM_SECTION_SELECTION')
+            for section in selected:
+                if section not in changed['submitted_section_ids']:
+                    changed['submitted_section_ids'].append(section)
+                    changed['section_submission_reasons'][section]='user'
+        else:
+            patch=payload.get('responses',{})
+            if not isinstance(patch,dict): raise ExamError('INVALID_EXAM_RESPONSES')
+            lookup={i['id']:(s['id'],i) for s in exam['sections'] if s['id'] in changed['section_ids'] for t in s['tasks'] for i in t['items']}
+            for item_id,answer in patch.items():
+                if item_id not in lookup: raise ExamError('UNKNOWN_EXAM_RESPONSE')
+                section,item=lookup[item_id]
+                if section in changed['submitted_section_ids']: raise ExamError('EXAM_SECTION_SUBMITTED',409)
+                changed['responses'][item_id]=validate_response(item,answer)
+            progress=payload.get('progress',{})
+            fields(progress,{'section_id','task_id','audio_cursor_ms','elapsed_ms'})
+            section_id=progress.get('section_id',changed['progress']['section_id'])
+            if section_id not in changed['section_ids']: raise ExamError('INVALID_EXAM_SECTION_SELECTION')
+            if section_id in changed['submitted_section_ids'] and progress: raise ExamError('EXAM_SECTION_SUBMITTED',409)
+            section=next(s for s in exam['sections'] if s['id']==section_id)
+            task_id=progress.get('task_id',changed['progress']['task_id'] if section_id==changed['progress']['section_id'] else section['tasks'][0]['id'])
+            if task_id not in {t['id'] for t in section['tasks']}: raise ExamError('INVALID_EXAM_PROGRESS_TASK')
+            cursor=progress.get('audio_cursor_ms',changed['progress']['audio_cursor_ms'])
+            if type(cursor) is not int or not 0<=cursor<=((audio or {}).get('source',{}).get('duration_ms',0)):
+                raise ExamError('INVALID_EXAM_AUDIO_CURSOR')
+            elapsed=progress.get('elapsed_ms',changed['progress']['elapsed_ms'])
+            if (not isinstance(elapsed,dict) or not set(elapsed).issubset(changed['section_ids'])
+                    or any(type(v) is not int or not 0<=v<=604800000 for v in elapsed.values())):
+                raise ExamError('INVALID_EXAM_ELAPSED_TIME')
+            self._start_section(changed,exam,section_id)
+            changed['progress']={'section_id':section_id,'task_id':task_id,'audio_cursor_ms':cursor,
+                'elapsed_ms':changed['progress']['elapsed_ms']|elapsed}
+            state=payload.get('state',changed['state'])
+            if not isinstance(state,str) or state not in {'in_progress','interrupted'}: raise ExamError('INVALID_EXAM_ATTEMPT_STATE')
+            changed['state']=state
+        changed['device_id']=device; changed['version']+=1; changed['updated_at']=iso(self.now())
+        self._refresh_result(changed,exam)
+        return changed
 
     def _mutate(self,owner,attempt_id,payload,submit):
         owner=owner_id(owner); attempt_id=uid(attempt_id)
@@ -270,53 +329,7 @@ class Service:
                 if previous:
                     if previous['request_digest']!=request_digest: raise ExamError('EXAM_CHANGE_ID_CONFLICT',409)
                 else:
-                    if payload['base_version']!=data['version']:
-                        raise ExamError('EXAM_ATTEMPT_CONFLICT',409,{'current_version':data['version'],'attempt':self._snapshot(data)})
-                    if device!=data['active_device_id'] and not payload.get('takeover'):
-                        raise ExamError('EXAM_DEVICE_CONFLICT',409,{'current_version':data['version'],'attempt':self._snapshot(data)})
-                    if not submit and set(data['submitted_section_ids'])==set(data['section_ids']):
-                        raise ExamError('EXAM_ATTEMPT_SUBMITTED',409)
-                    changed=copy.deepcopy(data)
-                    changed['active_device_id']=device
-                    if submit:
-                        selected=[payload['section_id']] if 'section_id' in payload else changed['section_ids']
-                        if any(not isinstance(s,str) for s in selected) or not set(selected).issubset(changed['section_ids']): raise ExamError('INVALID_EXAM_SECTION_SELECTION')
-                        for section in selected:
-                            if section not in changed['submitted_section_ids']:
-                                changed['submitted_section_ids'].append(section)
-                                changed['section_submission_reasons'][section]='user'
-                    else:
-                        patch=payload.get('responses',{})
-                        if not isinstance(patch,dict): raise ExamError('INVALID_EXAM_RESPONSES')
-                        lookup={i['id']:(s['id'],i) for s in exam['sections'] if s['id'] in changed['section_ids'] for t in s['tasks'] for i in t['items']}
-                        for item_id,answer in patch.items():
-                            if item_id not in lookup: raise ExamError('UNKNOWN_EXAM_RESPONSE')
-                            section,item=lookup[item_id]
-                            if section in changed['submitted_section_ids']: raise ExamError('EXAM_SECTION_SUBMITTED',409)
-                            changed['responses'][item_id]=validate_response(item,answer)
-                        progress=payload.get('progress',{})
-                        fields(progress,{'section_id','task_id','audio_cursor_ms','elapsed_ms'})
-                        section_id=progress.get('section_id',changed['progress']['section_id'])
-                        if section_id not in changed['section_ids']: raise ExamError('INVALID_EXAM_SECTION_SELECTION')
-                        if section_id in changed['submitted_section_ids'] and progress: raise ExamError('EXAM_SECTION_SUBMITTED',409)
-                        section=next(s for s in exam['sections'] if s['id']==section_id)
-                        task_id=progress.get('task_id',changed['progress']['task_id'] if section_id==changed['progress']['section_id'] else section['tasks'][0]['id'])
-                        if task_id not in {t['id'] for t in section['tasks']}: raise ExamError('INVALID_EXAM_PROGRESS_TASK')
-                        cursor=progress.get('audio_cursor_ms',changed['progress']['audio_cursor_ms'])
-                        if type(cursor) is not int or not 0<=cursor<=((audio or {}).get('source',{}).get('duration_ms',0)):
-                            raise ExamError('INVALID_EXAM_AUDIO_CURSOR')
-                        elapsed=progress.get('elapsed_ms',changed['progress']['elapsed_ms'])
-                        if (not isinstance(elapsed,dict) or not set(elapsed).issubset(changed['section_ids'])
-                                or any(type(v) is not int or not 0<=v<=604800000 for v in elapsed.values())):
-                            raise ExamError('INVALID_EXAM_ELAPSED_TIME')
-                        self._start_section(changed,exam,section_id)
-                        changed['progress']={'section_id':section_id,'task_id':task_id,'audio_cursor_ms':cursor,
-                            'elapsed_ms':changed['progress']['elapsed_ms']|elapsed}
-                        state=payload.get('state',changed['state'])
-                        if not isinstance(state,str) or state not in {'in_progress','interrupted'}: raise ExamError('INVALID_EXAM_ATTEMPT_STATE')
-                        changed['state']=state
-                    changed['device_id']=device; changed['version']+=1; changed['updated_at']=iso(self.now())
-                    self._refresh_result(changed,exam)
+                    changed=self._change_data(data,exam,audio,payload,submit,device)
                     self._save(connection,owner,changed)
                     connection.execute('INSERT INTO attempt_changes VALUES(?,?,?,?)',(owner,attempt_id,change_id,request_digest))
                     data=changed
@@ -338,7 +351,7 @@ class Service:
         section,task=matches[0]
         if section['id'] not in data['section_ids'] or section['id'] not in data['submitted_section_ids']:
             raise ExamError('EXAM_ASSESSMENT_NOT_READY',409)
-        if task_id not in {'grammar-V','grammar-VI'}: raise ExamError('EXAM_TASK_NOT_ASSESSABLE')
+        if not is_assessment_task(task): raise ExamError('EXAM_TASK_NOT_ASSESSABLE')
         return {'exam':copy.deepcopy(exam),'task':copy.deepcopy(task),'responses':copy.deepcopy(data['responses']),'attempt':self._snapshot(data)}
 
     def assessment_context(self,owner,attempt_id,task_id):

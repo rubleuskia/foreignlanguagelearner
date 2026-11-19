@@ -1,3 +1,45 @@
+## Cloud exams and independently published source data (2026-11-19)
+
+Keep real examination profiles, full JSON, originals, keys, audio and review evidence outside
+Git in ExamSources. Commit code/schema and synthetic test material. Previously tracked pilot
+profiles leave the current tree; do not rewrite shared history.
+
+Use private versioned S3 for immutable full packages and DynamoDB for small catalog pointers,
+revision descriptors, owner-keyed attempts and idempotency records. Pin objects by VersionId,
+size and checksum. Publish new revision/catalog/receipt in one conditional transaction only
+after complete local and S3 verification. Administrative AWS SDK import is distinct from code
+deployment and unavailable to student HTTP callers. Never fall back to Lambda disk SQLite.
+
+Expose authenticated student projections without keys or private rubrics and sign only PDF/audio
+sources. Preserve signed URLs and never forward API bearer credentials to object storage.
+Use the existing translation identity/provider routes for source-bound AI task assessments;
+derive contracts from actual bounded free-text items, including declared grouped rules,
+rather than fixed grammar task numbers. Preserve declared numeric or letter token alphabets.
+Writing remains stored and inactive. Machine alignment/review flags are not human acceptance.
+
+Retain the local JSON-driven authoring web UI in source control as the foundation for a future
+web client, with a separate backend transport. Its full-key local mode must not become the
+public student entry point. Cloud deployment and authenticated acceptance are later operations.
+
+## Archive preparation does not publish inferred examinations (2026-11-18)
+
+Separate source inventory, PDF extraction, rough ASR, semantic curation, occurrence alignment
+and validated package publication. Keep the batch inventory immutable and bind every stage
+to original URLs/hashes. Publish completed stage directories atomically, verify caches before
+reuse, and retain corrupt/failed evidence instead of overwriting it as a success. Run PDF
+rendering in separate processes and reuse one local recognition model sequentially.
+
+Rough recognition may omit passages even after producing valid output. Recover anchors only
+from actual original-audio crops with original bounds, offsets, hashes and portable raw
+evidence. Do not fabricate reference text or timing. Typo/split-word matching retains the
+full-anchor threshold and exact occurrence/order/bounds checks. Machine alignment does not
+constitute human listening acceptance. Preserve acoustic and source-rubric review flags.
+
+An existing task number is not evidence that another exam shares June's ambiguity or scoring.
+Build assessment notes from the actual annotated rubric and retain per-exam counts/slots.
+Keep review-relative image paths so pages from different PDFs cannot overwrite each other.
+Writing images/alternatives and unavailable oral material remain source-linked future data.
+
 ## Native exam persistence and execution boundaries (2026-11-18)
 
 Use a dedicated Exams tab and keep exam packages/audio separate from book imports.

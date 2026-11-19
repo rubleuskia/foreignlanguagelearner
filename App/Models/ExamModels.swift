@@ -230,12 +230,15 @@ struct ExamPresentation: Codable, Sendable {
     var suppressExampleBlocks: Bool? = nil
     var showExampleInTable: Bool? = nil
     var answerLabel: String? = nil
+    var promptHeader: String? = nil
+    var answerHeader: String? = nil
     var columns: [String]? = nil
     var sourceRefs: [ExamSourceReference]? = nil
     enum CodingKeys: String, CodingKey {
         case layout, rows, columns, displayCodes = "display_codes", bankPosition = "bank_position", optionBank = "option_bank"
         case inputFormat = "input_format", exampleAnswer = "example_answer", exampleOptionIDs = "example_option_ids"
         case suppressExampleBlocks = "suppress_example_blocks", showExampleInTable = "show_example_in_table", answerLabel = "answer_label", sourceRefs = "source_refs"
+        case promptHeader = "prompt_header", answerHeader = "answer_header"
     }
 }
 

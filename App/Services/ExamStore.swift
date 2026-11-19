@@ -291,6 +291,13 @@ import Foundation
                     try await validateScope(identity.scopeID)
                     try recordConflict(attemptID: event.attemptID, message: error.localizedDescription, remote: remote)
                     break
+                } catch let error as ExamAPIError where error.isRejectedChange {
+                    // A definitive rejection has not applied the event. Keep the draft
+                    // and expose recovery instead of permanently blocking newer answers.
+                    let remote = try? await remoteAttempt(event.attemptID, scope: identity.scopeID)
+                    try await validateScope(identity.scopeID)
+                    try recordConflict(attemptID: event.attemptID, message: error.localizedDescription, remote: remote)
+                    break
                 }
             }
             syncMessage = local?.outbox.isEmpty == true ? "Progress is synchronized." : "Local answers are saved. Synchronization is pending."

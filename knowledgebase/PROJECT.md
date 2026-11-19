@@ -13,9 +13,23 @@ local answer/outbox persistence, audio recovery, timed submission and conflict r
 An authenticated loopback API provides verified atomic imports, immutable revisions,
 SQLite-backed attempts and authoritative objective grading. Native grammar assessment
 uses the translation settings/transport; the web authoring preview retains AI placeholders.
-Production storage/file delivery, deployment and live assessment quality are not yet verified.
+Cloud storage/file delivery are implemented with DynamoDB and private versioned S3;
+deployment, authenticated acceptance of the deployed exam API and live assessment quality
+remain separate verification steps. No production exam publication is implied by a code release.
+Actual digitized profiles/packages are external to Git; synthetic examples support CI.
+See [cloud import procedure](../docs/EXAM_AWS_IMPORT.md). The retained web authoring
+interface and its backend transport are the foundation for a future web client.
 See [the utility guide](../tools/exam-digitizer/README.md).
 See [local API/app workflow](../docs/EXAMS.md).
+
+The archive batch prepares all 44 downloaded sets without replacing the original pilot.
+The other 43 sets have source-bound PDF evidence and rough local ASR; these outputs are
+not inferred exam questions. Reviewed adult B1 packages include June 2024,
+February/April 2024 and February/April/June/November 2023, with official text/key review
+and real occurrence alignment. Further levels/years are curated separately; the current
+source-bound inventory lives in ExamSources/digitization rather than Git.
+Listening/AI/source-ambiguity flags remain explicit.
+See [batch stages and resumption](../tools/exam-digitizer/BATCH.md).
 
 Manual alignment benchmark reports are not required for deployment. Worker image compatibility
 and verified-release checks remain enforced. Automated measurement and quality acceptance in

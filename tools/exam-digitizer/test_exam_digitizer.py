@@ -7,8 +7,8 @@ import tempfile
 import threading
 import unittest
 
-from exam_digitizer import (InvalidExam, PreviewHandler, build, canonical_digest, digest,
-                            grade_attempt, inside, validate_audio, validate_exam, write_json)
+from exam_digitizer import (InvalidExam, PreviewHandler, build, canonical_digest, copy_review_images, digest,
+                            grade_attempt, inside, validate_audio, validate_exam, write_json, compile_assessment)
 
 
 REF = [{"source_id": "paper", "page": 1}]
@@ -25,11 +25,15 @@ def fixture():
     items = [item("q1", "text", 100, "exact", ["żółw"]),
              item("q2", "multi_choice", 100, "set", [["a", "b"]], ["a", "b", "c"]),
              item("q3", "text", 100, "ai_stub", [])]
+    items[2]['grading'].update(reference_answer='Przykładowa odpowiedź',
+                               rubric={'text':'1 punkt za poprawną odpowiedź zgodną z poleceniem.',
+                                       'source_refs':KEY})
     for position, row in enumerate(items, 1):
         row["position"] = position
     task = {"id": "listening-I", "label": "I", "position": 1, "instruction": "Instrukcja",
             "interaction_type": "mixed", "max_score_units": 300, "source_refs": REF,
             "blocks": [], "options": [{"id": o, "label": o, "text": o, "source_refs": REF} for o in "abc"], "items": items}
+    task['ai_assessment']=compile_assessment(task,'test-exam')
     sources = [{"id": id_, "url": f"https://example.org/{id_}", "path": f"sources/{id_}.bin",
                 "sha256": "0" * 64, "bytes": 1, "media_type": "audio/mpeg" if id_ == "audio" else "application/pdf",
                 **({"page_count": 1} if id_ != "audio" else {})} for id_ in ("paper", "keys", "audio")]
@@ -41,6 +45,38 @@ def fixture():
 
 
 class ImportContractTests(unittest.TestCase):
+    def test_absolute_review_image_paths_are_rebased_to_portable_package_paths(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            review, stage = root / 'review', root / 'package'
+            source = review / 'keys/page-001.png'
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b'keys-image')
+            report = {'rendered_evidence_directory': str(review), 'rendered_pages': [
+                {'path': str(source), 'sha256': digest(source), 'source_refs': KEY}]}
+            copy_review_images(report, stage)
+            row = report['rendered_pages'][0]
+            self.assertEqual(row['path'], 'evidence/content-review/keys/page-001.png')
+            self.assertEqual((stage / row['path']).read_bytes(), source.read_bytes())
+
+    def test_review_images_from_different_pdfs_cannot_overwrite_each_other(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            review, stage = root / 'review', root / 'package'
+            rows = []
+            for role in ('paper', 'keys'):
+                file = review / role / 'page-001.png'
+                file.parent.mkdir(parents=True)
+                file.write_bytes(role.encode())
+                rows.append({'path': f'{role}/page-001.png', 'sha256': digest(file),
+                             'source_refs': [{'source_id': role, 'page': 1}]})
+            report = {'rendered_evidence_directory': str(review), 'rendered_pages': rows}
+            copy_review_images(report, stage)
+            self.assertNotEqual(rows[0]['path'], rows[1]['path'])
+            for role, row in zip(('paper', 'keys'), rows):
+                self.assertEqual((stage / row['path']).read_bytes(), role.encode())
+                self.assertEqual(digest(stage / row['path']), row['sha256'])
+
     def test_invalid_total_or_missing_origin_page_is_rejected(self):
         for change in ("total", "page", "gap", "option"):
             exam = fixture()
@@ -95,7 +131,7 @@ class ImportContractTests(unittest.TestCase):
                 result = grade_attempt(exam, {"revision": exam["revision"], "responses": {"q2": answer}})
                 item_result = next(i for i in result["sections"][0]["items"] if i["item_id"] == "q2")
                 self.assertEqual(item_result["awarded_score_units"], expected)
-        with self.assertRaisesRegex(InvalidExam, "Too many numeric answers"):
+        with self.assertRaisesRegex(InvalidExam, "Too many token answers"):
             grade_attempt(exam, {"revision": exam["revision"], "responses": {"q2": "1,2,3,4,5"}})
 
     def test_writing_alternative_sets_do_not_triple_the_section_maximum(self):

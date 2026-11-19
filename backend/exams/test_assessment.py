@@ -9,12 +9,12 @@ from backend.cloud.errors import CloudError
 from backend.translation.contract import validate_input, validate_output
 from backend.translation.provider import OpenAIProvider, ProviderFailure
 from .assessment import prepare
+from .testing import synthetic_profile
 
 
 class AssessmentIntegrationTests(unittest.TestCase):
     def setUp(self):
-        self.exam = json.loads((Path(__file__).resolve().parents[2] /
-            'tools/exam-digitizer/profiles/b1-2024-06.json').read_text())
+        self.exam = synthetic_profile()
         self.exam.update(revision='test-revision', sources=[
             {'id': 'paper', 'url': 'https://example.test/p.pdf', 'sha256': 'a'*64},
             {'id': 'keys', 'url': 'https://example.test/k.pdf', 'sha256': 'b'*64}])

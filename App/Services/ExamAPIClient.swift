@@ -12,6 +12,10 @@ struct ExamAPIError: LocalizedError, Sendable {
     var status: Int? = nil
     var payload: Data? = nil
     var isConflict: Bool { status == 409 || code.contains("CONFLICT") || code == "VERSION_MISMATCH" || ["EXAM_ATTEMPT_SUBMITTED", "EXAM_SECTION_SUBMITTED"].contains(code) }
+    var isRejectedChange: Bool {
+        [400, 413, 422].contains(status ?? 0) || ["TOO_MANY_EXAM_TOKENS", "UNKNOWN_EXAM_RESPONSE",
+            "INVALID_EXAM_RESPONSE", "EXAM_RECORD_TOO_LARGE", "INVALID_EXAM_PROGRESS"].contains(code)
+    }
     var errorDescription: String? {
         if isConflict { return "This attempt changed on another device. Your local answers are saved." }
         switch code {
@@ -20,6 +24,7 @@ struct ExamAPIError: LocalizedError, Sendable {
         case "ACCOUNT_CHANGED": return "The exam account or provider changed. Reopen the exam."
         case "SIGN_IN_REQUIRED": return "Sign in using the selected translation provider in Settings."
         case "STORAGE_FAILED": return "Could not save the attempt. Your last saved answers are retained."
+        case "TOO_MANY_EXAM_TOKENS": return "Too many answers in a response field. Your local answers are saved; correct the answer and retry."
         default: return "Exam service unavailable (\(code)). Local progress is saved."
         }
     }
@@ -181,11 +186,30 @@ actor ExamAPIClient {
             throw ExamAPIError(code: "INVALID_EXAM_MATERIAL")
         }
         let route = try Self.revisionRoute(examID: package.id, revision: package.revision) + "/sources/\(source.id)"
-        struct Descriptor: Decodable { let download_path: String; let bytes: Int64; let sha256: String; let media_type: String }
+        struct Descriptor: Decodable { let download_path: String?; let download_url: URL?; let bytes: Int64; let sha256: String; let media_type: String }
         let info = try ExamJSON.decoder().decode(Descriptor.self, from: await send(route + "/download", expectedScope: expectedScope))
-        guard info.download_path == "/" + route + "/content", info.bytes == source.bytes,
+        guard info.bytes == source.bytes,
               info.sha256 == source.sha256, info.media_type == source.mediaType else { throw ExamAPIError(code: "INVALID_EXAM_MATERIAL") }
-        let bytes = try await send(info.download_path, expectedScope: expectedScope, timeout: 900)
+        let bytes: Data
+        if let url = info.download_url {
+            guard info.download_path == nil, S3ArtifactURL.isAllowed(url) else { throw ExamAPIError(code: "INVALID_EXAM_MATERIAL") }
+            guard try await identity().scopeID == expectedScope else { throw ExamAPIError(code: "ACCOUNT_CHANGED") }
+            // Signed object requests carry no API Authorization header or cookies.
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 900
+            let downloader = URLSessionBookDownloadClient()
+            let (file, response) = try await downloader.download(for: request)
+            defer { try? FileManager.default.removeItem(at: file) }
+            guard response.statusCode == 200, let finalURL = response.url, S3ArtifactURL.isAllowed(finalURL),
+                  (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) == source.bytes else {
+                throw ExamAPIError(code: "INVALID_EXAM_MATERIAL")
+            }
+            bytes = try Data(contentsOf: file, options: .mappedIfSafe)
+            guard try await identity().scopeID == expectedScope else { throw ExamAPIError(code: "ACCOUNT_CHANGED") }
+        } else {
+            guard info.download_path == "/" + route + "/content" else { throw ExamAPIError(code: "INVALID_EXAM_MATERIAL") }
+            bytes = try await send(info.download_path!, expectedScope: expectedScope, timeout: 900)
+        }
         guard Int64(bytes.count) == source.bytes,
               SHA256.hash(data: bytes).map({ String(format: "%02x", $0) }).joined() == source.sha256 else {
             throw ExamAPIError(code: "INVALID_EXAM_MATERIAL")
