@@ -1,3 +1,18 @@
+## 2026-11-20 — Limit the cloud exam catalog to one active B1 exam
+
+- Store mutable availability as an explicit boolean on the DynamoDB catalog pointer.
+  Return only active examinations, deny hidden material/download/new-attempt requests
+  with 404, and retain existing revisions and saved attempts.
+- Publish new exams inactive; retain visibility through new revisions, including a
+  concurrent administrator deactivation. Add an administrator-only set-active CLI.
+- In AWS eu-north-1, keep January 2021 adult B1 active and mark the other 32 published
+  exams inactive. Apply the catalog/filter change as a one-file operator Lambda hotfix;
+  retain the original archive and before/after catalog snapshots outside Git.
+- Update DECISIONS.md and PROJECT.md for the single-exam refinement phase. No packages,
+  attempts or AWS resources are deleted and no exam content revision is switched.
+- Validation: 53 backend examination tests passed. Verify the live table/catalog and
+  material/new-attempt restrictions separately from end-user HTTP authentication.
+
 ## 2026-11-20 — Interactive listening and grouped examination catalog
 
 - Replace the flat examination list with adaptive cards grouped by CEFR level and

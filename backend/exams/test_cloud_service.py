@@ -51,7 +51,58 @@ class CloudServiceTests(unittest.TestCase):
 
     def publish(self, folder=None, transaction=None):
         folder = folder or self.package
-        return self.service.publish('operator', folder, transaction or str(uuid.uuid4()), preview(folder)['manifest_digest'])
+        result = self.service.publish('operator', folder, transaction or str(uuid.uuid4()), preview(folder)['manifest_digest'])
+        self.service.set_active(result['exam_id'], True)
+        return result
+
+    def test_inactive_exams_are_hidden_and_cannot_be_opened_or_started(self):
+        self.publish()
+        attempt = self.attempt()
+        self.service.set_active(self.exam['id'], False)
+        self.assertEqual(self.restart().catalog()['exams'], [])
+        self.error('EXAM_NOT_FOUND', lambda:self.service.student_package(self.exam['id']))
+        self.error('EXAM_NOT_FOUND', lambda:self.service.student_package(self.exam['id'], self.exam['revision']))
+        self.error('EXAM_NOT_FOUND', lambda:self.service.download_metadata(self.exam['id'], self.exam['revision'], 'audio'))
+        self.error('EXAM_NOT_FOUND', lambda:self.attempt())
+        self.assertEqual(self.service.get_attempt('alice', attempt['id'])['id'], attempt['id'])
+        self.assertEqual(self.service.list_attempts('alice')['attempts'][0]['id'], attempt['id'])
+        self.service.set_active(self.exam['id'], True)
+        self.assertEqual(self.restart().catalog()['exams'][0]['id'], self.exam['id'])
+        self.assertEqual(self.service.student_package(self.exam['id'])['exam']['revision'], self.exam['revision'])
+
+    def test_new_publications_are_inactive_and_revisions_preserve_visibility(self):
+        self.service.publish('operator', self.package, str(uuid.uuid4()), preview(self.package)['manifest_digest'])
+        self.assertEqual(self.service.catalog()['exams'], [])
+
+        pointer = self.service.repository.get('CATALOG', 'EXAM#' + self.exam['id'])
+        self.assertIs(pointer['active'], False)
+        newer = self.root / 'inactive-newer'; shutil.copytree(self.package, newer)
+        refresh_package(newer, 'Still hidden')
+        self.service.publish('operator', newer, str(uuid.uuid4()), preview(newer)['manifest_digest'])
+        self.assertEqual(self.service.catalog()['exams'], [])
+        self.service.set_active(self.exam['id'], True)
+        latest = self.root / 'active-newer'; shutil.copytree(newer, latest)
+        refresh_package(latest, 'Still active')
+        self.service.publish('operator', latest, str(uuid.uuid4()), preview(latest)['manifest_digest'])
+        self.assertEqual(self.service.catalog()['exams'][0]['title'], 'Still active')
+        self.table.update_item(Key={'pk':'CATALOG','sk':'EXAM#'+self.exam['id']}, UpdateExpression='REMOVE active')
+        self.assertEqual(self.service.catalog()['exams'], [])
+
+    def test_publication_retries_when_exam_is_disabled_concurrently(self):
+        self.publish()
+        newer = self.root / 'concurrent-newer'; shutil.copytree(self.package, newer)
+        refresh_package(newer, 'New content stays hidden')
+        original = self.service.repository.transaction
+        interleaved = []
+        def disable_before_commit(rows):
+            if not interleaved and any(row['pk'] == 'CATALOG' for row, _ in rows):
+                interleaved.append(True)
+                self.service.set_active(self.exam['id'], False)
+            return original(rows)
+        with patch.object(self.service.repository, 'transaction', side_effect=disable_before_commit):
+            self.service.publish('operator', newer, str(uuid.uuid4()), preview(newer)['manifest_digest'])
+        self.assertEqual(self.service.catalog()['exams'], [])
+        self.assertEqual(self.service.repository.get('CATALOG', 'EXAM#' + self.exam['id'])['revision'], preview(newer)['revision'])
 
     def attempt(self, sections=('reading',), mode='exam', owner='alice'):
         return self.service.create_attempt(owner, {'attempt_id':str(uuid.uuid4()), 'exam_id':self.exam['id'],

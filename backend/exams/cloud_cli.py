@@ -45,6 +45,11 @@ def main(argv=None):
     commit.add_argument('--report', type=Path, required=True,
                         help='Write publication receipt outside the repository; reuse transaction ID after interruption.')
     commands.add_parser('catalog')
+    visibility = commands.add_parser('set-active')
+    visibility.add_argument('exam_id')
+    state = visibility.add_mutually_exclusive_group(required=True)
+    state.add_argument('--active', dest='active', action='store_true')
+    state.add_argument('--inactive', dest='active', action='store_false')
     args = parser.parse_args(argv)
     if args.command != 'dry-run' and (not args.table or not args.bucket):
         parser.error('--table and --bucket are required for cloud operations')
@@ -69,6 +74,8 @@ def main(argv=None):
             service = CloudService.configured(args.table, args.bucket, region=args.region, profile=args.profile)
             if args.command == 'catalog':
                 result = service.catalog()
+            elif args.command == 'set-active':
+                result = service.set_active(args.exam_id, args.active)
             else:
                 result = service.publish(args.owner, args.package_dir, args.transaction_id, args.manifest_digest)
                 write_report(args.report, {'transaction_id': args.transaction_id, 'result': result})

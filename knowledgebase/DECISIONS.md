@@ -1,3 +1,15 @@
+## Single-exam refinement and explicit cloud visibility (2026-11-20)
+
+Keep only adult B1 January 2021 visible while refining the complete interactive
+experience, then extend the accepted design to other examinations. Preserve all
+other prepared/published content. Availability is mutable catalog metadata, separate
+from immutable exam revisions and owner attempts: only boolean active=true is visible.
+New publications start inactive and revisions preserve the current state using
+conditional writes so concurrent deactivation cannot be undone by publication.
+Inactive exams cannot provide new material, signed downloads or new attempts through
+the student API. Existing attempts can still synchronize and be graded from pinned
+revisions. Activation is an administrator SDK/CLI action with no student HTTP route.
+
 ## Native interactive listening and catalog grouping (2026-11-20)
 
 Group the native exam catalog by CEFR level, then audience, with latest sessions first

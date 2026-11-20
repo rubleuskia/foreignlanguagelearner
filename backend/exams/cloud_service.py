@@ -79,9 +79,41 @@ class CloudService(Service):
 
     def catalog(self):
         return {'schema_version': '1.1', 'exams': [json.loads(row['summary_json'])
-                for row in self.repository.query('CATALOG', 'EXAM#')]}
+                for row in self.repository.query('CATALOG', 'EXAM#') if row.get('active') is True]}
+
+    def _require_active_exam(self, exam_id):
+        identity(exam_id)
+        pointer = self.repository.get('CATALOG', 'EXAM#' + exam_id)
+        if not pointer or pointer.get('active') is not True:
+            raise ExamError('EXAM_NOT_FOUND', 404)
+        return pointer
+
+    def set_active(self, exam_id, active):
+        """Administrator SDK operation, deliberately absent from student routes."""
+        from boto3.dynamodb.conditions import Attr
+        identity(exam_id)
+        if type(active) is not bool:
+            raise ExamError('INVALID_EXAM_ACTIVE')
+        for _ in range(8):
+            old = self.repository.get('CATALOG', 'EXAM#' + exam_id)
+            if not old:
+                raise ExamError('EXAM_NOT_FOUND', 404)
+            condition = Attr('revision').eq(old['revision']) & self._active_condition(old)
+            updated = {**old, 'active': active}
+            try:
+                self.repository.transaction([(updated, condition)])
+                return {'exam_id': exam_id, 'revision': old['revision'], 'active': active}
+            except ConcurrentWrite:
+                continue
+        raise ExamError('EXAM_CATALOG_CONFLICT', 409)
+
+    @staticmethod
+    def _active_condition(row):
+        from boto3.dynamodb.conditions import Attr
+        return Attr('active').eq(row['active']) if 'active' in row else Attr('active').not_exists()
 
     def student_package(self, exam_id, revision=None):
+        self._require_active_exam(exam_id)
         row, exam, audio = self._revision(None, exam_id, revision)
         public = student_projection(exam)
         for source in public['sources']:
@@ -98,6 +130,7 @@ class CloudService(Service):
         return self.assets.download(row['public_assets'][source_id], source['media_type'])
 
     def download_metadata(self, exam_id, revision, source_id):
+        self._require_active_exam(exam_id)
         if source_id not in PUBLIC_SOURCES:
             raise ExamError('EXAM_SOURCE_NOT_FOUND', 404)
         row, exam, _ = self._revision(None, exam_id, revision)
@@ -150,9 +183,10 @@ class CloudService(Service):
             rows = [(transaction, Attr('pk').not_exists())]
             if not existing:
                 old = self.repository.get('CATALOG', 'EXAM#' + exam_id)
-                condition = Attr('revision').eq(old['revision']) if old else Attr('pk').not_exists()
+                condition = (Attr('revision').eq(old['revision']) & self._active_condition(old)) if old else Attr('pk').not_exists()
                 catalog = {'pk': 'CATALOG', 'sk': 'EXAM#' + exam_id, 'revision': revision,
-                           'summary_json': canonical(self._catalog_entry(exam))}
+                           'summary_json': canonical(self._catalog_entry(exam)),
+                           'active': old.get('active') is True if old else False}
                 rows += [(uploaded, Attr('pk').not_exists()), (catalog, condition)]
             try:
                 self.repository.transaction(rows)
@@ -178,6 +212,7 @@ class CloudService(Service):
         attempt_id = uid(payload['attempt_id']); device = identity(payload['device_id'])
         if not isinstance(payload['mode'], str) or payload['mode'] not in {'exam','training'}:
             raise ExamError('INVALID_EXAM_MODE')
+        self._require_active_exam(payload['exam_id'])
         _, exam, _ = self._revision(None, payload['exam_id'], payload['revision'])
         selected = payload.get('section_ids', exam['interactive_section_ids'])
         if (not isinstance(selected, list) or not selected or any(not isinstance(s, str) for s in selected)
