@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select UI coverage from the actual PR diff, without suppressing other CI checks."""
+"""Select simulator coverage from changed iOS inputs; keep device/backend checks."""
 import json
 import os
 from pathlib import Path
@@ -38,15 +38,34 @@ def select_ui(event_name, event, *, repo=ROOT):
     return any(affects_ios(path) for path in changed_paths(pr['base']['sha'], pr['head']['sha'], repo=repo))
 
 
+def select_ios_tests(event_name, event, *, repo=ROOT):
+    if event_name == 'pull_request':
+        pr = event['pull_request']
+        base, head = pr['base']['sha'], pr['head']['sha']
+    elif event_name == 'push':
+        base, head = event['before'], event['after']
+        if base == '0' * 40:
+            return True  # Initial branch creation has no previous tree to compare.
+    else:
+        return True  # Explicit manual/reusable runs retain full unit coverage.
+    paths = changed_paths(base, head, repo=repo)
+    return any(affects_ios(path) or path.startswith('Tests/Unit/')
+               or path == 'scripts/ci_ios.py' for path in paths)
+
+
 def main():
     try:
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-        run_ui = select_ui(os.environ['GITHUB_EVENT_NAME'], event)
+        event_name = os.environ['GITHUB_EVENT_NAME']
+        run_ui = select_ui(event_name, event)
+        run_ios_tests = select_ios_tests(event_name, event)
         value = str(run_ui).lower()
         print('UI coverage selected: ' + value)
+        print('iOS simulator tests selected: ' + str(run_ios_tests).lower())
         if output := os.environ.get('GITHUB_OUTPUT'):
             with open(output, 'a') as file:
                 file.write('run_ui=' + value + '\n')
+                file.write('run_ios_tests=' + str(run_ios_tests).lower() + '\n')
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print('Cannot determine UI coverage: ' + str(error), file=sys.stderr)
         return 1

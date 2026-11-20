@@ -18,11 +18,12 @@ jobs:
     timeout-minutes: 5
     outputs:
       run_ui: ${{ steps.scope.outputs.run_ui }}
+      run_ios_tests: ${{ steps.scope.outputs.run_ios_tests }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Check iOS inputs in the PR merge-base diff
+      - name: Check changed iOS inputs
         id: scope
         run: python3 scripts/ci_changes.py
   alignment-backend:
@@ -79,6 +80,7 @@ jobs:
   ios-build:
     name: Build iOS test products
     needs: changes
+    if: needs.changes.outputs.run_ios_tests == 'true'
     runs-on: macos-26
     timeout-minutes: 25
     outputs:
@@ -209,10 +211,15 @@ jobs:
           results = json.loads(os.environ['CI_JOB_RESULTS'])
           for name, value in results.items():
               print(name, value['result'])
-          for name in ['changes', 'ios-build', 'ios-release']:
+          for name in ['changes', 'ios-release']:
               assert results[name]['result'] == 'success', name + ' did not pass'
+          ios_selection = results['changes']['outputs']['run_ios_tests']
+          assert ios_selection in ['true', 'false'], 'Missing iOS test selection'
+          expected_build = 'success' if ios_selection == 'true' else 'skipped'
+          assert results['ios-build']['result'] == expected_build, 'Required iOS test build did not pass'
           selection = results['changes']['outputs']['run_ui']
           assert selection in ['true', 'false'], 'Missing UI selection'
+          assert selection != 'true' or ios_selection == 'true', 'UI requires the iOS test build'
           expected = 'success' if selection == 'true' else 'skipped'
           assert results['ios-tests']['result'] == expected, 'Required test shards did not pass'
           PY

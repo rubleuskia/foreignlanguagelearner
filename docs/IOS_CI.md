@@ -5,16 +5,20 @@ then built device Release. Run 41345712143 reached its limit while still executi
 Release never started. Logs also exposed stale settings/reader assertions, so increasing the
 deadline alone would not produce a successful release.
 
-UI tests run **only on `pull_request` events whose base branch is `main` and whose diff touches iOS inputs**. Pushes to `main`
-(including merges that produce release tags), manual runs and reusable publishing runs keep backend
-contracts, all unit tests and device Release compilation, without UI discovery or execution.
+UI tests run **only on `pull_request` events whose base branch is `main` and whose diff touches iOS inputs**.
+Simulator unit tests run when a PR or main push changes iOS inputs, Swift unit tests or
+`scripts/ci_ios.py`. Documentation/backend/tooling-only diffs skip simulator jobs entirely,
+while backend contracts and device Release compilation remain required. Explicit manual/reusable
+runs retain unit coverage. Missing or invalid diff data fails selection instead of disabling tests.
 
 | Event | Unit tests | UI tests | Device Release / backend |
 | --- | --- | --- | --- |
 | PR into `main`, iOS inputs changed | All | All eight shards | Required |
-| PR into `main`, docs/backend/tooling only | All | Not scheduled | Required |
-| Push/merge into `main` | All | Not scheduled | Required |
-| Other PR, manual or reusable run | All | Not scheduled | Required |
+| PR, docs/backend/tooling only | Not scheduled | Not scheduled | Required |
+| PR, Swift unit tests or iOS runner only | All | Not scheduled | Required |
+| Push/merge into `main`, iOS inputs changed | All | Not scheduled | Required |
+| Push/merge into `main`, docs/backend/tooling only | Not scheduled | Not scheduled | Required |
+| Manual or reusable run | All | Not scheduled | Required |
 
 `Select UI coverage` reads the PR event's base/head commit SHAs and compares head against their
 Git merge base. iOS inputs are `App/`, `Tests/UI/`, `.swiftpm/`, the app's Xcode project/workspace,
@@ -26,8 +30,9 @@ of silently omitting UI. Full Git history avoids file-list pagination limits and
 
 The `CI` workflow has independent jobs:
 
-- **Select UI coverage** computes the event/path decision. Failure blocks verification.
-- **Build iOS test products** has two exhaustive paths. With no UI selected, `ci_ios.py unit` starts
+- **Select UI coverage** computes separate unit/UI event/path decisions. Failure blocks verification.
+- **Build iOS test products** is skipped when simulator coverage is not selected. Otherwise it
+  has two exhaustive paths. With no UI selected, `ci_ios.py unit` starts
   an owned simulator before compilation, lets first-boot migration overlap the build, discovers
   every unit method and immediately executes the frozen unit plan on that same device. It saves
   diagnostics directly; there is no unit artifact upload/download or second runner/boot. With UI
@@ -38,10 +43,12 @@ The `CI` workflow has independent jobs:
   a fresh simulator for each shard and the existing 25-minute budget. The unit matrix entry still
   runs all unit cases; UI cases retain eight balanced groups.
 - **Compile iOS device Release** runs independently, with a 25-minute budget.
-- **Build and test** keeps the required-check name. Selection, producer and Release must succeed.
-  With UI selected, every matrix job must also succeed. With no UI selected, the matrix must be
-  intentionally skipped and the producer must have passed the combined unit execution. Missing
-  selection, failed/skipped producer, failed Release or failed/cancelled required matrix jobs fail.
+- **Build and test** keeps the required-check name. Selection and Release must succeed.
+  The producer must succeed when selected and be intentionally skipped otherwise.
+  With UI selected, every matrix job must also succeed. With unit-only coverage selected, the
+  matrix must be intentionally skipped and the producer must pass combined unit execution.
+  Missing selection, a failed/skipped required producer, failed Release or failed/cancelled
+  required matrix jobs fail. A server-only diff requires both simulator jobs to be skipped.
 - Backend checks remain independent and required for overall workflow success.
 
 Run [42710302925](https://github.com/rubleuskia/foreignlanguagelearner/actions/runs/42710302925)
@@ -51,8 +58,9 @@ that duplicate lifecycle and artifact handoff, while overlapping boot with compi
 validation executed all 273 unit tests successfully on the reused device with zero skipped tests;
 hosted before/after wall time still needs measurement. UI-changing PRs retain the matrix path.
 
-Tagging still requires complete successful **main push CI**, including backend, unit and Release jobs. UI is checked on iOS-changing PRs into main and is not repeated
-after merge. There is no manual tag bypass or backend-only success path. Total wall time also depends on available runners;
+Tagging still requires complete successful **main push CI**, including backend, selected unit tests
+and device Release compilation. UI is checked on iOS-changing PRs into main and is not repeated
+after merge. There is no manual tag bypass. Total wall time also depends on available runners;
 this change does not promise a tag within ten minutes. Historical successful monolithic runs were
 already around 23–25 minutes before the latest tests were added.
 

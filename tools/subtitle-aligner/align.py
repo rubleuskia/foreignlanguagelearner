@@ -49,18 +49,30 @@ def remove_engine_duplicates(data, text):
     """Remove only extra adjacent repeated tokens proven absent from the source."""
     words = [w for s in data["segments"] for w in s["words"]]
     expected = text.split()
-    actual = [w["word"].strip() for w in words]
+    # Stable-ts may group punctuation and its following word in one timing
+    # record ("- potem"). Compare source tokens while retaining record ownership.
+    actual, owners = [], []
+    for index, word in enumerate(words):
+        parts = clean_text(word["word"]).split() if word["word"].strip() else []
+        actual.extend(parts)
+        owners.extend([index] * len(parts))
     changes = [op for op in difflib.SequenceMatcher(None, expected, actual, autojunk=False)
                .get_opcodes() if op[0] != "equal"]
-    removed = set()
+    removed_tokens = set()
     for tag, _, _, start, end in changes:
         if tag != "insert" or not all(
                 (i > 0 and actual[i] == actual[i - 1])
                 or (i + 1 < len(actual) and actual[i] == actual[i + 1])
                 for i in range(start, end)):
             return data
-        removed.update(range(start, end))
-    if not removed:
+        removed_tokens.update(range(start, end))
+    if not removed_tokens:
+        return data
+    removed = {owners[i] for i in removed_tokens}
+    # Never discard a timing record that also contains a source token.
+    if any(owner in removed and i not in removed_tokens for i, owner in enumerate(owners)):
+        return data
+    if clean_text("".join(w["word"] for i, w in enumerate(words) if i not in removed)) != text:
         return data
     corrected = dict(data)
     corrected["engine_duplicate_words"] = [dict(words[i], original_index=i) for i in sorted(removed)]

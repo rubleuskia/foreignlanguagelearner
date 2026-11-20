@@ -1,3 +1,13 @@
+## Select simulator coverage from iOS inputs (2026-11-20)
+
+For pull requests and main pushes, run simulator unit tests only when the diff changes
+iOS application/project inputs, Swift unit/UI tests or the iOS execution script.
+Keep existing main-targeting iOS PR UI coverage. Documentation, backend and server
+tooling changes skip simulator jobs while retaining backend contracts and device
+Release compilation. Explicit manual/reusable runs retain unit coverage. Fail on
+missing selection and require intentional skipped/success statuses in the final gate.
+Verified release tags still require the complete successful main workflow.
+
 ## Incomplete required examination recordings (2026-11-20)
 
 Withhold the entire examination from the cloud catalog when its official recording

@@ -24,6 +24,32 @@ class AudioMarkupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'expected 2'):
             audio.find_anchor(words(phrase), phrase, 2)
 
+    def test_anchor_cannot_bridge_a_repeat_pause(self):
+        phrase = 'w wymyslonym przykladzie omawiamy nowe plany naszego zespolu'
+        observed = words('w innym zdaniu', 10) + words(phrase, 65)
+        matches = audio.find_anchor(observed, phrase, 1)
+        self.assertEqual(matches[0]['start'], 65)
+        with self.assertRaisesRegex(ValueError, 'expected 2'):
+            audio.find_anchor(observed, phrase, 2)
+
+    def test_overlapping_long_anchor_candidates_are_one_occurrence(self):
+        phrase = 'w wymyslonym przykladzie omawiamy nowe plany naszego zespolu na jutro'
+        observed = words('w innym zdaniu', 10) + words(phrase, 35)
+        # A slow phrase can produce a weaker candidate >20s before its real
+        # start. Its overlapping words still belong to this single reading.
+        observed[2]['end'] = 16
+        matches = audio.find_anchor(observed, phrase, 1)
+        self.assertEqual(matches[0]['start'], 35)
+
+    def test_anchor_keeps_a_long_pause_around_a_worked_example(self):
+        phrase = 'pierwszy fragment zaczyna sie tutaj'
+        observed = words(phrase)
+        for word in observed[2:]:
+            word['start'] += 30
+            word['end'] += 30
+        match = audio.find_anchor(observed, phrase, 1)[0]
+        self.assertEqual(match['end'], observed[-1]['end'])
+
     def test_search_folds_asr_accents_without_changing_reference(self):
         phrase = 'treningi są dobre dla zawodowców'
         result = audio.find_anchor(words('tręningi są dobry dla zawodowców'), phrase, 1)
@@ -38,6 +64,7 @@ class AudioMarkupTests(unittest.TestCase):
         task = {'task_label': 'I', 'expected_occurrences': 1,
                 'start_anchor': 'jeden dwa trzy cztery',
                 'end_anchor': 'koniec tego fragmentu tutaj', 'source_refs': []}
+        task['text'] = task['start_anchor'] + ' ' + task['end_anchor']
         with self.assertRaisesRegex(ValueError, 'unordered'):
             audio.locate({'tasks': [task, dict(task, task_label='II')]}, transcription, 100000)
 
@@ -52,6 +79,7 @@ class AudioMarkupTests(unittest.TestCase):
         task = {'task_label': 'I', 'expected_occurrences': 1,
                 'start_anchor': 'pierwszy fragment zaczyna sie',
                 'end_anchor': phrase, 'source_refs': []}
+        task['text'] = task['start_anchor'] + ' ' + task['end_anchor']
         transcript = {'segments': [{'words': [
             {'word': word['token'], 'start': word['start'], 'end': word['end']}
             for word in observed]}]}
@@ -69,6 +97,7 @@ class AudioMarkupTests(unittest.TestCase):
         task = {'task_label': 'I', 'expected_occurrences': 1,
                 'start_anchor': 'pierwszy komunikat zaczyna sie',
                 'end_anchor': 'ostatni komunikat konczy sie', 'source_refs': []}
+        task['text'] = task['start_anchor'] + ' ' + task['end_anchor']
         transcript = {'segments': [{'words': [
             {'word': w['token'], 'start': w['start'], 'end': w['end']}
             for w in words(task['start_anchor'], 160) + words(task['end_anchor'], 713)
@@ -89,6 +118,8 @@ class AudioMarkupTests(unittest.TestCase):
                   'start_anchor': f'{name} fragment zaczyna sie',
                   'end_anchor': f'{name} fragment konczy sie teraz', 'source_refs': []}
                  for label, name in [('I','pierwszy'), ('II','drugi')]]
+        for task in tasks:
+            task['text'] = task['start_anchor'] + ' ' + task['end_anchor']
         with self.assertRaisesRegex(ValueError, 'unordered'):
             audio.locate({'tasks': tasks[::-1]}, transcript, 200000)
 
@@ -96,6 +127,41 @@ class AudioMarkupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'found 0'):
             audio.find_anchor(words('To zupełnie inna wypowiedź o pogodzie'),
                               'Książki trzeba oddać przed końcem miesiąca', 1)
+
+    def test_source_boundary_rejects_interior_hints_and_changed_words(self):
+        task = {'task_label':'I', 'text':'Pierwszy tekst ma początek. Ten tekst ma swój koniec.',
+                'start_anchor':'Pierwszy tekst ma początek', 'end_anchor':'ma swój koniec'}
+        audio.validate_source_anchors(task)
+        for changed in [dict(task, start_anchor='tekst ma początek'),
+                        dict(task, end_anchor='ma swój końcówkę'),
+                        dict(task, end_anchor='Ten tekst ma swój')]:
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'not a source'):
+                audio.validate_source_anchors(changed)
+
+    def test_search_number_expansion_is_explicit_and_preserves_source(self):
+        task = {'task_label':'I', 'text':'123 osoby rozpoczęły wspólną pracę.',
+                'start_anchor':'sto dwadzieścia trzy osoby', 'end_anchor':'rozpoczęły wspólną pracę'}
+        with self.assertRaisesRegex(ValueError, 'not a source'):
+            audio.validate_source_anchors(task)
+        normalization = {'type':'printed_number_spoken_words','source_prefix':'123',
+                         'search_prefix':'sto dwadzieścia trzy','source_text_unchanged':True,
+                         'raw_recognition_unchanged':True}
+        task['search_only_normalizations'] = [normalization]
+        audio.validate_source_anchors(task)
+        self.assertEqual(task['text'], '123 osoby rozpoczęły wspólną pracę.')
+        for changed in [dict(normalization,source_prefix='12'),
+                        dict(normalization,raw_recognition_unchanged=False),
+                        dict(normalization,type='drop_source_words')]:
+            task['search_only_normalizations'] = [changed]
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'Invalid search-only'):
+                audio.validate_source_anchors(task)
+
+    def test_locate_rejects_changed_source_anchor_before_matching(self):
+        task = {'task_label':'I','text':'Początek źródła ma znaczenie. To jest jego koniec.',
+                'start_anchor':'źródła ma znaczenie','end_anchor':'jest jego koniec',
+                'expected_occurrences':1,'source_refs':[]}
+        with self.assertRaisesRegex(ValueError, 'not a source prefix'):
+            audio.locate({'tasks':[task]}, {'segments':[]}, 10000)
 
     def test_reference_text_mismatch_is_reported(self):
         result = {'alignment': {'segments': [{'words': [
