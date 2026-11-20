@@ -2,6 +2,12 @@
 
 ## Source-linked examinations
 
+The cloud catalog is temporarily limited to adult B1 January 2021 while its interactive
+experience is refined. Other published exams are retained with active=false. Only an
+explicit active=true catalog pointer is returned or permits new material/new attempts;
+existing attempts retain access to their stored progress and pinned grading revisions.
+New exams require explicit administrator activation after publication.
+
 The native catalog uses level/audience groups and searchable session cards. Listening
 offers saved task tabs, answer progress, per-task training audio and uninterrupted full
 exam audio. The first chronological adult B1 January 2021 listening package is curated
