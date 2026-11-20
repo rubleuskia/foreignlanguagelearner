@@ -11,7 +11,9 @@
   adjacent duplicates. Remove only entire surplus records when the resulting text
   exactly matches the source; retain intentional repetitions and all measured times.
 - Real examination data and acoustic evidence remain in the external ExamSources
-  archive. No architecture decision or project overview changed.
+  archive. Project overview unchanged. Record the CI coverage decision in DECISIONS.md:
+  server/tooling-only PR and main diffs skip simulator jobs while retaining backend
+  contracts and device Release compilation; iOS input changes keep selected unit/UI tests.
 - Add the physical-iPhone manual acceptance checklist for remaining acoustic, UI,
   offline/recovery, timer and mixed AI/manual grading cases. Live authenticated API
   acceptance passed; it does not certify those manual cases. Simulator checks excluded.

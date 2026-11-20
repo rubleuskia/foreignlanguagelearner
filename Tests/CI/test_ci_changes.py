@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.ci_changes import affects_ios, changed_paths, select_ui
+from scripts.ci_changes import affects_ios, changed_paths, select_ui, select_ios_tests
 
 
 class UIScopeTests(unittest.TestCase):
@@ -48,6 +48,24 @@ class UIScopeTests(unittest.TestCase):
         for base in ['', '--bad-option', 'HEAD', None]:
             with self.subTest(base=base), self.assertRaises(ValueError):
                 changed_paths(base, 'b' * 40)
+
+    def test_simulator_tests_follow_ios_inputs_for_prs_and_main_pushes(self):
+        events = [('pull_request', {'pull_request': {'base': {'sha': 'a'*40}, 'head': {'sha': 'b'*40}}}),
+                  ('push', {'before': 'a'*40, 'after': 'b'*40})]
+        for name, event in events:
+            for path in ['App/View.swift','Tests/Unit/ExampleTests.swift','Tests/UI/Flow.swift',
+                         'project.yml','Shared/Example.swift','scripts/ci_ios.py']:
+                with self.subTest(name=name,path=path), patch('scripts.ci_changes.changed_paths',return_value=[path]):
+                    self.assertTrue(select_ios_tests(name,event))
+            with patch('scripts.ci_changes.changed_paths',return_value=['backend/example.py','tools/subtitle-aligner/align.py','docs/guide.md','.github/workflows/ci.yml']):
+                self.assertFalse(select_ios_tests(name,event))
+
+    def test_explicit_runs_and_initial_push_keep_unit_tests(self):
+        self.assertTrue(select_ios_tests('workflow_dispatch',{}))
+        self.assertTrue(select_ios_tests('workflow_call',{}))
+        self.assertTrue(select_ios_tests('push',{'before':'0'*40,'after':'a'*40}))
+        with self.assertRaises(KeyError):select_ios_tests('push',{})
+        with self.assertRaises(ValueError):select_ios_tests('push',{'before':'bad','after':'b'*40})
 
 
 class GitDiffScopeTests(unittest.TestCase):

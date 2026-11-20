@@ -274,10 +274,10 @@ class CombinedUnitTests(unittest.TestCase):
 
 
 class WorkflowGateTests(unittest.TestCase):
-    def evaluate(self, include_ui, *, build='success', release='success', matrix=None, selection='success'):
+    def evaluate(self, include_ui, *, include_ios='true', build='success', release='success', matrix=None, selection='success'):
         workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/ci.yml').read_text()
         policy=textwrap.dedent(workflow.rsplit("python3 - <<'PY'\n",1)[1].split('\n          PY',1)[0])
-        needs={'changes':{'result':selection,'outputs':{'run_ui':include_ui}},
+        needs={'changes':{'result':selection,'outputs':{'run_ui':include_ui,'run_ios_tests':include_ios}},
                'ios-build':{'result':build},'ios-release':{'result':release},
                'ios-tests':{'result':matrix or ('success' if include_ui=='true' else 'skipped')}}
         with patch.dict(os.environ,{'CI_JOB_RESULTS':json.dumps(needs)}),redirect_stdout(io.StringIO()):
@@ -294,6 +294,14 @@ class WorkflowGateTests(unittest.TestCase):
         for kwargs in [{'matrix':'skipped'},{'matrix':'failure'},{'build':'failure'}]:
             with self.subTest(kwargs=kwargs),self.assertRaises(AssertionError):self.evaluate('true',**kwargs)
         with self.assertRaises(AssertionError):self.evaluate('')
+
+    def test_server_only_diff_requires_intentionally_skipped_simulator_jobs(self):
+        self.evaluate('false',include_ios='false',build='skipped')
+        for kwargs in [{'build':'success'},{'build':'failure'},{'release':'failure'},
+                       {'matrix':'success'},{'include_ios':''},{'selection':'failure'}]:
+            inputs={'include_ios':'false','build':'skipped',**kwargs}
+            with self.subTest(kwargs=kwargs),self.assertRaises(AssertionError):self.evaluate('false',**inputs)
+        with self.assertRaises(AssertionError):self.evaluate('true',include_ios='false',build='skipped')
 
 
 if __name__=='__main__':unittest.main()
