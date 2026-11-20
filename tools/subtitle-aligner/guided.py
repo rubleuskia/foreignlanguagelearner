@@ -13,9 +13,16 @@ def plan_chunks(text, transcription, duration, target_seconds=20):
     for a, b, size in matcher.get_matching_blocks():
         for offset in range(max(0, size - 3)):
             start = float(words[b + offset]["start"])
-            if (a + offset > cuts[-1][0] and start - cuts[-1][1] >= target_seconds
+            source_index = a + offset
+            # Keep standalone dialogue punctuation with the following words.
+            # A trailing dash can make Stable-ts repeat the preceding word;
+            # moving the source cut preserves every token without repairing
+            # or discarding generated words after alignment.
+            while source_index > cuts[-1][0] and not normalize(book[source_index - 1]):
+                source_index -= 1
+            if (source_index > cuts[-1][0] and start - cuts[-1][1] >= target_seconds
                     and start < duration):
-                cuts.append((a + offset, start))
+                cuts.append((source_index, start))
     cuts.append((len(book), duration))
     if any(end - start > 180 for (_, start), (_, end) in zip(cuts, cuts[1:])):
         raise ValueError("Insufficient matching transcript anchors. Use shorter matching excerpts.")
