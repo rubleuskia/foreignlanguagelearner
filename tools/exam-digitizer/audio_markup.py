@@ -53,7 +53,7 @@ def timed_tokens(transcription):
     return result
 
 
-def find_anchor(words, phrase, expected_count, threshold=0.75):
+def find_anchor(words, phrase, expected_count, threshold=0.75, *, require_last_token=False):
     """Find independent repeated occurrences; fail rather than guess a count."""
     expected = tokens(phrase)
     if len(expected) < 3:
@@ -79,12 +79,21 @@ def find_anchor(words, phrase, expected_count, threshold=0.75):
                     and ''.join(expected) == ''.join(actual[start:end])):
                 score = 1.0
                 policy = 'exact_concatenated_tokens'
+            last_exact = actual[end-1] == expected[-1]
+            if (require_last_token and policy != 'exact_concatenated_tokens'
+                    and not last_exact and difflib.SequenceMatcher(
+                        None, expected[-1], actual[end-1], autojunk=False).ratio() < 0.66):
+                continue
+            if require_last_token and policy != 'exact_concatenated_tokens':
+                policy = 'token_sequence_with_endpoint_typo_gates'
             if best is None or score > best['score']:
                 best = {'start': words[start]['start'], 'end': words[end-1]['end'],
                         'score': score, 'observed_text': ' '.join(actual[start:end]),
                         'reference_text': phrase, 'match_policy': policy,
                         'first_token_exact': first_exact,
                         'full_anchor_threshold': threshold}
+                if require_last_token:
+                    best.update(last_token_exact=last_exact, last_token_gate_required=True)
         if best and best['score'] >= threshold:
             candidates.append(best)
     # Suppress windows around the same spoken phrase; retain distinct repeats.
@@ -107,7 +116,7 @@ def locate(reference, transcription, duration_ms):
         if not isinstance(count, int) or isinstance(count, bool) or count < 1:
             raise ValueError('Expected occurrence count must be a positive integer.')
         starts = find_anchor(words, task['start_anchor'], count)
-        ends = find_anchor(words, task['end_anchor'], count)
+        ends = find_anchor(words, task['end_anchor'], count, require_last_token=True)
         occurrences = []
         for number, (start, end) in enumerate(zip(starts, ends), 1):
             if not 0 <= start['start'] <= start['end'] <= end['end'] <= duration_ms / 1000:

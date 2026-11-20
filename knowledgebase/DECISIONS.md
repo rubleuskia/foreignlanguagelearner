@@ -1,3 +1,12 @@
+## Incomplete required examination recordings (2026-11-20)
+
+Withhold the entire examination from the cloud catalog when its official recording
+for an interactive listening module is incomplete. Do not publish only its reading
+and grammar modules, invent missing speech, or silently replace the official source.
+Keep the complete available source documents, extracted structure, keys and diagnostic
+evidence locally until a complete recording is available. This gate does not activate
+writing or require missing speaking material for the currently supported three modules.
+
 ## Cloud exams and independently published source data (2026-11-19)
 
 Keep real examination profiles, full JSON, originals, keys, audio and review evidence outside

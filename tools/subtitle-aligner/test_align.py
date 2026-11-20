@@ -59,6 +59,28 @@ class SubtitleTests(unittest.TestCase):
         restored = [w for ((a, _), (b, _)) in passages for w in book.split()[a:b]]
         self.assertEqual(restored, book.split())
 
+    def test_guided_dialogue_dash_stays_with_following_speech(self):
+        book = "Raz dwa trzy - cztery pięć sześć siedem osiem dziewięć."
+        starts = [0, 1, 2, 3, 25, 26, 27, 28, 29, 30]
+        words = [word(" " + token, start, start + .5)
+                 for token, start in zip(book.split(), starts)]
+        cuts = plan_chunks(book, {"segments": [{"words": words}]}, 40)
+        self.assertEqual(cuts, [(0, 0.), (3, 25.), (10, 40)])
+        passages = [book.split()[a:b] for (a, _), (b, _) in zip(cuts, cuts[1:])]
+        self.assertEqual(passages[1][:2], ["-", "cztery"])
+        self.assertEqual([token for passage in passages for token in passage], book.split())
+
+    def test_guided_punctuation_run_does_not_create_empty_source_passage(self):
+        book = "— („ jeden dwa trzy cztery pięć sześć siedem osiem dziewięć dziesięć"
+        words = [word(" " + token, i * 21, i * 21 + .5)
+                 for i, token in enumerate(book.split())]
+        cuts = plan_chunks(book, {"segments": [{"words": words}]}, 260)
+        self.assertTrue(all(a < b for (a, _), (b, _) in zip(cuts, cuts[1:])))
+        self.assertFalse(any(book.split()[index - 1] in {"—", "(„"}
+                             for index, _ in cuts[1:-1]))
+        restored = [token for (a, _), (b, _) in zip(cuts, cuts[1:]) for token in book.split()[a:b]]
+        self.assertEqual(restored, book.split())
+
     def test_untimed_words_retained_only_with_opt_in(self):
         words = [word("—", 0, 0), word(" Tak.", 0, 1), word(" Koniec.", 1, 1)]
         data = {"segments": [{"words": words}]}

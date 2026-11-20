@@ -3,9 +3,19 @@
 - Accept source listening passages longer than six minutes, including C2 news blocks,
   while rejecting measured anchors outside the original recording. Preserve the full
   source task rather than imposing a fixed duration cap.
-- Validation: all 63 digitizer tests passed, including long-passage preservation and
-  rejection of anchors beyond the recording. No architectural decision or project
-  overview changed.
+- Require end anchors to match the final source word as well as the full phrase;
+  a high phrase score cannot accept a truncated ending. Retain exact concatenated
+  word matches for ASR token splits and the existing bounded typo tolerance.
+- Keep standalone dialogue punctuation with the following guided alignment chunk,
+  preventing repeated words at a chunk boundary without dropping source tokens.
+- Validation: all 65 digitizer tests passed, including long-passage preservation,
+  missing final-word rejection, exact word splits and out-of-recording anchors.
+  All 37 subtitle-aligner/worker tests passed, and the real failing dialogue excerpt
+  aligned with exact source text after the punctuation fix. Four local playback
+  controller tests passed after a single CI test failed; CI still needs confirmation.
+- Record the user's decision to withhold an entire exam when its required official
+  recording is incomplete; retain all local documents and diagnostics. Update the
+  import guide for the deployed operator backend .277. Project overview unchanged.
 
 ## 2026-11-19 — Cloud examinations, external source archive and retained web prototype
 
