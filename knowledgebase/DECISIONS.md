@@ -1,3 +1,16 @@
+## Protected exam credentials and recoverable identity failures (2026-11-20)
+
+Keep operator credentials protected with WhenUnlockedThisDeviceOnly. Do not loosen
+Keychain accessibility to make background exam polling succeed. Only poll identity
+while foregrounded with protected data available; defer locked synchronization while
+retaining local attempts and deadline/checkpoint handling.
+Temporary Keychain failures do not imply logout and must not discard loaded progress.
+Make editing unavailable until the current identity is verified; definitive sign-out
+or account invalidation clears in-memory owner data while retaining scoped files.
+Keep authentication banners independent of unrelated operation/storage failures so
+successful revalidation clears only the resolved authentication issue. Log only the
+Keychain operation and numeric OSStatus for device diagnosis, never session values.
+
 ## Single-exam refinement and explicit cloud visibility (2026-11-20)
 
 Keep only adult B1 January 2021 visible while refining the complete interactive

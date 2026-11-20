@@ -23,6 +23,7 @@ struct ExamAPIError: LocalizedError, Sendable {
         case "UNSUPPORTED_EXAM_SCHEMA": return "This exam uses an unsupported format."
         case "ACCOUNT_CHANGED": return "The exam account or provider changed. Reopen the exam."
         case "SIGN_IN_REQUIRED": return "Sign in using the selected translation provider in Settings."
+        case "DEVICE_LOCKED": return AppLanguage.text("Unlock your device to access the saved exam session.")
         case "STORAGE_FAILED": return "Could not save the attempt. Your last saved answers are retained."
         case "TOO_MANY_EXAM_TOKENS": return "Too many answers in a response field. Your local answers are saved; correct the answer and retry."
         default: return "Exam service unavailable (\(code)). Local progress is saved."
@@ -35,15 +36,13 @@ actor ExamAPIClient {
     private let operatorSession: OperatorSession
     private let cloudSession: CloudSession
     private let client: any ContextAnalysisHTTPClient
-    private let operatorCredentials: any OperatorCredentialStoring
     private let modeProvider: @Sendable () -> CloudProviderMode
 
     init(operatorSession: OperatorSession = .shared, cloudSession: CloudSession = .shared,
          client: any ContextAnalysisHTTPClient = URLSessionContextAnalysisHTTPClient(session: URLSession(configuration: .ephemeral)),
-         operatorCredentials: any OperatorCredentialStoring = KeychainOperatorCredentialStore(),
          modeProvider: @escaping @Sendable () -> CloudProviderMode = { TranslationRequestSettings.current.mode }) {
         self.operatorSession = operatorSession; self.cloudSession = cloudSession
-        self.client = client; self.modeProvider = modeProvider; self.operatorCredentials = operatorCredentials
+        self.client = client; self.modeProvider = modeProvider
     }
 
     private static func digest(_ text: String) -> String {
@@ -72,8 +71,7 @@ actor ExamAPIClient {
             let lease = try await cloudSession.lease()
             return ExamIdentity(scopeID: Self.digest("cloud|\(lease.scopeID)|\(lease.userID)"), userID: lease.userID, mode: mode)
         }
-        guard let name = try await operatorSession.username(), !name.isEmpty else { throw ExamAPIError(code: "SIGN_IN_REQUIRED") }
-        guard let credentials = try operatorCredentials.load(), credentials.username == name,
+        guard let credentials = try await operatorSession.credentialsSnapshot(), !credentials.username.isEmpty,
               let subject = Self.localSubject(credentials.accessToken) else { throw ExamAPIError(code: "SIGN_IN_REQUIRED") }
         return ExamIdentity(scopeID: Self.digest("operator|\(BuiltinLibraryService.baseURL.absoluteString)|\(OperatorSession.clientID)|\(subject)"), userID: subject, mode: mode)
     }
