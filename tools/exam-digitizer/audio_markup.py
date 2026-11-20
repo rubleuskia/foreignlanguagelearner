@@ -110,11 +110,38 @@ def find_anchor(words, phrase, expected_count, threshold=0.75, *, require_last_t
     return sorted(selected, key=lambda x: x['start'])
 
 
+def validate_source_anchors(task):
+    """Search phrases must retain the complete source boundary, not an interior hint."""
+    source = task.get('text')
+    if not isinstance(source, str) or not tokens(source):
+        raise ValueError('A task needs its source text before locating audio.')
+    for normalization in task.get('search_only_normalizations', []):
+        prefix = normalization.get('source_prefix')
+        replacement = normalization.get('search_prefix')
+        if (normalization.get('type') != 'printed_number_spoken_words'
+                or normalization.get('source_text_unchanged') is not True
+                or normalization.get('raw_recognition_unchanged') is not True
+                or not isinstance(prefix, str) or not prefix.isdecimal()
+                or not isinstance(replacement, str) or not tokens(replacement)
+                or not source.startswith(prefix)
+                or (len(source) > len(prefix) and source[len(prefix)].isalnum())):
+            raise ValueError('Invalid search-only source number normalization.')
+        source = replacement + source[len(prefix):]
+    original = tokens(source)
+    for side in ('start', 'end'):
+        anchor = tokens(task[side + '_anchor'])
+        boundary = original[:len(anchor)] if side == 'start' else original[-len(anchor):]
+        if not anchor or anchor != boundary:
+            raise ValueError(f'Task {task["task_label"]} {side} anchor is not a source '
+                             + ('prefix.' if side == 'start' else 'suffix.'))
+
+
 def locate(reference, transcription, duration_ms):
     words = timed_tokens(transcription)
     tasks = []
     previous_end = 0
     for task in reference['tasks']:
+        validate_source_anchors(task)
         count = task['expected_occurrences']
         if not isinstance(count, int) or isinstance(count, bool) or count < 1:
             raise ValueError('Expected occurrence count must be a positive integer.')

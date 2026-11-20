@@ -3,12 +3,19 @@
 - Treat overlapping anchor candidates as one spoken occurrence even when their starts
   are more than 20 seconds apart. A weak match cannot borrow words from the next
   reading and count that same reading twice. Preserve pauses around worked examples.
+- Require every search anchor to be an actual source prefix/suffix; reject interior
+  hints and changed boundary words before alignment. Only explicitly declared
+  printed-number search expansions can change search spelling, without rewriting
+  source text or recognition timestamps.
 - Compare source tokens across grouped engine timing records when removing extra
   adjacent duplicates. Remove only entire surplus records when the resulting text
   exactly matches the source; retain intentional repetitions and all measured times.
 - Real examination data and acoustic evidence remain in the external ExamSources
   archive. No architecture decision or project overview changed.
-- Validation: 68 digitizer tests and 39 subtitle-aligner/worker tests passed;
+- Add the physical-iPhone manual acceptance checklist for remaining acoustic, UI,
+  offline/recovery, timer and mixed AI/manual grading cases. Live authenticated API
+  acceptance passed; it does not certify those manual cases. Simulator checks excluded.
+- Validation: 71 digitizer tests and 39 subtitle-aligner/worker tests passed;
   synthetic regressions cover overlapping matches, preserved pauses, grouped
   punctuation and intentional repetitions. Existing 28 package bounds were
   independently recomputed without changes.
