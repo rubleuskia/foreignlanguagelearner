@@ -24,6 +24,32 @@ class AudioMarkupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'expected 2'):
             audio.find_anchor(words(phrase), phrase, 2)
 
+    def test_anchor_cannot_bridge_a_repeat_pause(self):
+        phrase = 'w wymyslonym przykladzie omawiamy nowe plany naszego zespolu'
+        observed = words('w innym zdaniu', 10) + words(phrase, 65)
+        matches = audio.find_anchor(observed, phrase, 1)
+        self.assertEqual(matches[0]['start'], 65)
+        with self.assertRaisesRegex(ValueError, 'expected 2'):
+            audio.find_anchor(observed, phrase, 2)
+
+    def test_overlapping_long_anchor_candidates_are_one_occurrence(self):
+        phrase = 'w wymyslonym przykladzie omawiamy nowe plany naszego zespolu na jutro'
+        observed = words('w innym zdaniu', 10) + words(phrase, 35)
+        # A slow phrase can produce a weaker candidate >20s before its real
+        # start. Its overlapping words still belong to this single reading.
+        observed[2]['end'] = 16
+        matches = audio.find_anchor(observed, phrase, 1)
+        self.assertEqual(matches[0]['start'], 35)
+
+    def test_anchor_keeps_a_long_pause_around_a_worked_example(self):
+        phrase = 'pierwszy fragment zaczyna sie tutaj'
+        observed = words(phrase)
+        for word in observed[2:]:
+            word['start'] += 30
+            word['end'] += 30
+        match = audio.find_anchor(observed, phrase, 1)[0]
+        self.assertEqual(match['end'], observed[-1]['end'])
+
     def test_search_folds_asr_accents_without_changing_reference(self):
         phrase = 'treningi są dobre dla zawodowców'
         result = audio.find_anchor(words('tręningi są dobry dla zawodowców'), phrase, 1)

@@ -96,10 +96,13 @@ def find_anchor(words, phrase, expected_count, threshold=0.75, *, require_last_t
                     best.update(last_token_exact=last_exact, last_token_gate_required=True)
         if best and best['score'] >= threshold:
             candidates.append(best)
-    # Suppress windows around the same spoken phrase; retain distinct repeats.
+    # Candidates sharing recognized words are the same spoken occurrence,
+    # even when a weak match starts across a long repeat/instruction pause.
     selected = []
     for candidate in sorted(candidates, key=lambda x: (x['score'], x['first_token_exact']), reverse=True):
-        if all(abs(candidate['start'] - old['start']) > 20 for old in selected):
+        if all(abs(candidate['start'] - old['start']) > 20
+               and (candidate['end'] <= old['start'] or old['end'] <= candidate['start'])
+               for old in selected):
             selected.append(candidate)
     if len(selected) != expected_count:
         raise ValueError(f'Anchor {phrase!r}: expected {expected_count} occurrences, '

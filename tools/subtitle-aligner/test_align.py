@@ -42,6 +42,20 @@ class SubtitleTests(unittest.TestCase):
         self.assertNotIn("engine_duplicate_words", align.remove_engine_duplicates(data, "Tak Tak jest."))
         self.assertIs(align.remove_engine_duplicates(data, "Nie jest."), data)
 
+    def test_engine_duplicate_repair_accepts_grouped_dialogue_punctuation(self):
+        words = [word(" - potem", 0, 1), word(" przyszli.", 1, 2),
+                 word(" przyszli.", 2.5, 2.5), word(" Dalej.", 2.5, 3)]
+        data = {"segments": [{"words": words}]}
+        fixed = align.remove_engine_duplicates(data, "- potem przyszli. Dalej.")
+        self.assertEqual([w['word'] for w in fixed['segments'][0]['words']],
+                         [" - potem", " przyszli.", " Dalej."])
+        self.assertEqual(fixed['engine_duplicate_words'][0]['original_index'], 2)
+        self.assertIs(align.remove_engine_duplicates(data, "- potem przyszli. przyszli. Dalej."), data)
+
+    def test_duplicate_repair_does_not_remove_part_of_a_timing_record(self):
+        data = {"segments": [{"words": [word(" Tak Tak jest.", 0, 2)]}]}
+        self.assertIs(align.remove_engine_duplicates(data, "Tak jest."), data)
+
     def test_guided_anchors_and_insufficient_matches(self):
         book = "one two three four five six seven eight nine ten"
         words = [word(" " + w, i * 20, i * 20 + 1) for i, w in enumerate(book.split())]

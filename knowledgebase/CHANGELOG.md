@@ -1,3 +1,18 @@
+## 2026-11-20 — Reject overlapping audio-anchor matches and repair grouped-token duplicates
+
+- Treat overlapping anchor candidates as one spoken occurrence even when their starts
+  are more than 20 seconds apart. A weak match cannot borrow words from the next
+  reading and count that same reading twice. Preserve pauses around worked examples.
+- Compare source tokens across grouped engine timing records when removing extra
+  adjacent duplicates. Remove only entire surplus records when the resulting text
+  exactly matches the source; retain intentional repetitions and all measured times.
+- Real examination data and acoustic evidence remain in the external ExamSources
+  archive. No architecture decision or project overview changed.
+- Validation: 68 digitizer tests and 39 subtitle-aligner/worker tests passed;
+  synthetic regressions cover overlapping matches, preserved pauses, grouped
+  punctuation and intentional repetitions. Existing 28 package bounds were
+  independently recomputed without changes.
+
 ## 2026-11-19 — Preserve long examination audio passages
 
 - Accept source listening passages longer than six minutes, including C2 news blocks,
