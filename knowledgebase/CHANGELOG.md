@@ -1,3 +1,19 @@
+## 2026-11-20 — Serve the curated January 2021 listening revision
+
+- Publish the external `pl-b1-2021-01-adults-interactive-v1` package and move the
+  sole active catalog pointer from the old page-backed January 2021 revision to
+  `07d655fa61d3b04f91bb12b6781ba0b7205f7899fb0f9e37e1c33be04b8dd189`.
+- Deliver the five listening tasks as 41 scored interactive responses with original
+  choices/examples, one/two-speaker limits and 11 individually cropped photographs.
+  Reading and grammar are unchanged and still require separate curation for this exam.
+- Deploy the verified `.289` backend release through the prepared Cloud Control plan
+  so the student projection includes illustration regions and public input limits.
+  Retain the other 32 published exams as inactive and preserve all prior revisions.
+- Validate the real cloud catalog and student projection through the SDK. End-user
+  authenticated HTTP acceptance remains separate. Store release/publication receipts
+  in the external ExamSources archive. Architectural decisions unchanged; update PROJECT.md
+  to distinguish the published revision from its former locally prepared state.
+
 ## 2026-11-20 — Recover exam sessions after temporary Keychain unavailability
 
 - Skip periodic identity reads while the app is in the background or protected data
