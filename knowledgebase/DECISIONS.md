@@ -1,3 +1,20 @@
+## Native interactive listening and catalog grouping (2026-11-20)
+
+Group the native exam catalog by CEFR level, then audience, with latest sessions first
+and title/level/session search. Use adaptive cards across phone and tablet sizes.
+Listening uses one selected task with persistent progress and per-task answer counts.
+Changing tasks pauses training audio without interrupting exam-mode full-recording playback.
+Use statement answer buttons and numeric speaker chips for source-declared integer-token
+matching, enforcing slot limits and retaining the original numeric response contract.
+Curate the January 2021 adult B1 listening section into complete JSON questions and
+examples; omit PDF links in listening task headers. Link source illustration rectangles
+to the corresponding item and crop only those images from the verified original PDF.
+Transmit public input slot limits so the client can enforce source answer counts.
+Existing source illustrations in other material still require
+source-specific conversion and must not be silently dropped or replaced with invented text.
+Keep former packages immutable. Content curation requires a new data revision published
+separately from the native app and student projection code; never rewrite old attempts.
+
 ## Select simulator coverage from iOS inputs (2026-11-20)
 
 For pull requests and main pushes, run simulator unit tests only when the diff changes

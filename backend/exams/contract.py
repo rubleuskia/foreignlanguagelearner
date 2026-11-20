@@ -121,6 +121,16 @@ def validate_exam(exam, audio=None):
             raise ExamError('INVALID_EXAM_SCORE_TOTAL')
         for task in tasks:
             items = task['items']
+            for block in task['blocks']:
+                if 'item_id' in block and block['item_id'] not in {i['id'] for i in items}:
+                    raise ExamError('INVALID_EXAM_ILLUSTRATION_ITEM')
+                if 'image_region' in block:
+                    region = block['image_region']
+                    if (block['type'] != 'image' or not isinstance(region, list) or len(region) != 4
+                        or not all(type(v) in (int, float) and 0 <= v <= 1 for v in region)
+                        or region[2] <= 0 or region[3] <= 0
+                        or region[0] + region[2] > 1 or region[1] + region[3] > 1):
+                        raise ExamError('INVALID_EXAM_ILLUSTRATION_REGION')
             if not items or len({i['position'] for i in items}) != len(items):
                 raise ExamError('INVALID_EXAM_ITEM_ORDER')
             if all(i['max_score_units'] is not None for i in items):
@@ -291,7 +301,7 @@ def student_projection(exam):
                 out['presentation']=public_presentation(task['presentation'])
             out['blocks']=[]
             for block in task['blocks']:
-                node=pick(block,('id','type','text','underlined_text','is_scored'))
+                node=pick(block,('id','type','text','underlined_text','is_scored','item_id','image_region','image_page_size','role'))
                 if block['type']=='example' and block.get('is_scored') is False and 'answer' in block:
                     node['answer']=copy.deepcopy(block['answer'])
                 node['source_refs']=public_refs(block.get('source_refs',[]))
@@ -306,6 +316,9 @@ def student_projection(exam):
                 node=pick(item,('id','label','position','prompt','response_type','option_ids','max_score_units',
                                 'context','underlined_text','required_word','selection'))
                 node['source_refs']=public_refs(item.get('source_refs',[]))
+                if 'input' in item:
+                    node['input']=pick(item['input'],('format','slot_count','max_tokens'))
+                    node['input']['source_refs']=public_refs(item['input'].get('source_refs',[]))
                 out['items'].append(node)
             public['tasks'].append(out)
         result['sections'].append(public)

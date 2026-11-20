@@ -110,6 +110,51 @@ struct ExamCatalogEnvelope: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case schemaVersion = "schema_version", exams }
 }
 
+struct ExamCatalogGroup: Identifiable {
+    let level: String
+    let audience: String
+    let exams: [ExamCatalogEntry]
+    var id: String { "\(level)|\(audience)" }
+
+    static func groups(_ entries: [ExamCatalogEntry], search: String = "") -> [Self] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = entries.filter {
+            query.isEmpty || "\($0.title) \($0.level) \($0.session.label)".localizedStandardContains(query)
+        }
+        let levels = ["A1", "A2", "B1", "B2", "C1", "C2"]
+        let buckets = Dictionary(grouping: filtered) { "\($0.level)|\($0.audience)" }
+        return buckets.values.compactMap { values in
+            guard let first = values.first else { return nil }
+            return Self(level: first.level, audience: first.audience, exams: values.sorted {
+                if $0.session.startDate != $1.session.startDate { return $0.session.startDate > $1.session.startDate }
+                return $0.id < $1.id
+            })
+        }.sorted {
+            if $0.level != $1.level {
+                let left = levels.firstIndex(of: $0.level) ?? levels.count
+                let right = levels.firstIndex(of: $1.level) ?? levels.count
+                return left == right ? $0.level < $1.level : left < right
+            }
+            return $0.audience < $1.audience
+        }
+    }
+}
+
+/// Numeric matching answers use the source's displayed codes, never opaque option IDs.
+enum ExamTokenSelection {
+    static func tokens(_ answer: String) -> [String] {
+        answer.split { !$0.isASCII || !$0.isNumber }.map(String.init)
+    }
+
+    static func toggled(_ code: String, answer: String, limit: Int) -> String {
+        var selected = Array(Set(tokens(answer))).sorted()
+        if selected.contains(code) { selected.removeAll { $0 == code } }
+        else if selected.count < max(1, limit) { selected.append(code) }
+        else if limit == 1 { selected = [code] }
+        return selected.sorted().joined(separator: ", ")
+    }
+}
+
 /// The student projection deliberately has no grading keys or private assessment contracts.
 struct ExamPackage: Codable, Identifiable, Sendable {
     let schemaVersion: String
@@ -185,8 +230,12 @@ struct ExamBlock: Codable, Identifiable, Sendable {
     var answer: String? = nil
     var underlinedText: String? = nil
     var role: String? = nil
+    var itemID: String? = nil
+    /// Normalized x/y/width/height in the original page's top-left coordinate system.
+    var imageRegion: [Double]? = nil
     enum CodingKeys: String, CodingKey {
         case id, type, text, answer, role, sourceRefs = "source_refs", underlinedText = "underlined_text"
+        case itemID = "item_id", imageRegion = "image_region"
     }
 }
 

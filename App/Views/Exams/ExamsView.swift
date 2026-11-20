@@ -7,10 +7,15 @@ struct ExamsNavigationView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = ExamStore()
     @State private var path: [ExamScreen] = []
+    @State private var search = ""
+    @State private var openingID: String?
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 22) {
+                Text(AppLanguage.text("Original exam papers with interactive tasks and recordings."))
+                    .font(.subheadline).foregroundStyle(.secondary)
                 if store.isLoading && store.catalog.isEmpty { ProgressView(AppLanguage.text("Loading exams…")) }
                 if let error = store.errorMessage { Text(AppLanguage.text(error)).foregroundStyle(.red) }
                 if !store.isLoading && store.catalog.isEmpty {
@@ -22,30 +27,32 @@ struct ExamsNavigationView: View {
                         Button(AppLanguage.text("Refresh")) { Task { await store.loadCatalog() } }
                     }
                 }
-                ForEach(store.catalog, id: \.id) { entry in
-                    Button {
-                        Task {
-                            await store.openExam(entry)
-                            if store.package?.id == entry.id { path.append(.overview) }
+                let groups = ExamCatalogGroup.groups(store.catalog, search: search)
+                if groups.isEmpty && !store.catalog.isEmpty {
+                    ContentUnavailableView.search(text: search)
+                }
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 12) {
+                            Text(group.level).font(.title2.bold()).foregroundStyle(.tint)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Label(AppLanguage.text(group.audience == "adults" ? "Adults" : "Children and teenagers"),
+                                      systemImage: group.audience == "adults" ? "person" : "figure.2.and.child.holdinghands")
+                                    .font(.headline)
+                                Text(AppLanguage.format("%d exams", group.exams.count)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.accessibilityElement(children: .combine)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), alignment: .top)], spacing: 14) {
+                            ForEach(group.exams) { entry in catalogCard(entry) }
                         }
-                    } label: {
-                        HStack(alignment: .top, spacing: 15) {
-                            Image(systemName: "doc.text").font(.title2).foregroundStyle(.tint)
-                                .frame(width: 44, height: 54).background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(entry.title).font(.headline).foregroundStyle(.primary)
-                                Text(entry.level).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                Text(entry.availableSectionIDs.map(ExamDisplay.title).joined(separator: " · "))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                        }.padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain).accessibilityIdentifier("exams.open.\(entry.id)")
+                    }.accessibilityIdentifier("exams.group.\(group.id)")
                 }
                 if let message = store.syncMessage { Text(AppLanguage.text(message)).font(.caption).foregroundStyle(.secondary) }
+              }.padding().frame(maxWidth: 1100).frame(maxWidth: .infinity)
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(AppLanguage.text("Exams"))
+            .searchable(text: $search, prompt: AppLanguage.text("Search exams"))
             .refreshable { await store.loadCatalog(); await store.synchronize() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -71,6 +78,36 @@ struct ExamsNavigationView: View {
             }
         }
         .accessibilityIdentifier("exams.root")
+    }
+
+    private func catalogCard(_ entry: ExamCatalogEntry) -> some View {
+        Button {
+            openingID = entry.id
+            Task {
+                await store.openExam(entry)
+                openingID = nil
+                if store.package?.id == entry.id { path.append(.overview) }
+            }
+        } label: {
+            ExamSurface {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text(entry.level).font(.title.bold()).foregroundStyle(.tint)
+                        Spacer()
+                        if openingID == entry.id { ProgressView() }
+                        else { Image(systemName: "arrow.up.right").foregroundStyle(.secondary) }
+                    }
+                    Text(entry.sessionLabel).font(.headline).foregroundStyle(.primary)
+                    Text(entry.title).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                    ForEach(entry.availableSectionIDs, id: \.self) { id in
+                        Label(ExamDisplay.title(id), systemImage: ExamDisplay.icon(id))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }.buttonStyle(.plain).disabled(openingID != nil)
+            .accessibilityIdentifier("exams.open.\(entry.id)")
     }
 }
 

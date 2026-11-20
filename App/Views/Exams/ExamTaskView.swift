@@ -3,13 +3,20 @@ import PDFKit
 import UIKit
 
 @MainActor enum ExamSourcePageRenderer {
-    static func thumbnail(url: URL, page: Int) -> UIImage? {
+    static func thumbnail(url: URL, page: Int, region: [Double]? = nil) -> UIImage? {
         guard url.isFileURL, page > 0 else { return nil }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.fragment = nil
         guard let file = components?.url, let document = PDFDocument(url: file),
               page <= document.pageCount, let original = document.page(at: page - 1) else { return nil }
-        return original.thumbnail(of: CGSize(width: 900, height: 1280), for: .mediaBox)
+        guard let region else { return original.thumbnail(of: CGSize(width: 900, height: 1280), for: .mediaBox) }
+        guard region.count == 4, region.allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= 1 }),
+              region[2] > 0, region[3] > 0, region[0] + region[2] <= 1, region[1] + region[3] <= 1 else { return nil }
+        let full = original.thumbnail(of: CGSize(width: 2000, height: 2800), for: .mediaBox)
+        guard let cgImage = full.cgImage,
+              let crop = cgImage.cropping(to: CGRect(x: region[0] * Double(cgImage.width), y: region[1] * Double(cgImage.height),
+                                                    width: region[2] * Double(cgImage.width), height: region[3] * Double(cgImage.height))) else { return nil }
+        return UIImage(cgImage: crop)
     }
 }
 
@@ -17,6 +24,7 @@ private struct ExamSourcePageImage: View {
     let url: URL
     let page: Int
     let label: String
+    var region: [Double]? = nil
     @State private var image: UIImage?
     @State private var finished = false
 
@@ -26,8 +34,8 @@ private struct ExamSourcePageImage: View {
             else if !finished { ProgressView() }
             else { Text(AppLanguage.text("Open original exam page")).font(.caption).foregroundStyle(.secondary) }
         }
-        .task(id: "\(url.absoluteString)|\(page)") {
-            image = ExamSourcePageRenderer.thumbnail(url: url, page: page)
+        .task(id: "\(url.absoluteString)|\(page)|\(region ?? [])") {
+            image = ExamSourcePageRenderer.thumbnail(url: url, page: page, region: region)
             finished = true
         }
     }
@@ -41,6 +49,14 @@ struct ExamTaskView: View {
 
     private var layout: String { task.presentation?.layout ?? (task.interactionType == "true_false" ? "true_false_table" : "question_list") }
     private var visibleBlocks: [ExamBlock] { task.blocks.filter { !(task.presentation?.suppressExampleBlocks == true && $0.type == "example") } }
+    private var isListening: Bool { store.currentAttempt?.sectionID == "listening" }
+    private var usesSpeakerSelection: Bool {
+        isListening && layout == "token_table" && !task.options.isEmpty &&
+        task.options.allSatisfy { option in
+            let code = task.presentation?.displayCodes?[option.id] ?? option.label
+            return !code.isEmpty && code.allSatisfy { $0.isASCII && $0.isNumber }
+        } && task.items.allSatisfy { $0.input?.object?["format"]?.string == "integer_tokens" }
+    }
 
     var body: some View {
         ExamSurface {
@@ -52,7 +68,7 @@ struct ExamTaskView: View {
                         Text(AppLanguage.format("%@ points", ExamDisplay.points(task.maxScoreUnits))).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
-                    sourceLink(task.sourceRefs)
+                    if !isListening { sourceLink(task.sourceRefs) }
                 }
                 Text(task.instruction).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
                 if store.currentAttempt?.mode == .training, store.currentAttempt?.sectionID == "listening",
@@ -63,7 +79,12 @@ struct ExamTaskView: View {
                         else { Task { await store.playTask(task.id) } }
                     }
                 }
-                taskBody
+                if usesSpeakerSelection {
+                    listeningMatching
+                } else if isListening && layout == "true_false_table" {
+                    ForEach(visibleBlocks.filter { $0.type != "example" }) { block in blockView(block) }
+                    listeningStatements
+                } else { taskBody }
                 if !itemResults.isEmpty {
                     Divider()
                     VStack(alignment: .leading, spacing: 9) {
@@ -93,6 +114,7 @@ struct ExamTaskView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("exam.task.\(task.id)")
     }
 
@@ -133,6 +155,9 @@ struct ExamTaskView: View {
 
     @ViewBuilder private var taskBody: some View {
         switch layout {
+        case "illustration_choices":
+            ForEach(visibleBlocks.filter { $0.itemID == nil }) { block in blockView(block) }
+            ForEach(task.items) { item in question(item) }
         case "true_false_table":
             ForEach(task.blocks.filter { $0.type != "example" }) { block in blockView(block) }
             ExamTrueFalseGrid(options: choices(task.options), rows: trueFalseRows, disabled: !store.canEdit) { itemID, value in store.setAnswer(itemID: itemID, value: value) }
@@ -173,20 +198,85 @@ struct ExamTaskView: View {
     private var trueFalseRows: [ExamTrueFalseRow] {
         var rows: [ExamTrueFalseRow] = []
         if let example = task.blocks.first(where: { $0.type == "example" }) {
-            let selected = task.options.first { $0.label == example.answer || $0.text == example.answer }?.id ?? ""
+            let answer = example.answer ?? task.presentation?.exampleAnswer
+            let selected = task.options.first { $0.label == answer || $0.text == answer }?.id ?? ""
             rows.append(ExamTrueFalseRow(id: example.id, label: "PRZYKŁAD", text: example.text, selectedID: selected, isExample: true))
         }
         rows += task.items.map { ExamTrueFalseRow(id: $0.id, label: $0.label, text: $0.prompt, selectedID: store.answer(for: $0.id)) }
         return rows
     }
 
+    private var listeningStatements: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(trueFalseRows) { row in
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(row.isExample ? "PRZYKŁAD" : row.label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(row.text).font(.body).textSelection(.enabled)
+                    ViewThatFits(in: .horizontal) {
+                        HStack { statementOptions(row) }
+                        VStack { statementOptions(row) }
+                    }
+                }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(row.isExample ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+
+    @ViewBuilder private func statementOptions(_ row: ExamTrueFalseRow) -> some View {
+        ForEach(task.options) { option in
+            Button { store.setAnswer(itemID: row.id, value: option.id) } label: {
+                Label(option.label, systemImage: row.selectedID == option.id ? "checkmark.circle.fill" : "circle")
+                    .font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.horizontal, 12)
+                    .background(row.selectedID == option.id ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            }.buttonStyle(.plain).disabled(!store.canEdit || row.isExample)
+                .accessibilityAddTraits(row.selectedID == option.id ? .isSelected : [])
+                .accessibilityLabel("\(row.label). \(row.text): \(option.label)")
+                .accessibilityIdentifier("exam.table.\(row.id).\(option.label)")
+        }
+    }
+
+    private var listeningMatching: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(visibleBlocks) { block in blockView(block) }
+            ForEach(task.items.sorted { $0.position < $1.position }) { item in
+                let limit = item.input?.object?["slot_count"]?.int ?? 1
+                let selected = ExamTokenSelection.tokens(store.answer(for: item.id))
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("\(item.label). \(item.prompt)").font(.body).textSelection(.enabled)
+                    Text(AppLanguage.format("Choose speakers: %d / %d", selected.count, limit))
+                        .font(.caption).foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 8) {
+                        ForEach(task.options) { option in
+                            let code = task.presentation?.displayCodes?[option.id] ?? option.label
+                            let chosen = selected.contains(code)
+                            Button {
+                                store.setAnswer(itemID: item.id, value: ExamTokenSelection.toggled(code, answer: store.answer(for: item.id), limit: limit))
+                            } label: {
+                                Label(option.text, systemImage: chosen ? "checkmark.circle.fill" : "circle")
+                                    .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44)
+                                    .padding(.horizontal, 8)
+                                    .background(chosen ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+                            }.buttonStyle(.plain)
+                                .disabled(!store.canEdit || (!chosen && limit > 1 && selected.count >= limit))
+                                .accessibilityAddTraits(chosen ? .isSelected : [])
+                                .accessibilityLabel("\(item.label). \(item.prompt): \(option.text)")
+                                .accessibilityIdentifier("exam.match.\(item.id).\(code)")
+                        }
+                    }
+                }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+
     @ViewBuilder private func blockView(_ block: ExamBlock) -> some View {
         if block.type == "image" {
             if let ref = block.sourceRefs.first(where: { $0.sourceID == "paper" && $0.page != nil }),
                let url = store.sourceURL(ref), let page = ref.page {
-                ExamSourcePageImage(url: url, page: page, label: block.text)
+                ExamSourcePageImage(url: url, page: page, label: block.text, region: block.imageRegion)
             }
-            sourceLink(block.sourceRefs)
+            if block.imageRegion == nil { sourceLink(block.sourceRefs) }
         } else if block.type == "heading" { Text(block.text).font(.system(.title3, design: .serif)).fontWeight(.semibold) }
         else if block.role == "attribution" { Text(block.text).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled) }
         else if block.type == "example" {
@@ -360,22 +450,41 @@ struct ExamTaskView: View {
 
     private func question(_ item: ExamItem) -> some View {
         VStack(alignment: .leading, spacing: 11) {
+            ForEach(task.blocks.filter { $0.itemID == item.id && $0.type == "image" }) { block in blockView(block) }
             if let context = item.context { ExamPaperText(text: context, underlined: item.underlinedText) }
             HStack(alignment: .firstTextBaseline) {
                 Text("\(item.label).").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 ExamPaperText(text: item.prompt, underlined: item.underlinedText).frame(maxWidth: .infinity, alignment: .leading)
             }
             if item.responseType == "single_choice" {
-                ForEach(task.options.filter { item.optionIDs.contains($0.id) }) { option in
-                    ExamObjectiveChoice(option: ExamChoiceDisplay(id: option.id, label: option.label, text: option.text),
-                                        selected: store.answer(for: item.id) == option.id, disabled: !store.canEdit) {
-                        store.setAnswer(itemID: item.id, value: option.id)
+                if layout == "illustration_choices" {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 54))], spacing: 8) {
+                        ForEach(task.options.filter { item.optionIDs.contains($0.id) }) { option in
+                            let selected = store.answer(for: item.id) == option.id
+                            Button { store.setAnswer(itemID: item.id, value: option.id) } label: {
+                                Text(option.label).font(.body.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .foregroundStyle(selected ? Color.white : Color.primary)
+                                    .background(selected ? Color.accentColor : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                            }.buttonStyle(.plain).disabled(!store.canEdit)
+                                .accessibilityLabel("\(item.label). \(option.text)")
+                                .accessibilityAddTraits(selected ? .isSelected : [])
+                                .accessibilityIdentifier("exam.illustration.\(item.id).\(option.label)")
+                        }
                     }
-                }
+                } else { questionChoices(item) }
             } else {
                 ExamAnswerInput(label: "\(task.label). \(item.label)", value: binding(item.id), disabled: !store.canEdit, identifier: "exam.answer.\(item.id)")
             }
         }.padding(.vertical, 8)
+    }
+    @ViewBuilder private func questionChoices(_ item: ExamItem) -> some View {
+        ForEach(task.options.filter { item.optionIDs.contains($0.id) }) { option in
+            ExamObjectiveChoice(option: ExamChoiceDisplay(id: option.id, label: option.label, text: option.text),
+                                selected: store.answer(for: item.id) == option.id, disabled: !store.canEdit) {
+                store.setAnswer(itemID: item.id, value: option.id)
+            }
+        }
     }
     private func tableCell<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content().padding(9).frame(maxHeight: .infinity).overlay { Rectangle().stroke(.quaternary, lineWidth: 0.5) }
