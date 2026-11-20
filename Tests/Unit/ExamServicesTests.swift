@@ -1,11 +1,93 @@
 import Foundation
 import XCTest
 import UIKit
+import Security
 @testable import ForeignLanguageLearner
 
 @MainActor final class ExamServicesTests: XCTestCase {
     private let scopeA = String(repeating: "a", count: 64)
     private let scopeB = String(repeating: "b", count: 64)
+
+    func testTemporaryKeychainFailurePreservesExamAndClearsAfterRecovery() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "exam-keychain-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let tokenPayload = Data(#"{"sub":"operator-subject"}"#.utf8).base64EncodedString()
+        let credentials = OperatorCredentials(clientID: "client", apiURL: BuiltinLibraryService.baseURL,
+            username: "operator", accessToken: "header.\(tokenPayload).signature", refreshToken: "refresh",
+            expiresAt: Date().addingTimeInterval(900))
+        let keychain = ExamOperatorFaultStore(credentials)
+        let session = OperatorSession(clientID: "client", store: keychain)
+        let http = ExamKeychainHTTPClient()
+        let api = ExamAPIClient(operatorSession: session, client: http, modeProvider: { .personalKey })
+        let identity = try await api.identity()
+        XCTAssertEqual(keychain.readCount, 1, "Exam identity should use one actor-owned credential snapshot")
+        let persistence = ExamPersistence(root: root)
+        let section = ExamSection(id: "grammar", title: "Grammar", position: 1, maxScoreUnits: 100,
+                                  sourceRefs: [], tasks: [])
+        let package = ExamPackage(schemaVersion: "1.1", id: "pilot", revision: String(repeating: "c", count: 64),
+            title: "Pilot", language: "pl", level: "B1", audience: "adults",
+            session: ExamSession(label: "Session", startDate: "2024-01-01", endDate: "2024-01-01"),
+            sources: [], sections: [section])
+        var saved = ExamLocalState(scopeID: identity.scopeID, deviceID: "device")
+        saved.catalog = [ExamCatalogEntry(id: package.id, revision: package.revision, title: package.title,
+            language: "pl", level: "B1", audience: "adults", session: package.session)]
+        var attempt = ExamAttempt(examID: package.id, revision: package.revision, mode: .training,
+                                  sectionID: "grammar", deviceID: "device")
+        attempt.version = 1; attempt.serverCreated = true; attempt.ownerID = identity.userID
+        attempt.responses["saved-answer"] = .text("żółty")
+        await http.setAttempt(attempt)
+        saved.attempts = [attempt]
+        try persistence.commit(saved)
+        try persistence.savePackage(package, scopeID: identity.scopeID)
+        let store = ExamStore(api: api, persistence: persistence, canAccessCredentials: { true }, isForeground: { true })
+        await store.resume(attempt)
+        XCTAssertEqual(store.currentAttempt?.id, attempt.id)
+        XCTAssertNil(store.errorMessage)
+
+        keychain.failure = OperatorKeychainError(operation: "read", status: errSecInteractionNotAllowed)
+        await store.refreshIdentity()
+        XCTAssertNotNil(store.errorMessage)
+        XCTAssertEqual(store.catalog.map(\.id), [package.id])
+        XCTAssertEqual(store.package?.id, package.id)
+        XCTAssertEqual(store.currentAttempt?.id, attempt.id)
+        XCTAssertEqual(store.answer(for: "saved-answer"), "żółty")
+        XCTAssertFalse(store.canEdit)
+
+        keychain.failure = nil
+        await store.refreshIdentity()
+        XCTAssertNil(store.errorMessage)
+        XCTAssertEqual(store.syncMessage, "Progress is synchronized.")
+        XCTAssertEqual(store.currentAttempt?.id, attempt.id)
+        XCTAssertEqual(store.answer(for: "saved-answer"), "żółty")
+        XCTAssertEqual(try persistence.load(scopeID: identity.scopeID).attempts[0].responses["saved-answer"], .text("żółty"))
+
+        try keychain.save(nil)
+        await store.refreshIdentity()
+        XCTAssertNotNil(store.errorMessage)
+        XCTAssertTrue(store.catalog.isEmpty)
+        XCTAssertTrue(store.attempts.isEmpty)
+        XCTAssertNil(store.currentAttempt)
+        XCTAssertNil(store.package)
+        XCTAssertEqual(try persistence.load(scopeID: identity.scopeID).attempts[0].responses["saved-answer"], .text("żółty"))
+    }
+
+    func testLockedAndBackgroundTicksDoNotReadKeychain() async throws {
+        let keychain = ExamOperatorFaultStore(nil)
+        keychain.failure = OperatorKeychainError(operation: "read", status: errSecInteractionNotAllowed)
+        let session = OperatorSession(clientID: "client", store: keychain)
+        let api = ExamAPIClient(operatorSession: session, modeProvider: { .personalKey })
+        let locked = ExamStore(api: api, canAccessCredentials: { false }, isForeground: { true })
+        locked.tick()
+        await locked.refreshIdentity()
+        await locked.synchronize()
+        let background = ExamStore(api: api, canAccessCredentials: { true }, isForeground: { false })
+        background.tick()
+        await background.refreshIdentity()
+        await Task.yield()
+        XCTAssertEqual(keychain.readCount, 0)
+        XCTAssertNil(locked.errorMessage)
+        XCTAssertNil(background.errorMessage)
+    }
 
     func testSpeakerSelectionRetainsSourceCodesAndEnforcesAnswerSlots() {
         XCTAssertEqual(ExamTokenSelection.toggled("2", answer: "", limit: 2), "2")
@@ -149,6 +231,40 @@ import UIKit
         _ = try await session.send("v1/exams/source/content", timeout: 900)
         let requests = await http.requests
         XCTAssertEqual(requests.map(\.timeoutInterval), [25, 900])
+    }
+}
+
+private final class ExamOperatorFaultStore: OperatorCredentialStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var credentials: OperatorCredentials?
+    private var storedFailure: Error?
+    private var reads = 0
+    init(_ credentials: OperatorCredentials?) { self.credentials = credentials }
+    var failure: Error? {
+        get { lock.withLock { storedFailure } }
+        set { lock.withLock { storedFailure = newValue } }
+    }
+    var readCount: Int { lock.withLock { reads } }
+    func load() throws -> OperatorCredentials? {
+        try lock.withLock {
+            reads += 1
+            if let storedFailure { throw storedFailure }
+            return credentials
+        }
+    }
+    func save(_ value: OperatorCredentials?) throws { lock.withLock { credentials = value } }
+}
+
+private actor ExamKeychainHTTPClient: ContextAnalysisHTTPClient {
+    private var attempt: ExamAttempt?
+    func setAttempt(_ value: ExamAttempt) { attempt = value }
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        guard var next = attempt, request.httpMethod == "PUT",
+              request.url?.path == "/v1/exam-attempts/\(next.id)" else { throw URLError(.badURL) }
+        next.version += 1
+        attempt = next
+        return (try ExamJSON.encoder().encode(next), HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: nil)!)
     }
 }
 

@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 /// UI state for the exam domain. Answers and delivery intents are durable before publication.
 @MainActor final class ExamStore: ObservableObject {
@@ -10,7 +11,12 @@ import Foundation
     @Published private(set) var isLoading = false
     @Published private(set) var isSyncing = false
     @Published private(set) var isGrading = false
-    @Published private(set) var errorMessage: String?
+    @Published private var operationErrorMessage: String?
+    @Published private var identityErrorMessage: String?
+    private(set) var errorMessage: String? {
+        get { identityErrorMessage ?? operationErrorMessage }
+        set { operationErrorMessage = newValue }
+    }
     @Published private(set) var syncMessage: String?
     @Published private(set) var conflictMessage: String?
     @Published private(set) var serverConflictAttempt: ExamAttempt?
@@ -19,6 +25,10 @@ import Foundation
     private let api: ExamAPIClient
     private let persistence: ExamPersistence
     private let assessment: ExamAssessmentService
+    private let canAccessCredentials: @MainActor () -> Bool
+    private let isForeground: @MainActor () -> Bool
+    private var identityVerified = false
+    private var identityCheckTask: Task<Void, Never>?
     private var identity: ExamIdentity?
     private var local: ExamLocalState?
     private var storageFailed = false
@@ -31,8 +41,11 @@ import Foundation
     private var autoSubmitting = false
 
     init(api: ExamAPIClient = ExamAPIClient(), persistence: ExamPersistence? = nil,
-         assessment: ExamAssessmentService? = nil) {
+         assessment: ExamAssessmentService? = nil,
+         canAccessCredentials: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
+         isForeground: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active }) {
         self.api = api; self.persistence = persistence ?? ExamPersistence()
+        self.canAccessCredentials = canAccessCredentials; self.isForeground = isForeground
         self.assessment = assessment ?? ExamAssessmentService(api: api)
         audio.onPosition = { [weak self] seconds in self?.recordAudio(seconds) }
         audio.onInterruption = { [weak self] in self?.recordSystemInterruption() }
@@ -47,7 +60,7 @@ import Foundation
 
     var hasConflict: Bool { conflictMessage != nil }
     var canEdit: Bool {
-        guard !storageFailed, !hasConflict, let a = currentAttempt, identity?.mode == TranslationRequestSettings.current.mode,
+        guard identityVerified, !storageFailed, !hasConflict, let a = currentAttempt, identity?.mode == TranslationRequestSettings.current.mode,
               a.state == .inProgress, !a.submittedSectionIDs.contains(a.sectionID),
               !a.submissionRequestedSectionIDs.contains(a.sectionID) else { return false }
         if a.mode == .exam, !a.serverCreated { return false }
@@ -60,6 +73,7 @@ import Foundation
 
     private func ensureIdentity() async throws -> ExamIdentity {
         do {
+            guard canAccessCredentials() else { throw ExamAPIError(code: "DEVICE_LOCKED") }
             let next = try await api.identity()
             if next.scopeID != identity?.scopeID {
                 audio.close(); syncTask?.cancel(); syncTask = nil
@@ -68,16 +82,48 @@ import Foundation
                 let saved = try persistence.load(scopeID: next.scopeID)
                 identity = next; local = saved; publish()
             }
+            identityVerified = true; identityErrorMessage = nil
             return next
         } catch {
-            audio.close(); package = nil; currentAttempt = nil; catalog = []; attempts = []
-            local = nil; identity = nil; conflictMessage = nil; serverConflictAttempt = nil
+            identityVerified = false
+            identityErrorMessage = error.localizedDescription
+            if Self.requiresIdentityReset(error) {
+                audio.close(); package = nil; currentAttempt = nil; catalog = []; attempts = []
+                local = nil; identity = nil; conflictMessage = nil; serverConflictAttempt = nil
+                syncMessage = nil
+            }
             throw error
         }
     }
 
+    private static func requiresIdentityReset(_ error: Error) -> Bool {
+        if let error = error as? ExamAPIError { return ["SIGN_IN_REQUIRED", "ACCOUNT_CHANGED"].contains(error.code) }
+        if let error = error as? CloudAPIError { return ["SIGN_IN_REQUIRED", "ACCOUNT_CHANGED"].contains(error.code) }
+        if let error = error as? OperatorSessionError {
+            switch error { case .signInRequired, .changed: return true; default: return false }
+        }
+        return false
+    }
+
+    private func recordError(_ error: Error) {
+        if error is OperatorKeychainError || error is OperatorSessionError || Self.requiresIdentityReset(error)
+            || (error as? CloudAPIError)?.code == "KEYCHAIN_UNAVAILABLE"
+            || (error as? ExamAPIError)?.code == "DEVICE_LOCKED" {
+            identityErrorMessage = error.localizedDescription
+        } else { operationErrorMessage = error.localizedDescription }
+    }
+
+    func refreshIdentity() async {
+        guard isForeground(), canAccessCredentials() else { return }
+        let recovering = identityErrorMessage != nil
+        do {
+            _ = try await ensureIdentity()
+            if recovering { await synchronize() }
+        } catch { /* ensureIdentity keeps authentication failures separate from operation failures. */ }
+    }
+
     private func validateScope(_ scope: String) async throws {
-        let next = try await api.identity()
+        let next = try await ensureIdentity()
         guard next.scopeID == scope, identity?.scopeID == scope else {
             _ = try await ensureIdentity(); throw ExamAPIError(code: "ACCOUNT_CHANGED")
         }
@@ -108,7 +154,7 @@ import Foundation
             await synchronize()
             try await refreshAttemptList(scope: identity.scopeID)
         } catch {
-            if catalog.isEmpty { errorMessage = error.localizedDescription }
+            if catalog.isEmpty { recordError(error) }
             else { syncMessage = "Showing the downloaded catalog. \(error.localizedDescription)" }
         }
     }
@@ -121,7 +167,7 @@ import Foundation
             checkpoint(); audio.close(); currentAttempt = nil
             package = try await material(examID: entry.id, revision: entry.revision, scope: identity.scopeID)
             conflictMessage = nil; serverConflictAttempt = nil
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     private func material(examID: String, revision: String, scope: String) async throws -> ExamPackage {
@@ -162,7 +208,7 @@ import Foundation
                 syncMessage = "Connect to start the exam timer. The attempt is saved and will be retried."; return
             }
             try await configureAudioIfNeeded(scope: identity.scopeID)
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     func resume(_ attempt: ExamAttempt) async {
@@ -182,7 +228,7 @@ import Foundation
             if let current = currentAttempt, current.state == .interrupted { await resumeAttempt() }
             else { try await configureAudioIfNeeded(scope: identity.scopeID) }
             tick()
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     func answer(for itemID: String) -> String { currentAttempt?.responses[itemID]?.text ?? "" }
@@ -224,7 +270,7 @@ import Foundation
             await synchronize()
             try await configureAudioIfNeeded(scope: identity.scopeID)
             audio.resumeAfterSystem()
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     func submit() async {
@@ -235,7 +281,7 @@ import Foundation
         next.attempts[index].state = .submitted; next.attempts[index].updatedAt = Date()
         next.outbox.append(ExamSyncEvent(attemptID: a.id, kind: .submit, body: ["section_id": .string(a.sectionID)]))
         do { try commit(next); audio.close(); await synchronize() }
-        catch { errorMessage = error.localizedDescription }
+        catch { recordError(error) }
     }
 
     private func enqueueUpdate(in state: inout ExamLocalState, attempt: ExamAttempt, responses: [String: ExamJSONValue] = [:]) {
@@ -261,6 +307,10 @@ import Foundation
 
     func synchronize() async {
         guard !isSyncing else { return }
+        guard canAccessCredentials() else {
+            syncMessage = "Local answers are saved. Synchronization is pending."
+            return
+        }
         isSyncing = true
         defer { isSyncing = false }
         do {
@@ -303,7 +353,7 @@ import Foundation
             syncMessage = local?.outbox.isEmpty == true ? "Progress is synchronized." : "Local answers are saved. Synchronization is pending."
         } catch {
             syncMessage = "Local answers are saved. \(error.localizedDescription)"
-            if (error as? ExamAPIError)?.code == "ACCOUNT_CHANGED" { errorMessage = error.localizedDescription }
+            if (error as? ExamAPIError)?.code == "ACCOUNT_CHANGED" { recordError(error) }
         }
     }
 
@@ -354,7 +404,7 @@ import Foundation
             let remote = try await remoteAttempt(a.id, scope: identity.scopeID)
             try await validateScope(identity.scopeID)
             try recordConflict(attemptID: a.id, message: conflictMessage ?? "Local answers are saved separately from the server version.", remote: remote)
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
     func retrySync() async { await synchronize() }
     func exportCurrentDraft() throws -> Data {
@@ -383,7 +433,7 @@ import Foundation
             } else { next.attempts[index] = remote }
             try commit(next); await synchronize()
             try await configureAudioIfNeeded(scope: identity.scopeID)
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     func gradeAI(sectionID: String) async {
@@ -406,7 +456,7 @@ import Foundation
             let server = try await remoteAttempt(a.id, scope: identity.scopeID)
             try await validateScope(identity.scopeID)
             if var next = local { try merge(server, into: &next); try commit(next) }
-        } catch { errorMessage = error.localizedDescription }
+        } catch { recordError(error) }
     }
 
     private func configureAudioIfNeeded(scope: String) async throws {
@@ -424,19 +474,19 @@ import Foundation
     func playTask(_ taskID: String) async {
         guard canEdit, currentAttempt?.mode == .training else { return }
         selectTask(taskID)
-        do { try await audio.play(taskID: taskID) } catch { errorMessage = error.localizedDescription }
+        do { try await audio.play(taskID: taskID) } catch { recordError(error) }
     }
     func seekTask(_ taskID: String, seconds: Double) async {
         guard canEdit, currentAttempt?.mode == .training else { return }
         selectTask(taskID)
         do { try await audio.prepare(taskID: taskID); audio.seek(seconds: seconds) }
-        catch { errorMessage = error.localizedDescription }
+        catch { recordError(error) }
     }
     func playExamAudio() async {
         guard let attempt = currentAttempt, attempt.mode == .exam else { return }
         if attempt.state == .interrupted { await resumeAttempt(); return }
         guard canEdit else { return }
-        do { try audio.resumeExam() } catch { errorMessage = error.localizedDescription }
+        do { try audio.resumeExam() } catch { recordError(error) }
     }
 
     func sourceURL(_ ref: ExamSourceReference) -> URL? {
@@ -476,11 +526,11 @@ import Foundation
         do { try commit(next); scheduleSync() } catch { }
     }
     func tick(now: Date = Date()) {
-        if now.timeIntervalSince(lastIdentityCheck) >= 1 {
+        if isForeground(), canAccessCredentials(), identityCheckTask == nil, now.timeIntervalSince(lastIdentityCheck) >= 1 {
             lastIdentityCheck = now
-            Task { @MainActor [weak self] in
-                do { _ = try await self?.ensureIdentity() }
-                catch { self?.errorMessage = error.localizedDescription }
+            identityCheckTask = Task { @MainActor [weak self] in
+                await self?.refreshIdentity()
+                self?.identityCheckTask = nil
             }
         }
         let delta = max(0, min(now.timeIntervalSince(lastTick), 10)); lastTick = now

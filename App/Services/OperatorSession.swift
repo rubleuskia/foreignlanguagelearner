@@ -1,5 +1,12 @@
 import Foundation
 import Security
+import OSLog
+
+struct OperatorKeychainError: Error, LocalizedError, Equatable {
+    let operation: String
+    let status: OSStatus
+    var errorDescription: String? { AppLanguage.text("Could not access the library session in Keychain.") }
+}
 
 struct OperatorCredentials: Codable, Sendable, Equatable {
     let clientID: String
@@ -16,6 +23,11 @@ protocol OperatorCredentialStoring: Sendable {
 }
 
 struct KeychainOperatorCredentialStore: OperatorCredentialStoring {
+    private static let logger = Logger(subsystem: "com.rubleuskia.foreignlanguagelearner", category: "OperatorSession")
+    private func failure(_ operation: String, _ status: OSStatus) -> OperatorKeychainError {
+        Self.logger.error("Keychain \(operation, privacy: .public) failed: \(status, privacy: .public)")
+        return OperatorKeychainError(operation: operation, status: status)
+    }
     private var lookup: [String: Any] { [kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: "com.rubleuskia.foreignlanguagelearner.operator",
         kSecAttrAccount as String: "operator-session-v1"] }
@@ -24,13 +36,14 @@ struct KeychainOperatorCredentialStore: OperatorCredentialStoring {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let bytes = result as? Data else { throw OperatorSessionError.storage }
+        guard status == errSecSuccess else { throw failure("read", status) }
+        guard let bytes = result as? Data else { throw OperatorSessionError.storage }
         return try JSONDecoder().decode(OperatorCredentials.self, from: bytes)
     }
     func save(_ value: OperatorCredentials?) throws {
         guard let value else {
             let status = SecItemDelete(lookup as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else { throw OperatorSessionError.storage }
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw failure("delete", status) }
             try OperatorAccessTokenStore.delete()
             return
         }
@@ -38,9 +51,9 @@ struct KeychainOperatorCredentialStore: OperatorCredentialStoring {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         let status = SecItemUpdate(lookup as CFDictionary, fields as CFDictionary)
         if status != errSecSuccess {
-            guard status == errSecItemNotFound,
-                  SecItemAdd(lookup.merging(fields) { _, new in new } as CFDictionary, nil) == errSecSuccess
-            else { throw OperatorSessionError.storage }
+            guard status == errSecItemNotFound else { throw failure("update", status) }
+            let added = SecItemAdd(lookup.merging(fields) { _, new in new } as CFDictionary, nil)
+            guard added == errSecSuccess else { throw failure("add", added) }
         }
         try OperatorAccessTokenStore.delete()
     }
@@ -82,6 +95,7 @@ actor OperatorSession {
         self.clientID = clientID; self.apiURL = apiURL; self.store = store; self.client = client
     }
     func username() throws -> String? { try saved()?.username }
+    func credentialsSnapshot() throws -> OperatorCredentials? { try saved() }
     private func saved() throws -> OperatorCredentials? {
         guard let value = try store.load(), value.clientID == clientID, value.apiURL == apiURL else { return nil }
         return value

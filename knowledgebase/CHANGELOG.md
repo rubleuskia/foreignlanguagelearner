@@ -1,3 +1,17 @@
+## 2026-11-20 — Recover exam sessions after temporary Keychain unavailability
+
+- Skip periodic identity reads while the app is in the background or protected data
+  is unavailable. Defer synchronization while locked and retain local timer/checkpoint work.
+- Preserve the loaded exam, catalog, attempt and saved answers after a temporary
+  credential-read failure; suspend editing until identity is verified again. Clear
+  in-memory owner data only on definitive sign-out/account invalidation.
+- Separate authentication errors from operation errors, clear the authentication
+  banner after successful revalidation and retry pending synchronization on recovery.
+- Obtain exam identity from one actor-owned credential snapshot instead of two
+  independent Keychain reads. Log Keychain operation/OSStatus without credentials.
+- Record the recovery/security decision in DECISIONS.md; project overview unchanged.
+  This is an iOS fix requiring a new app build, with no backend/data deployment.
+
 ## 2026-11-20 — Limit the cloud exam catalog to one active B1 exam
 
 - Store mutable availability as an explicit boolean on the DynamoDB catalog pointer.
