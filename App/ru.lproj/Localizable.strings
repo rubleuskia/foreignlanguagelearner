@@ -978,3 +978,11 @@
 "%d / %d answers" = "%d / %d ответов";
 "Up to %@ points require assessment." = "До %@ баллов требуют проверки.";
 "Deadline: %@. Answers submit automatically when time is up." = "Срок: %@. По истечении времени ответы отправляются автоматически.";
+"Original exam papers with interactive tasks and recordings." = "Оригинальные экзамены с интерактивными заданиями и аудиозаписями.";
+"Adults" = "Взрослые";
+"Children and teenagers" = "Дети и подростки";
+"%d exams" = "Экзаменов: %d";
+"Search exams" = "Поиск экзаменов";
+"Choose speakers: %d / %d" = "Выберите говорящих: %d / %d";
+"Previous task" = "Предыдущее задание";
+"Next task" = "Следующее задание";

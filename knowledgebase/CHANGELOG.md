@@ -1,3 +1,22 @@
+## 2026-11-20 — Interactive listening and grouped examination catalog
+
+- Replace the flat examination list with adaptive cards grouped by CEFR level and
+  adults / children and teenagers, newest sessions first within each group, with search.
+- Present listening one task at a time with saved task navigation, answer counts,
+  previous/next controls and existing task audio in training / full recording in exam mode.
+- Curate the first chronological adult B1 January 2021 listening package externally:
+  I has a/b/c choices, II transport matching, III TAK/NIE statement cards, IV one/two
+  speaker selection, V individual original photographs with numbered answer buttons.
+  Preserve all 41 scored responses, 30 points, official keys and the original audio.
+- Remove task-header PDF links from listening. Add validated, normalized illustration
+  regions linked to individual questions, rendered from the verified source PDF in iOS
+  and as clipped original page images in the retained web preview. Other examinations
+  still need individual content conversion; do not hide their essential source material.
+- Forward public input slot limits and illustration metadata through the student projection,
+  while retaining the exclusion of grading keys and private contracts.
+- Update DECISIONS.md and the examination workflow in PROJECT.md. The new immutable
+  source package is prepared locally; cloud publication and backend deployment are separate.
+
 ## 2026-11-20 — Reject overlapping audio-anchor matches and repair grouped-token duplicates
 
 - Treat overlapping anchor candidates as one spoken occurrence even when their starts

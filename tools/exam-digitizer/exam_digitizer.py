@@ -234,6 +234,15 @@ def validate_exam(exam, root=None):
                 raise InvalidExam("Shared task-level scoring is only allowed for AI/manual tasks")
             item_ids = {item["id"] for item in items}
             for block in task["blocks"]:
+                if 'item_id' in block and block['item_id'] not in item_ids:
+                    raise InvalidExam('Unknown illustration item')
+                if 'image_region' in block:
+                    region = block['image_region']
+                    if (block['type'] != 'image' or not isinstance(region, list) or len(region) != 4
+                        or not all(type(v) in (int, float) and 0 <= v <= 1 for v in region)
+                        or region[2] <= 0 or region[3] <= 0
+                        or region[0] + region[2] > 1 or region[1] + region[3] > 1):
+                        raise InvalidExam('Invalid normalized illustration region')
                 for gap_id in re.findall(r"\{\{([^{}]+)\}\}", block["text"]):
                     if gap_id not in item_ids:
                         raise InvalidExam(f"Unknown gap {gap_id} in {task['id']}")

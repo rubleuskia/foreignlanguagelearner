@@ -7,6 +7,33 @@ import UIKit
     private let scopeA = String(repeating: "a", count: 64)
     private let scopeB = String(repeating: "b", count: 64)
 
+    func testSpeakerSelectionRetainsSourceCodesAndEnforcesAnswerSlots() {
+        XCTAssertEqual(ExamTokenSelection.toggled("2", answer: "", limit: 2), "2")
+        XCTAssertEqual(ExamTokenSelection.toggled("4", answer: "2", limit: 2), "2, 4")
+        XCTAssertEqual(ExamTokenSelection.toggled("5", answer: "2, 4", limit: 2), "2, 4")
+        XCTAssertEqual(ExamTokenSelection.toggled("2", answer: "2, 4", limit: 2), "4")
+        XCTAssertEqual(ExamTokenSelection.toggled("1", answer: "4", limit: 1), "1")
+        XCTAssertEqual(ExamTokenSelection.toggled("1", answer: "1", limit: 1), "")
+        XCTAssertEqual(ExamTokenSelection.toggled("4", answer: "2; 2", limit: 2), "2, 4")
+        XCTAssertEqual(ExamTokenSelection.tokens("2 / 4"), ["2", "4"])
+    }
+
+    func testCatalogGroupsByLevelAndAudienceWithNewestSessionFirst() {
+        func entry(_ id: String, level: String = "B1", audience: String = "adults", date: String) -> ExamCatalogEntry {
+            ExamCatalogEntry(id: id, revision: "r", title: "Exam \(id)", language: "pl", level: level, audience: audience,
+                session: ExamSession(label: date, startDate: date, endDate: date))
+        }
+        let entries = [entry("old", date: "2023-06-01"), entry("c2", level: "C2", date: "2024-06-01"),
+            entry("child", audience: "children_youth", date: "2024-06-01"), entry("new", date: "2024-06-01"),
+            entry("a2", level: "A2", date: "2024-06-01")]
+        let groups = ExamCatalogGroup.groups(entries)
+        XCTAssertEqual(groups.map(\.id), ["A2|adults", "B1|adults", "B1|children_youth", "C2|adults"])
+        XCTAssertEqual(groups[1].exams.map(\.id), ["new", "old"])
+        XCTAssertEqual(ExamCatalogGroup.groups(entries, search: "  old  ").flatMap(\.exams).map(\.id), ["old"])
+        XCTAssertEqual(ExamCatalogGroup.groups(entries, search: "C2").flatMap(\.exams).map(\.id), ["c2"])
+        XCTAssertTrue(ExamCatalogGroup.groups(entries, search: "absent").isEmpty)
+    }
+
     func testSourceIllustrationsRenderOnlyAnExistingLocalPDFPage() throws {
         let file = FileManager.default.temporaryDirectory.appending(path: "exam-picture-\(UUID()).pdf")
         defer { try? FileManager.default.removeItem(at: file) }
@@ -19,6 +46,11 @@ import UIKit
         var components = URLComponents(url: file, resolvingAgainstBaseURL: false)!
         components.fragment = "page=1"
         XCTAssertNotNil(ExamSourcePageRenderer.thumbnail(url: components.url!, page: 1))
+        let crop = ExamSourcePageRenderer.thumbnail(url: file, page: 1, region: [0.2, 0.2, 0.6, 0.6])
+        XCTAssertNotNil(crop)
+        XCTAssertEqual(Double(crop!.size.width / crop!.size.height), 1, accuracy: 0.01)
+        XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 1, region: [0.9, 0, 0.5, 1]))
+        XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 1, region: [0, 0, 0, 1]))
         XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 0))
         XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: file, page: 2))
         XCTAssertNil(ExamSourcePageRenderer.thumbnail(url: URL(string: "https://example.test/paper.pdf")!, page: 1))

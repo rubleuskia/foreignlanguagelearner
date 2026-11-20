@@ -59,7 +59,18 @@ function content(text,task,underline){
   if(underline)html=html.replace(esc(underline),`<u class="source-underline">${esc(underline)}</u>`);return html;
 }
 function block(b,t){
-  if(b.type==='image'){const path=b.path??b.asset_path;return path?`<figure><img class="source-image" src="/${String(path).split('/').map(encodeURIComponent).join('/')}" alt="${esc(b.alt??b.text??'Ilustracja z arkusza')}"><figcaption>${sourceLink(b.source_refs)}</figcaption></figure>`:`<p>${sourceLink(b.source_refs,'Ilustracja w oryginale ↗')}</p>`;}
+  if(b.type==='image'){
+    const path=b.path??b.asset_path;
+    if(!path)return `<p>${sourceLink(b.source_refs,'Ilustracja w oryginale ↗')}</p>`;
+    const src=`/${String(path).split('/').map(encodeURIComponent).join('/')}`,label=esc(b.alt??b.text??'Ilustracja z arkusza');
+    const r=b.image_region;
+    const size=b.image_page_size;
+    if(Array.isArray(r)&&r.length===4&&r.every(v=>Number.isFinite(v)&&v>=0&&v<=1)&&r[2]>0&&r[3]>0&&r[0]+r[2]<=1&&r[1]+r[3]<=1&&Array.isArray(size)&&size.length===2&&size.every(v=>Number.isFinite(v)&&v>0)){
+      const view=[r[0]*size[0],r[1]*size[1],r[2]*size[0],r[3]*size[1]];
+      return `<figure><svg class="source-image" role="img" aria-label="${label}" viewBox="${view.join(' ')}"><image href="${src}" width="${size[0]}" height="${size[1]}" preserveAspectRatio="none"/></svg></figure>`;
+    }
+    return `<figure><img class="source-image" src="${src}" alt="${label}"><figcaption>${sourceLink(b.source_refs)}</figcaption></figure>`;
+  }
   const tag=b.type==='heading'?'h3':'div';
   return `<${tag} class="reading-block ${esc(b.type??'')} ${b.role==='attribution'?'attribution':''}">${content(b.text,t,b.underlined_text)}${b.type==='example'&&b.answer!==undefined?`<div class="example-answer">Odpowiedź: <strong>${esc(b.answer)}</strong></div>`:''}</${tag}>`;
 }
@@ -93,7 +104,7 @@ function question(i,t){
   const value=attempt.answers[i.id];let input='';
   if(i.response_type==='single_choice')input=`<div class="choice-grid">${i.option_ids.map(id=>{const o=option(t,id);return `<label class="choice"><input type="radio" name="${esc(i.id)}" data-item="${esc(i.id)}" value="${esc(id)}" ${value===id?'checked':''} ${submitted()?'disabled':''}><span class="choice-label">${esc(o.label)}</span><span class="choice-text">${esc(o.text)}</span></label>`;}).join('')}</div>`;
   else input=`<input class="item-input" type="text" data-item="${esc(i.id)}" value="${esc(value??'')}" aria-label="${esc(`Odpowiedź ${i.label}`)}" autocomplete="off" ${submitted()?'disabled':''}>`;
-  return `<div class="item" id="item-${esc(i.id)}">${i.context?`<div class="item-context">${content(i.context,t,i.underlined_text)}</div>`:''}<div class="item-heading"><span class="item-label">${esc(i.label)}.</span><h3 class="item-prompt">${content(i.prompt,t,i.underlined_text)}</h3><span class="item-weight">${points(i.max_score_units)} pkt</span></div>${input}${feedback(i,t)}</div>`;
+  return `<div class="item" id="item-${esc(i.id)}">${(t.blocks??[]).filter(b=>b.item_id===i.id).map(b=>block(b,t)).join('')}${i.context?`<div class="item-context">${content(i.context,t,i.underlined_text)}</div>`:''}<div class="item-heading"><span class="item-label">${esc(i.label)}.</span><h3 class="item-prompt">${content(i.prompt,t,i.underlined_text)}</h3><span class="item-weight">${points(i.max_score_units)} pkt</span></div>${input}${feedback(i,t)}</div>`;
 }
 
 function audioTask(t){
@@ -120,7 +131,7 @@ function renderTask(t){
     const inText=new Set(blocks.flatMap(b=>[...String(b.text??'').matchAll(/\{\{([^}]+)\}\}/gu)].map(m=>m[1])));
     body+=t.items.filter(i=>!inText.has(i.id)).map(i=>question(i,t)).join('');
     if(submitted())body+=`<div class="inline-review">${t.items.filter(i=>inText.has(i.id)).map(i=>`<div class="compact-review"><strong>${esc(i.label)}.</strong>${feedback(i,t,true)}</div>`).join('')}</div>`;
-  }else body=blocks.map(b=>block(b,t)).join('')+t.items.map(i=>question(i,t)).join('');
+  }else body=blocks.filter(b=>!b.item_id).map(b=>block(b,t)).join('')+t.items.map(i=>question(i,t)).join('');
   return `<article class="task-card" id="task-${esc(t.id)}"><header class="task-header"><div class="task-title-row"><span class="task-number">${esc(t.label)}</span><div><h2>${esc(t.title||`Zadanie ${t.label}`)}</h2><span class="task-points">Maksymalnie ${points(t.max_score_units)} pkt</span></div></div>${sourceLink(t.source_refs)}</header><div class="task-body"><p class="instruction">${esc(t.instruction)}</p>${taskAudio(t)}${body}</div></article>`;
 }
 

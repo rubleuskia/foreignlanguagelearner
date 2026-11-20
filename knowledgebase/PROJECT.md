@@ -2,6 +2,13 @@
 
 ## Source-linked examinations
 
+The native catalog uses level/audience groups and searchable session cards. Listening
+offers saved task tabs, answer progress, per-task training audio and uninterrupted full
+exam audio. The first chronological adult B1 January 2021 listening package is curated
+locally for native choices, transport matching, TAK/NIE statement cards, one/two-speaker
+selection and individual original photographs with numbered answers. It requires separate
+publication of the prepared data revision and updated student projection.
+
 `tools/exam-digitizer/` extracts official PDF evidence, compiles reviewed examination profiles
 to validated source-linked JSON import packages, marks actual audio repetitions using the
 existing local aligner, and serves a loopback interactive simulation. The first adult B1

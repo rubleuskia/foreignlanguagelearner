@@ -18,9 +18,10 @@ struct ExamRunnerView: View {
         Group {
             if let attempt = store.currentAttempt, let package = store.package,
                let section = package.section(attempt.sectionID), ["listening", "reading", "grammar"].contains(section.id) {
-                ScrollView {
+                ScrollViewReader { proxy in
+                  ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
-                        header(attempt, section: section)
+                        header(attempt, section: section).id("exam-top")
                         if store.hasConflict { conflictBanner }
                         if let error = store.errorMessage { Text(AppLanguage.text(error)).font(.subheadline).foregroundStyle(.red) }
                         if let error = uiError { Text(AppLanguage.text(error)).font(.subheadline).foregroundStyle(.red) }
@@ -58,8 +59,12 @@ struct ExamRunnerView: View {
                             Label(AppLanguage.text("Answers are saved. Waiting for the submitted result to synchronize."), systemImage: "arrow.triangle.2.circlepath")
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
-                        ForEach(section.tasks.sorted { $0.position < $1.position }) { task in
-                            ExamTaskView(store: store, audio: audio, task: task)
+                        if section.id == "listening" {
+                            listeningTasks(section, attempt: attempt)
+                        } else {
+                            ForEach(section.tasks.sorted { $0.position < $1.position }) { task in
+                                ExamTaskView(store: store, audio: audio, task: task)
+                            }
                         }
                         if store.canEdit {
                             Button {
@@ -75,6 +80,10 @@ struct ExamRunnerView: View {
                         Text(AppLanguage.text("The original wording, examples and source-page references are preserved. Your answers are saved as you work."))
                             .font(.caption2).foregroundStyle(.secondary)
                     }.padding().frame(maxWidth: 900).frame(maxWidth: .infinity)
+                  }
+                  .onChange(of: attempt.progress.taskID) { _, _ in
+                      if section.id == "listening" { proxy.scrollTo("exam-top", anchor: .top) }
+                  }
                 }
                 .background(Color(uiColor: .systemGroupedBackground))
                 .navigationTitle(section.title).navigationBarTitleDisplayMode(.inline)
@@ -100,6 +109,51 @@ struct ExamRunnerView: View {
         }
         .onDisappear { if store.currentAttempt?.mode == .training { store.pauseTraining() } }
         .task { store.tick() }
+    }
+
+    private func listeningTasks(_ section: ExamSection, attempt: ExamAttempt) -> some View {
+        let tasks = section.tasks.sorted { $0.position < $1.position }
+        let selected = tasks.firstIndex { $0.id == attempt.progress.taskID } ?? 0
+        return VStack(alignment: .leading, spacing: 16) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                        let answered = task.items.filter { !store.answer(for: $0.id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+                        Button { chooseListeningTask(task.id, attempt: attempt) } label: {
+                            VStack(spacing: 5) {
+                                Text("Zadanie \(task.label)").font(.subheadline.weight(.semibold))
+                                Label("\(answered) / \(task.items.count)", systemImage: answered == task.items.count ? "checkmark.circle.fill" : "circle.dotted")
+                                    .font(.caption)
+                            }.padding(.horizontal, 15).padding(.vertical, 11)
+                                .foregroundStyle(index == selected ? Color.white : Color.primary)
+                                .background(index == selected ? Color.accentColor : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        }.buttonStyle(.plain).accessibilityAddTraits(index == selected ? .isSelected : [])
+                            .accessibilityIdentifier("exam.task-tab.\(task.id)")
+                    }
+                }
+            }.scrollIndicators(.hidden)
+            if tasks.indices.contains(selected) {
+                ExamTaskView(store: store, audio: audio, task: tasks[selected]).id(tasks[selected].id)
+                HStack {
+                    Button {
+                        chooseListeningTask(tasks[selected - 1].id, attempt: attempt)
+                    } label: { Label(AppLanguage.text("Previous task"), systemImage: "chevron.left") }
+                        .disabled(selected == 0).accessibilityIdentifier("exam.previous-task")
+                    Spacer()
+                    if selected + 1 < tasks.count {
+                        Button {
+                            chooseListeningTask(tasks[selected + 1].id, attempt: attempt)
+                        } label: { Label(AppLanguage.text("Next task"), systemImage: "chevron.right") }
+                            .accessibilityIdentifier("exam.next-task")
+                    }
+                }.buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func chooseListeningTask(_ id: String, attempt: ExamAttempt) {
+        if attempt.mode == .training { audio.pause() }
+        store.selectTask(id)
     }
 
     private func header(_ attempt: ExamAttempt, section: ExamSection) -> some View {

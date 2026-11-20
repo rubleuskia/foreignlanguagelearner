@@ -2,3 +2,11 @@
 
 // Exams
 "Exams" = "Egzaminy";
+"Original exam papers with interactive tasks and recordings." = "Oryginalne egzaminy z interaktywnymi zadaniami i nagraniami.";
+"Adults" = "Dorośli";
+"Children and teenagers" = "Dzieci i młodzież";
+"%d exams" = "Egzaminy: %d";
+"Search exams" = "Szukaj egzaminów";
+"Choose speakers: %d / %d" = "Wybierz osoby: %d / %d";
+"Previous task" = "Poprzednie zadanie";
+"Next task" = "Następne zadanie";

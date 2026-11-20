@@ -344,3 +344,11 @@
 "%d / %d answers" = "%d / %d answers";
 "Up to %@ points require assessment." = "Up to %@ points require assessment.";
 "Deadline: %@. Answers submit automatically when time is up." = "Deadline: %@. Answers submit automatically when time is up.";
+"Original exam papers with interactive tasks and recordings." = "Original exam papers with interactive tasks and recordings.";
+"Adults" = "Adults";
+"Children and teenagers" = "Children and teenagers";
+"%d exams" = "%d exams";
+"Search exams" = "Search exams";
+"Choose speakers: %d / %d" = "Choose speakers: %d / %d";
+"Previous task" = "Previous task";
+"Next task" = "Next task";

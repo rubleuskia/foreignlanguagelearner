@@ -7,7 +7,7 @@ import unittest
 import uuid
 
 from backend.exams.assessment_contract import compile_assessment
-from backend.exams.contract import ExamError, file_digest, fingerprint, validate_package, grade_sections
+from backend.exams.contract import ExamError, file_digest, fingerprint, validate_package, grade_sections, student_projection, validate_exam
 from backend.exams.service import Service
 from backend.exams.testing import synthetic_profile
 
@@ -67,6 +67,32 @@ def fixture(folder):
 
 
 class ExamServiceTests(unittest.TestCase):
+    def test_student_illustrations_and_slot_limits_survive_without_private_fields(self):
+        exam=copy.deepcopy(self.exam)
+        audio=json.loads((self.package/'audio.json').read_text())
+        task=exam['sections'][0]['tasks'][0]
+        item=task['items'][0]
+        item['input']={'format':'integer_tokens','slot_count':2,'max_tokens':2,'private_answer':'secret'}
+        task['blocks'].append({'id':'crop','type':'image','text':'Original illustration',
+            'source_refs':[{'source_id':'paper','page':1}], 'item_id':item['id'],
+            'image_region':[0.1,0.2,0.3,0.4]})
+        exam.pop('revision',None)
+        exam['revision']=fingerprint({'exam':exam,'audio':audio})
+        validate_exam(exam,audio)
+        public=student_projection(exam)['sections'][0]['tasks'][0]
+        self.assertEqual(public['items'][0]['input'],{'format':'integer_tokens','slot_count':2,'max_tokens':2,'source_refs':[]})
+        self.assertEqual(public['blocks'][-1]['image_region'],[0.1,0.2,0.3,0.4])
+        self.assertEqual(public['blocks'][-1]['item_id'],item['id'])
+        self.assertNotIn('secret',json.dumps(public))
+        for region in ([0,0,0,1],[0.9,0,0.5,1],[0,0,1],[False,0,1,1],[float('nan'),0,1,1]):
+            task['blocks'][-1]['image_region']=region
+            with self.assertRaises(ExamError) as caught:
+                validate_exam(exam,audio)
+            self.assertIn(caught.exception.code,{'INVALID_EXAM_ILLUSTRATION_REGION','INVALID_EXAM_SCHEMA'})
+        task['blocks'][-1]['image_region']=[0,0,1,1]
+        task['blocks'][-1]['item_id']='unknown'
+        self.assert_code('INVALID_EXAM_ILLUSTRATION_ITEM',lambda:validate_exam(exam,audio))
+
     def test_ai_assessment_does_not_grade_manual_fields_in_the_same_task(self):
         exam=synthetic_profile()
         exam['revision']='c'*64
